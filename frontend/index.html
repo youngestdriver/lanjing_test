@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>答题助手</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="答题助手">
+<meta name="theme-color" content="#1a8cfe">
+<style>
+/* ========== Theme ========== */
+:root {
+  --bg: #f5f6fa; --card: #fff; --text: #27274a; --text2: #656577; --text3: #9090a4;
+  --border: #ebeef6; --accent: #1a8cfe; --accent-hover: #1985f1;
+  --green: #1dc88c; --red: #ff4b50; --gray: #c1c1cb;
+  --green-bg: rgba(29,200,140,.08); --red-bg: rgba(255,75,80,.08); --gray-bg: #f1f3f8;
+  --radius: 8px; --shadow: 0 1px 4px rgba(58,62,81,.08);
+  --sidebar-w: 320px;
+}
+[data-theme="dark"] {
+  --bg: #1a1a2e; --card: #222240; --text: #dbdbdb; --text2: #b3b3b3; --text3: #838383;
+  --border: #3b3b4a; --accent: #4da6ff; --gray-bg: #2a2a3a;
+  --green: #34d99e; --red: #ff6b70; --gray: #666;
+  --green-bg: rgba(29,200,140,.15); --red-bg: rgba(255,75,80,.15);
+  --shadow: 0 1px 8px rgba(0,0,0,.3);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); height:100vh; overflow:hidden; }
+input, button { font-family: inherit; }
+
+/* ========== Page visibility ========== */
+.page { display:none; flex-direction:column; height:100vh; }
+.page.active { display:flex; }
+
+/* ========== Login ========== */
+.login-page { justify-content:center; align-items:center; padding:20px; }
+.login-card { background:var(--card); border-radius:12px; padding:40px 32px; box-shadow:var(--shadow); width:100%; max-width:400px; }
+.login-card h1 { text-align:center; margin-bottom:8px; font-size:24px; }
+.login-card .sub { text-align:center; color:var(--text3); margin-bottom:32px; font-size:14px; }
+.login-card label { display:block; font-size:14px; color:var(--text2); margin-bottom:6px; }
+.login-card input { width:100%; padding:12px 16px; border:1px solid var(--border); border-radius:var(--radius); font-size:16px; background:var(--card); color:var(--text); margin-bottom:20px; outline:none; transition:border .2s; }
+.login-card input:focus { border-color:var(--accent); }
+.login-card .btn { width:100%; padding:14px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius); font-size:16px; cursor:pointer; font-weight:600; }
+.login-card .btn:hover { background:var(--accent-hover); }
+.login-card .err { color:var(--red); text-align:center; margin-top:12px; font-size:14px; display:none; }
+
+/* ========== Header ========== */
+.header { background:var(--card); border-bottom:1px solid var(--border); padding:10px 20px; display:flex; align-items:center; justify-content:space-between; gap:8px; flex-shrink:0; }
+.header h2 { font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.header-actions { display:flex; gap:8px; align-items:center; }
+.header-actions button { padding:6px 12px; border:1px solid var(--border); border-radius:var(--radius); background:var(--card); color:var(--text2); cursor:pointer; font-size:12px; }
+.header-actions button:hover { border-color:var(--accent); color:var(--accent); }
+
+/* ========== Exam List ========== */
+.exam-list { padding:20px; max-width:900px; margin:0 auto; width:100%; overflow-y:auto; flex:1; }
+.exam-list .stats { color:var(--text3); font-size:13px; margin-bottom:16px; }
+.category { margin-bottom:24px; }
+.category h3 { font-size:15px; color:var(--text2); margin-bottom:10px; padding:8px 12px; background:var(--gray-bg); border-radius:var(--radius); }
+.exam-card { background:var(--card); border-radius:var(--radius); padding:14px 16px; margin-bottom:8px; box-shadow:var(--shadow); cursor:pointer; transition:all .15s; border-left:4px solid transparent; }
+.exam-card:hover { border-left-color:var(--accent); transform:translateX(2px); }
+.exam-card .name { font-size:15px; font-weight:600; margin-bottom:6px; }
+.exam-card .meta { display:flex; gap:12px; flex-wrap:wrap; font-size:12px; color:var(--text3); }
+.badge { padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+.badge-new { background:var(--accent); color:#fff; }
+.badge-cont { background:var(--green-bg); color:var(--green); }
+.badge-exam { background:#fff3e0; color:#e65100; }
+.badge-drill { background:#e8f5e9; color:#2e7d32; }
+.exam-card .id-tag { font-family:monospace; color:var(--text3); font-size:11px; }
+
+/* ========== Quiz Layout ========== */
+.quiz-layout { display:flex; flex:1; overflow:hidden; }
+.quiz-main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.quiz-sidebar { width:var(--sidebar-w); border-left:1px solid var(--border); background:var(--card); display:flex; flex-direction:column; overflow:hidden; flex-shrink:0; }
+
+/* Question area */
+.quiz-top { padding:10px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; font-size:13px; color:var(--text3); }
+.quiz-top .q-progress { font-weight:600; color:var(--accent); }
+.quiz-scroll { flex:1; overflow-y:auto; padding:0 24px 0; display:flex; flex-direction:column; position:relative; }
+.q-block { max-width:860px; display:grid; grid-template-rows:auto 1fr auto auto; min-height:100%; }
+.q-block.answered-mode { display:block; min-height:0; }
+.answered-mode .q-text { max-height:35vh; }
+.q-num { font-size:13px; color:var(--text3); padding:12px 0 8px; }
+.q-num .badge-q { padding:2px 8px; border-radius:4px; font-size:11px; margin-left:8px; }
+.q-num .badge-multi { background:#fff3e0; color:#e65100; }
+.q-text { font-size:16px; line-height:1.7; overflow-y:auto; min-height:0; padding-right:8px; }
+.q-text img { max-width:100%; }
+.q-text p { margin-bottom:8px; }
+/* Strip inline backgrounds from API content (white bg in dark mode) */
+.q-text *, .q-text table, .q-text td, .q-text th, .q-text span,
+.options .opt-row > div:last-child *,
+.opt-row table, .opt-row td, .opt-row th, .opt-row span,
+.explain *, .ex-answer * { background:transparent !important; color:inherit !important; }
+.options { padding:12px 0 0; }
+.opt-row { display:flex; align-items:flex-start; gap:10px; padding:12px 14px; margin-bottom:8px; border:2px solid var(--border); border-radius:var(--radius); cursor:pointer; transition:all .15s; font-size:15px; }
+.opt-row.compact { flex:1; text-align:center; justify-content:center; align-items:center; margin:0 4px; padding:10px 8px; min-width:0; }
+.options.row { display:flex; flex-direction:row; gap:0; }
+.opt-row:hover { border-color:var(--accent); }
+.opt-row.selected { border-color:var(--accent); }
+.opt-row.correct { border-color:var(--green) !important; }
+.opt-row.wrong { border-color:var(--red) !important; }
+.opt-row.answered { pointer-events:none; }
+.opt-dot { width:22px; height:22px; border-radius:50%; border:2px solid var(--gray); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:12px; font-weight:700; transition:all .15s; }
+.opt-dot.sel { border-color:var(--accent); background:var(--accent); color:#fff; }
+.opt-row.correct .opt-dot { border-color:var(--green); background:var(--green); color:#fff; }
+.opt-row.wrong .opt-dot { border-color:var(--red); background:var(--red); color:#fff; }
+.opt-row.answered.correct .opt-dot { border-color:var(--green); background:var(--green); color:#fff; }
+.opt-row.answered:not(.correct):not(.wrong) .opt-dot { border-color:var(--gray); background:var(--card); color:var(--text2); }
+.opt-btn { width:20px; height:20px; border:2px solid var(--gray); border-radius:4px; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:all .15s; }
+.opt-btn.sel { border-color:var(--accent); background:var(--accent); }
+.opt-btn.sel::after { content:'✓'; color:#fff; font-size:13px; }
+.opt-row.correct .opt-btn { border-color:var(--green); background:var(--green); }
+.opt-row.correct .opt-btn::after { content:'✓'; color:#fff; font-size:13px; }
+.opt-row.wrong .opt-btn { border-color:var(--red); background:var(--red); }
+.opt-row.wrong .opt-btn::after { content:'✕'; color:#fff; font-size:13px; }
+/* Explanation popup */
+.explain { margin-top:8px; padding:12px 14px; border-radius:var(--radius); display:none; animation:fadeIn .3s; border:2px solid var(--border); }
+.answered-mode .explain { max-height:none; overflow-y:visible; }
+.explain.show { display:block; }
+.explain.correct-explain { border-color:var(--green); }
+.explain.wrong-explain { border-color:var(--red); }
+.explain .ex-title { font-weight:700; font-size:14px; margin-bottom:6px; }
+.explain .ex-answer { font-size:14px; margin-bottom:4px; }
+.explain .ex-analysis { font-size:13px; color:var(--text2); line-height:1.6; }
+.ex-analysis img { max-width:100%; height:auto; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(-4px);} to{opacity:1;transform:translateY(0);} }
+
+/* Sidebar */
+.sidebar-header { padding:8px 14px; border-bottom:1px solid var(--border); font-size:12px; font-weight:600; display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none; }
+.sidebar-header .expand-icon { font-size:14px; transition:transform .2s; color:var(--text3); }
+.sidebar-header .expand-icon.open { transform:rotate(180deg); }
+.sidebar-tabs { display:flex; border-bottom:1px solid var(--border); overflow-x:auto; flex-shrink:0; }
+.sidebar-tab { flex:1; text-align:center; padding:6px 4px; font-size:11px; cursor:pointer; border-bottom:2px solid transparent; color:var(--text3); white-space:nowrap; }
+.sidebar-tab.active { border-bottom-color:var(--accent); color:var(--accent); font-weight:600; }
+.answer-grid { padding:6px 10px; overflow-x:auto; overflow-y:hidden; display:flex; flex-wrap:nowrap; gap:4px; height:42px; flex-shrink:0; }
+.answer-grid .answer-dot { flex-shrink:0; }
+.answer-grid.expanded { overflow-y:auto; overflow-x:hidden; flex:1; height:auto; flex-wrap:wrap; }
+.answer-grid.expanded .answer-dot { flex-shrink:0; }
+.answer-dot { width:30px; height:30px; border-radius:5px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:12px; font-weight:600; border:1px solid var(--border); background:var(--card); color:var(--text2); transition:all .15s; }
+.answer-dot:hover { border-color:var(--accent); }
+.answer-dot.done { background:var(--green); color:#fff; border-color:var(--green); }
+.answer-dot.wrong-dot { background:var(--red); color:#fff; border-color:var(--red); }
+.answer-dot.cur { border:2px solid var(--accent); box-shadow:0 1px 6px rgba(26,140,254,.3); }
+.stats-bar { display:flex; gap:14px; padding:8px 14px; border-top:1px solid var(--border); font-size:12px; color:var(--text3); flex-shrink:0; }
+.stats-bar .s-green { color:var(--green); font-weight:600; }
+.stats-bar .s-red { color:var(--red); font-weight:600; }
+
+/* Loading */
+.loading { text-align:center; padding:60px 20px; color:var(--text3); }
+.spinner { display:inline-block; width:40px; height:40px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; margin-bottom:12px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* ========== Mobile ========== */
+@media (max-width:768px) {
+  .quiz-layout { flex-direction:column; }
+  .quiz-sidebar { width:100%; border-left:none; border-top:1px solid var(--border); max-height:220px; }
+  .quiz-scroll { padding:16px; }
+  .header { padding:8px 14px; }
+  .exam-list { padding:12px; }
+}
+
+/* Hidden for fresh-answer questions: answer NOT revealed until user answers */
+.q-block.fresh .opt-row.answered { pointer-events:none; }
+</style>
+</head>
+<body>
+
+<!-- ========== Login Page ========== -->
+<div class="page active login-page" id="loginPage">
+  <div class="login-card">
+    <h1>答题助手</h1>
+    <div class="sub">蓝鲸微课考试平台</div>
+    <label>手机号</label>
+    <input type="tel" id="phone" placeholder="请输入手机号" />
+    <label>密码</label>
+    <input type="password" id="pwd" placeholder="请输入密码" />
+    <button class="btn" onclick="doLogin()">登 录</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ========== Exam List Page ========== -->
+<div class="page" id="examListPage">
+  <div class="header">
+    <h2>考试列表</h2>
+    <div class="header-actions">
+      <button onclick="toggleTheme()">🌓</button>
+      <button onclick="doLogout()">退出</button>
+    </div>
+  </div>
+  <div class="exam-list" id="examList"></div>
+</div>
+
+<!-- ========== Quiz Page ========== -->
+<div class="page" id="quizPage">
+  <div class="header">
+    <h2 id="quizTitle">题目</h2>
+    <div class="header-actions">
+      <button onclick="showExamList()">← 返回</button>
+      <button onclick="toggleTheme()">🌓</button>
+    </div>
+  </div>
+  <div class="quiz-layout">
+    <div class="quiz-main">
+      <div class="quiz-top">
+        <span id="qProgress"></span>
+        <span id="qSection" style="color:var(--text3)"></span>
+      </div>
+      <div class="quiz-scroll" id="quizScroll"><div class="q-block" id="qBlock"></div></div>
+    </div>
+    <div class="quiz-sidebar">
+      <div class="sidebar-header" onclick="toggleSidebar()">
+        <span id="sidebarLabel">答题卡</span>
+        <span class="expand-icon" id="expandIcon">▲</span>
+      </div>
+      <div class="sidebar-tabs" id="sectionTabs"></div>
+      <div class="answer-grid" id="answerGrid"></div>
+      <div class="stats-bar" id="statsBar"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ========== State ==========
+const S = { exams:[], currentExam:null, questions:[], states:[], stateMap:{}, sectionMap:{}, qIdx:0, answered:{} };
+const $ = s=>document.querySelector(s);
+
+function toggleTheme() {
+  const el=document.documentElement, cur=el.getAttribute("data-theme");
+  el.setAttribute("data-theme",cur==="dark"?"light":"dark");
+}
+function showPage(id){ $$(".page").forEach(p=>p.classList.remove("active")); $(id).classList.add("active"); }
+function $$(s){ return document.querySelectorAll(s); }
+
+// ========== API ==========
+async function api(url,opts={}){
+  const r=await fetch(url,{headers:{"Content-Type":"application/json"},...opts});
+  if(r.status===401){ sessionStorage.clear(); showPage("#loginPage"); return {error:"Session expired"}; }
+  const data=await r.json();
+  // Detect auth failures in responses
+  if(data.error&&(data.error.includes("Not logged")||data.error.includes("expired")||data.error.includes("login"))){
+    sessionStorage.clear(); showPage("#loginPage");
+  }
+  return data;
+}
+
+// ========== Login ==========
+async function doLogin(){
+  const ph=$("#phone").value.trim(), pw=$("#pwd").value;
+  if(!ph||!pw) return showLoginErr("请输入手机号和密码");
+  showLoginErr("");
+  const r=await api("/api/login",{method:"POST",body:JSON.stringify({phone:ph,password:pw})});
+  if(r.error) return showLoginErr(r.error);
+  loadExams();
+}
+function showLoginErr(m){ const e=$("#loginErr"); e.textContent=m; e.style.display=m?"block":"none"; }
+async function doLogout(){ await api("/api/logout"); sessionStorage.clear(); showPage("#loginPage"); }
+
+// ========== Exam List ==========
+async function loadExams(){
+  showPage("#examListPage");
+  const el=$("#examList"); el.innerHTML='<div class="loading"><div class="spinner"></div><div>加载中...</div></div>';
+  const r=await api("/api/exams");
+  if(r.error){ el.innerHTML=`<div class="loading">${r.error}</div>`; return; }
+  S.exams=r.exams;
+  renderExamList(r.exams);
+}
+
+function renderExamList(exams){
+  const el=$("#examList");
+  const grouped={};
+  for(const e of exams) (grouped[e.style]??=[]).push(e);
+  const keys=Object.keys(grouped);
+  keys.sort((a,b)=>{if(a.includes("机考题库"))return -1;if(b.includes("机考题库"))return 1;return 0;});
+  let html=`<div class="stats">共 ${exams.length} 场考试，${keys.length} 个分类</div>`;
+  for(const k of keys){
+    html+=`<div class="category"><h3>${k}</h3>`;
+    for(const e of grouped[k]){
+      const ml={0:"模拟考试",1:"MOCK",2:"练习"}[e.practiceMode]??"?";
+      const tl=e.totalTime===0?"不限时":`${e.totalTime}分钟`;
+      const sl=e.wfs===1?'<span class="badge badge-new">新试卷</span>':'<span class="badge badge-cont">继续考试</span>';
+      const mb=`<span class="badge ${e.practiceMode===0?'badge-exam':'badge-drill'}">${ml}</span>`;
+      html+=`<div class="exam-card" onclick="enterExam(${e.id},${e.wfs===1})">
+        <div class="name">${sl} ${e.name} <span class="id-tag">#${e.id}</span></div>
+        <div class="meta">${mb} | ${tl}</div></div>`;
+    }
+    html+=`</div>`;
+  }
+  el.innerHTML=html;
+}
+
+// ========== Enter Exam ==========
+async function enterExam(id,isNew){
+  showPage("#quizPage");
+  sessionStorage.setItem("lastExam",id);
+  sessionStorage.setItem("lastPage","quiz");
+  const sc=$("#quizScroll");
+  sc.innerHTML='<div class="q-block" id="qBlock"><div class="loading"><div class="spinner"></div><div>'+(isNew?'初始化...':'加载中...')+'</div></div></div>';
+  const r=await api(`/api/exams/${id}/enter`,{method:"POST"});
+  if(r.error){ sc.innerHTML=`<div class="q-block" id="qBlock"><div class="loading">${r.error} — <a href="#" onclick="showExamList()">返回</a></div></div>`; return; }
+  S.currentExam=r; S.sectionMap=r.sections||{};
+  sc.innerHTML='<div class="q-block" id="qBlock"><div class="loading"><div class="spinner"></div><div>加载题目...</div></div></div>';
+  const qr=await api(`/api/exams/${id}/questions`);
+  if(qr.error){ sc.innerHTML=`<div class="q-block"><div class="loading">${qr.error}</div></div>`; return; }
+  S.questions=qr.questions; S.states=qr.states;
+  // Build state map
+  S.stateMap={};
+  for(const s of S.states) S.stateMap[s.questionsId]=s;
+  // Track answered: already-answered questions
+  S.answered={};
+  for(const s of S.states){
+    if(s.state!=="unanswered") S.answered[s.questionsId]=true;
+  }
+  // Start at first unanswered, or first question
+  S.qIdx=0;
+  for(let i=0;i<S.states.length;i++){
+    if(S.states[i].state==="unanswered"){ S.qIdx=i; break; }
+  }
+  renderQuiz();
+}
+
+// ========== Render Quiz ==========
+function renderQuiz(){
+  const exam=S.exams.find(e=>String(e.id)===String(S.currentExam.examInfoId));
+  $("#quizTitle").textContent=exam?.name||"题目";
+  renderAnswerGrid();
+  renderSectionTabs();
+  renderStatsBar();
+  renderQuestion();
+}
+
+function renderQuestion(){
+  const q=S.questions[S.qIdx];
+  if(!q) return;
+  const st=S.stateMap[q._id]||{};
+  const isAnswered=S.answered[q._id]||st.state!=="unanswered";
+
+  // Progress
+  $("#qProgress").textContent=`第 ${S.qIdx+1} / ${S.questions.length} 题`;
+  $("#qSection").textContent=st.section||"";
+
+  // Build question HTML
+  // Detect short-answer options (logic/推理 type) → horizontal layout
+  const map=["A","B","C","D"];
+  const optTexts=[];
+  for(let i=1;i<=4;i++) if(q[`answer${i}`]) optTexts.push(q[`answer${i}`].replace(/<[^>]+>/g,"").trim());
+  const isCompact=optTexts.length===4 && optTexts.every(t=>t.length<=2);
+
+  let html=`<div class="q-num">`;
+  if(st.state==="right") html+=`✅ 已答对`;
+  else if(st.state==="error") html+=`❌ 已答错`;
+  else html+=`⬜ 未作答`;
+  html+=` <span class="badge-q">第 ${st.num||(S.qIdx+1)} 题</span>`;
+  if(q._isMulti) html+=` <span class="badge-q badge-multi">多选</span>`;
+  html+=`</div>`;
+  html+=`<div class="q-text">${q.question||""}</div>`;
+
+  // Options — horizontal row if compact (short answers only), else vertical stack
+  if(isCompact) html+=`<div class="options row">`;
+  else html+=`<div class="options">`;
+
+  for(let i=1;i<=4;i++){
+    if(!q[`answer${i}`]) continue;
+    const l=map[i-1];
+    const isCorrect=q._answers.includes(l);
+    let cls="opt-row";
+    if(isCompact) cls+=" compact";
+    if(isAnswered){
+      cls+=" answered";
+      if(isCorrect) cls+=" correct";
+    }
+    const multiType=q._isMulti?"opt-btn":"opt-dot";
+    html+=`<div class="${cls}" data-opt="${l}" onclick="${isAnswered?'':'selectOpt(\''+l+'\')'}">
+      <div class="${multiType}">${q._isMulti?'':l}</div>
+      <div>${q[`answer${i}`]}</div></div>`;
+  }
+  html+=`</div>`;
+
+  // Explanation (only for answered questions)
+  html+=`<div class="explain" id="explainBox">`;
+  if(isAnswered){
+    const wasRight=st.state==="right";
+    html+=`<div class="ex-title">${wasRight?'✅ 回答正确':'❌ 回答错误！正确答案是：'+q._answers.join('、')}</div>`;
+    if(!wasRight && q._answerHtml) html+=`<div class="ex-answer">${q._answerHtml}</div>`;
+    if(q._analysis) html+=`<div class="ex-analysis">${q._analysis}</div>`;
+  }
+  html+=`</div>`;
+
+  $("#qBlock").innerHTML=html;
+  if(isAnswered){
+    const box=$("#explainBox");
+    box.classList.add("show");
+    box.classList.add(st.state==="right"?"correct-explain":"wrong-explain");
+  }
+
+  // Save position
+  sessionStorage.setItem("qIdx",S.qIdx);
+  // Scroll to top
+  $("#quizScroll").scrollTop=0;
+
+  // After answering, let content flow naturally
+  if(isAnswered) qBlock.classList.add("answered-mode");
+  else qBlock.classList.remove("answered-mode");
+
+  // Update answer grid highlight
+  renderAnswerGrid();
+}
+
+async function selectOpt(letter){
+  const q=S.questions[S.qIdx];
+  const st=S.stateMap[q._id]||{};
+  if(S.answered[q._id]) return; // already answered
+
+  const isCorrect=q._answers.includes(letter);
+  S.answered[q._id]=true;
+
+  // Update state
+  st.state=isCorrect?"right":"error";
+  S.stateMap[q._id]=st;
+
+  // Highlight selected + correct options (border only)
+  const opts=$$("#qBlock .opt-row");
+  opts.forEach(o=>{
+    o.classList.add("answered");
+    const opt=o.dataset.opt;
+    if(isCorrect && q._answers.includes(opt)) o.classList.add("correct");
+    else if(!isCorrect && opt===letter) o.classList.add("wrong");
+    else if(!isCorrect && q._answers.includes(opt)) o.classList.add("correct");
+  });
+
+  // Switch to full-scroll mode immediately
+  $("#qBlock").classList.add("answered-mode");
+  // Show explanation
+  const eb=$("#explainBox");
+  eb.classList.add("show",isCorrect?"correct-explain":"wrong-explain");
+  eb.innerHTML=`
+    <div class="ex-title">${isCorrect?'✅ 回答正确！':'❌ 回答错误！正确答案：'+q._answers.join('、')}</div>
+    ${q._answerHtml?`正确答案：${q._answerHtml}`:''}
+    ${q._analysis?`<div class="ex-analysis">${q._analysis}</div>`:''}`;
+
+  // Report answer to server
+  const letterIdx={A:1,B:2,C:3,D:4}[letter];
+  const ansKey="key"+letterIdx;
+  const examId=S.currentExam.examInfoId;
+  api(`/api/exams/${examId}/answer`,{method:"POST",body:JSON.stringify({
+    testId:q._id, testAns:ansKey+",", correct:isCorrect
+  })}).catch(()=>{});
+
+  // Update sidebar
+  renderAnswerGrid();
+  renderStatsBar();
+
+  // Auto-advance only if correct
+  if(isCorrect){
+    setTimeout(()=>{
+      const nextUnanswered=S.states.findIndex((s,i)=>i>S.qIdx&&s.state==="unanswered");
+      if(nextUnanswered>=0) S.qIdx=nextUnanswered;
+      else if(S.qIdx+1<S.questions.length) S.qIdx++;
+      renderQuestion();
+    },1200);
+  }
+}
+
+// ========== Sidebar ==========
+function renderAnswerGrid(){
+  const grid=$("#answerGrid");
+  // Filter by active section tab
+  const activeTab=$("#sectionTabs .sidebar-tab.active");
+  let filtered=S.states;
+  if(activeTab){
+    const tabTitle=activeTab.textContent.trim();
+    const fullKey=Object.keys(S.sectionMap).find(k=>k.startsWith(tabTitle));
+    if(fullKey) filtered=S.states.filter(s=>s.section===fullKey);
+  }
+  grid.innerHTML=filtered.map((s)=>{
+    const i=S.states.indexOf(s);
+    let cls="answer-dot";
+    if(s.state==="right") cls+=" done";
+    else if(s.state==="error") cls+=" wrong-dot";
+    if(i===S.qIdx) cls+=" cur";
+    return `<div class="${cls}" onclick="S.qIdx=${i};renderQuestion()" title="第${s.num}题">${s.num}</div>`;
+  }).join("");
+  // Auto-scroll to current dot
+  setTimeout(()=>{
+    const cur=grid.querySelector(".cur");
+    if(cur) cur.scrollIntoView({behavior:"smooth",block:"nearest",inline:"center"});
+  },50);
+}
+
+function renderSectionTabs(){
+  const tabs=$("#sectionTabs");
+  const keys=Object.keys(S.sectionMap);
+  if(keys.length<=1){ tabs.innerHTML=""; return; }
+  // Auto-select tab based on current question's section
+  const curQ=S.states[S.qIdx];
+  const curSection=curQ?.section||"";
+  tabs.innerHTML=keys.map(k=>{
+    const short=k.replace(/\(.*/,"");
+    const active=curSection===k;
+    return `<div class="sidebar-tab ${active?'active':''}" onclick="jumpToSection('${k.replace(/'/g,"\\'")}',this)">${short}</div>`;
+  }).join("");
+}
+
+function renderStatsBar(){
+  const sts=S.states, r=sts.filter(s=>s.state==="right").length, e=sts.filter(s=>s.state==="error").length, u=sts.filter(s=>s.state==="unanswered").length;
+  $("#statsBar").innerHTML=`✅<span class="s-green">${r}</span> ❌<span class="s-red">${e}</span> ⬜${u} | 共${sts.length}题`;
+}
+
+function jumpToSection(title,el){
+  $$(".sidebar-tab").forEach(t=>t.classList.remove("active"));
+  el.classList.add("active");
+  // Jump to first unanswered in this section, or first question
+  const inSection=S.states.filter(s=>s.section===title);
+  const firstUnanswered=inSection.find(s=>s.state==="unanswered");
+  if(firstUnanswered) S.qIdx=S.states.indexOf(firstUnanswered);
+  else if(inSection.length>0) S.qIdx=S.states.indexOf(inSection[0]);
+  renderQuestion();
+}
+
+function setSidebar(expand){
+  const grid=$("#answerGrid");
+  const icon=$("#expandIcon");
+  if(expand){ grid.classList.add("expanded"); icon.classList.add("open"); $("#sidebarLabel").textContent="答题卡 ▼"; }
+  else { grid.classList.remove("expanded"); icon.classList.remove("open"); $("#sidebarLabel").textContent="答题卡 ▲"; }
+  // Re-render to re-scroll to current dot
+  if(S.states.length) renderAnswerGrid();
+}
+function toggleSidebar(){
+  const isExpanded=$("#answerGrid").classList.contains("expanded");
+  setSidebar(!isExpanded);
+}
+// ========== Swipe navigation ==========
+let touchX=0,touchY=0;
+document.addEventListener("touchstart",e=>{
+  touchX=e.touches[0].clientX; touchY=e.touches[0].clientY;
+},{passive:true});
+document.addEventListener("touchend",e=>{
+  if(!S.states.length) return;
+  // Ignore swipes on sidebar (answer card)
+  if(e.target.closest(".quiz-sidebar")) return;
+  const dx=e.changedTouches[0].clientX-touchX;
+  const dy=e.changedTouches[0].clientY-touchY;
+  if(Math.abs(dx)<50||Math.abs(dy)>Math.abs(dx)) return;
+  if(dx<0&&S.qIdx<S.states.length-1) S.qIdx++;
+  else if(dx>0&&S.qIdx>0) S.qIdx--;
+  renderQuestion();
+});
+
+// Auto expand/collapse by orientation
+const orientMQ=window.matchMedia("(orientation: landscape)");
+orientMQ.addEventListener("change",e=>setSidebar(e.matches));
+// Init: landscape→expand, portrait→collapse
+if(orientMQ.matches) setSidebar(true);
+
+function showExamsFromCache(){ showPage("#examListPage"); renderExamList(S.exams); }
+function showExamList(){ showPage("#examListPage"); loadExams(); }
+
+// ========== Init ==========
+if("serviceWorker"in navigator){
+  navigator.serviceWorker.register("/sw.js")
+    .then(r=>console.log("SW registered:",r.scope))
+    .catch(e=>console.warn("SW failed:",e.message));
+}
+(async function(){
+  let r=await api("/api/status").catch(()=>({}));
+  if(!r.loggedIn){ showPage("#loginPage"); return; }
+  // Verify session still valid by trying to fetch exams
+  r=await api("/api/exams");
+  if(r.error){ showPage("#loginPage"); return; }
+  // Restore last page on refresh
+  const lastPage=sessionStorage.getItem("lastPage");
+  const lastExam=sessionStorage.getItem("lastExam");
+  S.exams=r.exams;
+  if(lastPage==="quiz"&&lastExam){
+    enterExam(parseInt(lastExam),false);
+  } else {
+    showExamsFromCache();
+  }
+})();
+</script>
+</body>
+</html>

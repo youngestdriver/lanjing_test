@@ -1,0 +1,15 @@
+{
+  "name": "蓝鲸微课答题助手",
+  "short_name": "答题助手",
+  "description": "跨平台考试答题工具",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f5f6fa",
+  "theme_color": "#1a8cfe",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
