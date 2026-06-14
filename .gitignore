@@ -1,0 +1,22 @@
+# Session & credentials
+session_cookies.txt
+
+# Saved exam data
+*_2026-*/
+
+# Debug files
+debug_notice.html
+
+# Server certs
+.cert/
+
+# Dependencies
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
