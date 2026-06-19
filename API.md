@@ -1,748 +1,852 @@
-# 蓝鲸微课考试平台 API 接口文档
+# 蓝鲸答题助手 API 文档
 
-> **测试环境**：`https://test.lanjingweike.com`
+> 文档版本：3.0
 >
-> **文档版本**：v2.1
+> 最后更新：2026-06-19
 >
-> **最后更新**：2026-06-15
+> 对应代码：`server.js`
 
----
+本文档描述本项目本地 Express 后端对前端开放的 `/api/...` 接口，以及这些接口背后调用的蓝鲸微课考试平台上游接口。
 
 ## 目录
 
 1. [通用约定](#1-通用约定)
-2. [接口列表](#2-接口列表)
-   - [2.1 获取会话 ID](#21-获取会话-id)
-   - [2.2 登录](#22-登录)
-   - [2.3 获取考试列表](#23-获取考试列表)
-   - [2.4 进入考试（继续考试）](#24-进入考试继续考试)
-   - [2.5 新考试初始化流程](#25-新考试初始化流程)
-   - [2.6 批量获取题目详情](#26-批量获取题目详情)
-   - [2.7 提交答案](#27-提交答案)
-3. [考试页面 HTML 解析规范](#3-考试页面-html-解析规范)
-4. [业务流程](#4-业务流程)
-5. [附录](#5-附录)
+2. [本地后端 API](#2-本地后端-api)
+3. [上游接口映射](#3-上游接口映射)
+4. [数据结构](#4-数据结构)
+5. [错误与会话处理](#5-错误与会话处理)
+6. [业务流程](#6-业务流程)
 
 ---
 
 ## 1. 通用约定
 
-### 1.1 基础 URL
+### 1.1 本地服务地址
 
-所有请求路径均基于以下地址拼接：
-
-```
-https://test.lanjingweike.com
-```
-
-### 1.2 公共请求头
-
-除特殊说明外，所有接口均需携带以下请求头：
+默认端口由 `PORT` 环境变量控制，未设置时使用 `3000`。
 
 ```http
-User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0
-X-Requested-With: XMLHttpRequest
-Origin: https://test.lanjingweike.com
-Referer: https://test.lanjingweike.com/exam
-Accept: application/json, text/javascript, */*; q=0.01
-sec-ch-ua: "Microsoft Edge";v="149", "Chromium";v="149", "Not)A;Brand";v="24"
-sec-ch-ua-mobile: ?0
-sec-ch-ua-platform: "Windows"
+http://localhost:3000
 ```
 
-POST 请求额外补充：
+### 1.2 请求格式
+
+前端调用本地 API 时统一使用 JSON：
 
 ```http
-Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+Content-Type: application/json
 ```
 
-> **注意**：某些接口（特别是新考试初始化流程中的接口）对 `Referer` 有严格要求，必须设置为前置页面的完整 URL，否则服务端可能拒绝处理。
+GET 请求无请求体。POST 请求体为 JSON 对象。
 
-### 1.3 认证与 Cookie
+### 1.3 登录状态
 
-| 阶段 | Cookie | 来源 | 说明 |
-|------|--------|------|------|
-| 会话初始化 | `JSESSIONID` | `GET /` 响应头 `Set-Cookie` | 标识浏览器会话 |
-| 登录后 | `sessionId` | `POST /login/account/login` 响应头 `Set-Cookie` | 标识已登录用户 |
-| 考试过程中 | `KSX_CID=1` | 部分接口响应头 | 考试环境标识 |
+后端维护一个进程内 `cookieJar`，并在登录成功后将上游 Cookie 写入：
 
-- 后续所有请求均需在 `Cookie` 头中携带以上全部 Cookie
-- `sessionId` 有效期约 48 小时，过期后需重新登录
-- 可通过文件持久化 Cookie 以复用会话，避免频繁登录
+```text
+session_cookies.txt
+```
 
-### 1.4 通用响应结构
+服务启动时会尝试读取该文件恢复会话。
 
-所有 JSON 接口均遵循以下格式：
+除以下接口外，所有 `/api/...` 接口都要求后端已有 `sessionId`：
+
+| Method | Path |
+|---|---|
+| `GET` | `/api/status` |
+| `POST` | `/api/login` |
+
+未登录时返回：
 
 ```json
 {
-  "code": 10000,
-  "desc": "成功",
-  "englishDesc": "Success",
-  "success": true,
-  "bizContent": { }
+  "error": "Not logged in"
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `code` | int | 业务状态码，见 [附录 A](#a-错误码表) |
-| `desc` | string | 中文状态描述 |
-| `englishDesc` | string | 英文状态描述 |
-| `success` | bool | 请求是否成功 |
-| `bizContent` | object | 业务数据，结构视具体接口而定 |
+HTTP 状态码为 `401`。
 
-### 1.5 重定向策略
+### 1.4 上游服务地址
 
-所有请求均应设置 `redirect: "manual"`，原因如下：
+后端代理调用的上游地址固定为：
 
-- 登录接口的 302 重定向中包含 `Set-Cookie: sessionId`，自动跟随将丢失此 Cookie
-- 继续考试时，直接访问 `exam_start` 可能触发 302 跳转至考前说明页，手动处理可判断考试状态
+```http
+https://test.lanjingweike.com
+```
+
+上游请求由 `server.js` 统一补充浏览器请求头、`Cookie`、`Origin`、`Referer`，并使用 `redirect: "manual"` 处理大多数接口。
 
 ---
 
-## 2. 接口列表
+## 2. 本地后端 API
 
-### 2.1 获取会话 ID
+### 2.1 查询会话状态
 
-初始化浏览器会话，获取后续请求所需的 `JSESSIONID`。
-
-#### 请求
+检查当前后端进程是否持有已保存或已登录的会话。
 
 ```http
-GET /
+GET /api/status
 ```
 
 #### 响应
 
-- `Status: 200`
-- `Content-Type: text/html`
-- `Set-Cookie: JSESSIONID={value}; Path=/; HttpOnly`
-- 响应体为首页 HTML，无需解析
+```json
+{
+  "loggedIn": true,
+  "hasSavedSession": true
+}
+```
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `loggedIn` | boolean | `cookieJar` 中是否包含 `sessionId=` |
+| `hasSavedSession` | boolean | `cookieJar` 是否非空，可能只有 `JSESSIONID` |
 
 ---
 
 ### 2.2 登录
 
-#### 请求
+使用手机号和明文密码登录上游平台。后端会自动计算 SHA256 和 MD5 后提交给上游。
 
 ```http
-POST /login/account/login
-Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+POST /api/login
+Content-Type: application/json
 ```
 
-#### 请求参数
+#### 请求体
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|:----:|------|
-| `userName` | string | ✓ | 完整用户名，格式 `手机号@公司ID`，如 `13800000000@1` |
-| `userNameInput` | string | ✓ | 纯手机号，即 `@` 之前的部分 |
-| `password` | string | ✓ | 明文密码经 **SHA256** 哈希后的 64 位十六进制小写字符串 |
-| `passwordMD5` | string | ✓ | 明文密码经 **MD5** 哈希后的 32 位十六进制小写字符串 |
-| `companyId` | string | ✓ | 公司 ID，固定值 `"1"` |
-| `newCompanyId` | string | ✓ | 固定值 `"1"` |
-| `remember` | string | | 固定 `"false"` |
-| `phoneAccount` | string | | 留空 |
-| `authCode` | string | | 短信验证码（留空） |
-| `captchaText` | string | | 图形验证码（留空） |
-| `nextUrl` | string | | 登录后跳转地址（留空） |
+```json
+{
+  "phone": "13800000000",
+  "password": "plain-password"
+}
+```
 
-> **说明**：平台要求同时提交明文密码的 SHA256 与 MD5 值。MD5 已不被视为安全算法，此处仅为兼容后端旧有校验逻辑。
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|:---:|---|
+| `phone` | string | 是 | 手机号，不包含 `@1` |
+| `password` | string | 是 | 明文密码，后端负责哈希 |
 
 #### 成功响应
 
 ```json
 {
-  "code": 10000,
-  "success": true,
-  "desc": "成功",
-  "bizContent": {
-    "url": "/exam/pc/home/#/",
-    "role": "staff"
-  }
+  "success": true
 }
 ```
 
-| 字段 | 说明 |
-|------|------|
-| `bizContent.url` | 登录后前端的跳转路径 |
-| `bizContent.role` | 用户角色标识，`staff` 表示普通考生 |
+登录成功后：
 
-- 响应头 `Set-Cookie` 包含 `sessionId`，后续所有请求须携带
+- 后端保存上游 Cookie 到 `session_cookies.txt`
+- 清空考试列表缓存 `examsCache`
 
 #### 失败响应
 
+缺少参数：
+
 ```json
 {
-  "code": -1,
-  "success": false,
-  "desc": "密码错误"
+  "error": "phone and password required"
 }
 ```
+
+HTTP 状态码为 `400`。
+
+无法获取 `JSESSIONID`：
+
+```json
+{
+  "error": "Failed to get JSESSIONID"
+}
+```
+
+HTTP 状态码为 `500`。
+
+上游登录失败：
+
+```json
+{
+  "error": "密码错误"
+}
+```
+
+HTTP 状态码为 `401`。
 
 ---
 
 ### 2.3 获取考试列表
 
-获取当前用户有权限访问的全部考试与练习。
-
-#### 请求
+获取当前登录用户可见的考试和练习列表。
 
 ```http
-POST /exam/current_exam_list
-Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+GET /api/exams
 ```
-
-#### 请求参数
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|:----:|------|
-| `examStyle` | string | ✓ | 分类筛选，`"0"` 表示不筛选、返回全部 |
-| `timeSort` | string | | 时间排序方式，留空表示默认 |
-| `status` | string | | 状态筛选，留空表示全部 |
-| `setProcess` | string | ✓ | 固定值 `"-1"` |
-| `page` | string | ✓ | 页码，起始值为 `"1"` |
-| `firstVisit` | string | ✓ | 是否首次访问，`"true"` 或 `"false"` |
-| `name` | string | | 按名称模糊搜索，留空表示全部 |
-| `rowCount` | string | ✓ | 每页条数，建议设为 `"100"` 以单次拉取全部 |
-| `participation` | string | | 参与状态筛选，留空表示全部 |
 
 #### 成功响应
 
 ```json
 {
-  "code": 10000,
-  "success": true,
-  "bizContent": {
-    "total": 34,
-    "styles": [
-      { "id": 1052373, "name": "【中石化模考套餐（2027年度）】" },
-      { "id": 1052372, "name": "【机考题库（2027年度）】" }
-    ],
-    "examInfoModelList": [ { } ]
-  }
+  "total": 34,
+  "styles": {
+    "1052373": "分类名称"
+  },
+  "exams": [
+    {
+      "id": 1439658,
+      "name": "考试名称",
+      "style": "分类名称",
+      "practiceMode": 2,
+      "examMode": "1",
+      "totalTime": 0,
+      "paperInfoId": 123456,
+      "examTimes": 0,
+      "examTimesRestrict": "0",
+      "paid": false,
+      "timeRestrict": "0",
+      "wfs": 1,
+      "timeLeft": 0
+    }
+  ]
 }
 ```
 
-##### `bizContent` 字段
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `total` | number | 上游返回的考试总数 |
+| `styles` | object | 分类 ID 到分类名称的映射 |
+| `exams` | array | 归一化后的考试列表 |
+
+`exams[]` 字段：
 
 | 字段 | 类型 | 说明 |
-|------|------|------|
-| `total` | int | 符合条件的考试总数 |
-| `styles` | array | 分类/风格列表 |
-| `styles[].id` | int | 分类唯一标识 |
-| `styles[].name` | string | 分类显示名称 |
-| `examInfoModelList` | array | 考试详情列表 |
+|---|---|---|
+| `id` | number | 考试 ID，也是后续接口的 `:id` |
+| `name` | string | 考试名称 |
+| `style` | string | 分类名称 |
+| `practiceMode` | number | 考试模式，常见值：`0` 模拟考试、`1` MOCK、`2` 练习 |
+| `examMode` | string | 上游考试模式 |
+| `totalTime` | number | 限时分钟数，`0` 表示不限时 |
+| `paperInfoId` | number | 试卷模板 ID |
+| `examTimes` | number | 允许作答次数 |
+| `examTimesRestrict` | string | 是否限制次数 |
+| `paid` | boolean | 是否付费考试 |
+| `timeRestrict` | string | 是否限制时间 |
+| `wfs` | number | `1` 表示新考试，`0` 表示已有作答记录 |
+| `timeLeft` | number | 剩余时间，单位秒 |
 
-##### `examInfoModelList` 条目核心字段
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `id` | int | **考试唯一标识**（进入考试、获取题目的核心参数） |
-| `examName` | string | 考试名称 |
-| `examStyle` | int | 所属分类 ID，关联 `styles[].id` |
-| `examStyleName` | string | 分类名称（服务端通常返回 `"未初始化"`，应通过 `styles` 查找） |
-| `paperInfoId` | int | 试卷模板 ID |
-| `practiceMode` | int | 考试模式：`0` = 正式模拟考试，`1` = MOCK，`2` = 刷题练习 |
-| `examMode` | string | 考试类型，`"1"` 为标准模式 |
-| `examTime` | int | 考试限时（**分钟**），`0` 表示不限时 |
-| `examTimeRestrict` | string | 是否限时：`"0"` 不限时，`"1"` 限时 |
-| `examTimesNum` | int | 允许作答次数 |
-| `examTimesRestrict` | string | 是否限次：`"0"` 不限次，`"1"` 限次 |
-| `wfs` | int | **作答状态**：`0` = 已有作答记录，`1` = 从未作答 |
-| `timeLeft` | int | 剩余可用时间（**秒**），`0` 表示无限制或未开始 |
-| `paid` | bool | 是否已付费（对于付费考试） |
-| `status` | string | 发布状态，`"0"` 表示已发布 |
-| `examStartTime` | string | 考试开放起始时间（`yyyy-MM-dd HH:mm`） |
-| `examEndTime` | string | 考试开放截止时间（`yyyy-MM-dd HH:mm`） |
-| `beforeAnswerNotice` | string | 考前须知文本（可能包含 `\r\n` 换行符） |
-
-> 完整字段列表见 [附录 B](#b-examInfoModelList-完整字段)。
-
----
-
-### 2.4 进入考试（继续考试）
-
-对于已有作答记录的考试（`wfs = 0`），可直接访问考试页面。
-
-#### 请求
-
-```http
-GET /exam/exam_start/{examInfoId}
-```
-
-#### 说明
-
-- `examInfoId` 来自 [2.3](#23-获取考试列表) 返回的 `id`
-- 必须设置 `redirect: "manual"` 防止自动跳转
-- 页面 HTML 的解析规范见 [第 3 章](#3-考试页面-html-解析规范)
-
----
-
-### 2.5 新考试初始化流程
-
-对于从未作答的考试（`wfs = 1`），**不可直接访问 `exam_start`**，必须先执行以下初始化流程。该流程模拟浏览器端 JavaScript 的完整交互逻辑。
-
-#### 流程概览
-
-```
-Step 0:  GET  /exam/enter_exam/1/{examInfoId}    → 302 重定向
-Step 1:  POST /exam/faceCheckCondition            → 检查是否需要人脸核验
-Step 2:  POST /exam/start_exam_queue              → 发起考试排队
-Step 3:  POST /exam/check_queue_status            → 轮询排队状态（可能重复多次）
-Step 4:  POST /exam/test_complete                 → 轮询组卷状态（可能重复多次）
-Step 5:  GET  /exam/exam_start/{examInfoId}       → 获取考试页面 HTML
-```
-
-> 该流程源于 `before_answer_notice` 页面中「开始答题」按钮的 JS 逻辑。不同考试类型（普通/严肃/付费/人脸核验）可能在中途分支，本文档以最常见的普通练习考试为主线。
-
----
-
-#### Step 0：进入考试入口
-
-```http
-GET /exam/enter_exam/1/{examInfoId}
-```
-
-- 浏览器端自动跟随 302 重定向，服务端可能在重定向过程中写入会话状态
-- 最终落点（302 的 `Location`）为 `/exam/before_answer_notice/{examInfoId}`
-- 实现时需**跟随重定向**，并捕获途中所有 `Set-Cookie`
-
----
-
-#### Step 1：人脸核验条件检查
-
-```http
-POST /exam/faceCheckCondition
-```
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| `examInfoId` | string | 考试 ID |
-
-**响应示例**：
+#### 失败响应
 
 ```json
 {
-  "success": true,
-  "bizContent": {
-    "condition": 0
-  }
+  "error": "Not logged in"
 }
 ```
 
-| `condition` 值 | 含义 | 后续操作 |
-|:---:|---|---|
-| `0` | 无需核验 | 直接进入 Step 2 |
-| `1` | 需拍照核验 | 弹窗采集照片，核验通过后进入 Step 2 |
-| `2` | 未上传核验照片 | 终止流程 |
-| `3` | 人脸识别余额不足 | 终止流程 |
+HTTP 状态码为 `401`。
 
-> 普通练习考试（`practiceMode = 2`，未开启监考）通常返回 `condition = 0`。
-
----
-
-#### Step 2：发起考试排队
-
-```http
-POST /exam/start_exam_queue
-```
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| `examId` | string | 考试 ID |
-
-> ⚠️ 注意此接口的参数名为 `examId`，而非 `examInfoId`。
-
-**响应示例**：
+上游业务失败时：
 
 ```json
 {
-  "success": true,
-  "bizContent": {
-    "isOk": true,
-    "waitTime": 0
-  }
+  "error": "上游错误描述"
 }
 ```
 
-| 字段 | 说明 |
-|------|------|
-| `bizContent.isOk` | `true` = 无需排队，直接进入组卷；`false` = 需要排队，进入 Step 3 轮询 |
-| `bizContent.waitTime` | 预计等待秒数（仅当 `isOk = false` 时有意义） |
-
-**特殊错误码**：
-
-| code | 含义 | 处理方式 |
-|------|------|---------|
-| `60011` | 免排队 | 视同 `isOk = true`，直接进入 Step 4 |
-| `50012` | 考试尚未开始 | 终止流程或等待开放时间 |
+HTTP 状态码为 `500`。
 
 ---
 
-#### Step 3：轮询排队状态
+### 2.4 进入考试
+
+进入指定考试，并解析考试页面中的题卡状态、题目 ID、考试结果 ID、分区统计等信息。
 
 ```http
-POST /exam/check_queue_status
+POST /api/exams/:id/enter
 ```
+
+路径参数：
 
 | 参数 | 类型 | 说明 |
-|------|------|------|
-| `examId` | string | 考试 ID |
+|---|---|---|
+| `id` | string | 考试 ID，即 `/api/exams` 返回的 `exams[].id` |
 
-> ⚠️ 仅当 Step 2 返回 `isOk = false` 时才需调用此接口。
+#### 行为
 
-- 轮询间隔：建议 **2 秒**
-- 终止条件：`bizContent.isOk` 变为 `true` 或超时（建议最多 30 次）
-- 请求超时建议设为 15 秒
-
----
-
-#### Step 4：轮询组卷完成状态
-
-```http
-POST /exam/test_complete
-```
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| `examId` | string | 考试 ID |
-
-- 响应体为纯文本（非 JSON）：`true` 表示组卷完成，`false` 表示仍在组卷
-- 轮询间隔：**2 秒**
-- 终止条件：响应体为 `true` 或超时（建议最多 30 次）
-- JavaScript 端使用 `async: false` 同步 AJAX 调用此接口
-
-> 浏览器端实际会在 `test_complete` 之前调用 `check_hard_over_count`（检查试题数量是否超限）。该接口参数为 `examId` 与 `setIpRange`，非超限场景下返回 `success = false`（即为可继续），对普通练习可省略。
-
----
-
-#### Step 5：进入考试
-
-同 [2.4](#24-进入考试继续考试)。
-
----
-
-### 2.6 批量获取题目详情
-
-获取指定题目的完整内容、选项及正确答案。
-
-#### 请求
-
-```http
-POST /exam/get_question_info/
-Content-Type: application/x-www-form-urlencoded; charset=UTF-8
-```
-
-#### 请求参数
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|:----:|------|
-| `examResultsId` | string | ✓ | 考试结果 ID |
-| `examInfoId` | string | ✓ | 考试信息 ID |
-| `testIds` | string | ✓ | 题目 ID 列表，以逗号 `,` 分隔 |
-| `uuids` | string | ✓ | 与 `testIds` 一一对应的 `uuid`，以逗号 `,` 分隔（所有题目共享同一 uuid 值） |
-
-> **建议**：单次请求不超过 **50** 题。超出时应分批请求。
+- 如果 `examsCache` 中该考试的 `wfs === 1`，按新考试流程进入
+- 其他情况直接访问上游 `exam_start`
+- 解析成功后写入 `examCache[id]`
 
 #### 成功响应
 
 ```json
-[
-  {
-    "_id": 12345,
-    "question": "<p>题目正文（可含 HTML 标签）</p>",
-    "difficult": 1,
-    "test_ans_right": "A",
-    "key1": "1",
-    "key2": "0",
-    "key3": "0",
-    "key4": "0",
-    "answer1": "<p>选项 A 内容</p>",
-    "answer2": "<p>选项 B 内容</p>",
-    "answer3": "<p>选项 C 内容</p>",
-    "answer4": "<p>选项 D 内容</p>"
+{
+  "examResultsId": "87380582",
+  "examInfoId": "1439658",
+  "uuid": "7404753692344238080",
+  "testIds": [
+    "6620dfdfee9c16509b87a928"
+  ],
+  "questionStates": [
+    {
+      "questionsId": "6620dfdfee9c16509b87a928",
+      "uuId": "7404753692344238080",
+      "num": 1,
+      "section": "科技常识",
+      "state": "unanswered",
+      "marked": false
+    }
+  ],
+  "sections": {
+    "科技常识": {
+      "total": 50,
+      "right": 0,
+      "error": 0,
+      "unanswered": 50
+    }
   }
-]
+}
 ```
-
-#### 题目对象字段
 
 | 字段 | 类型 | 说明 |
-|------|------|------|
-| `_id` | int | 题目唯一标识 |
-| `question` | string | 题目正文（可能包含 `<p>`、`<img>`、`<table>` 等 HTML 标签） |
-| `difficult` | int/string | 难度等级 |
-| `key1` ~ `key4` | string | 正确答案标记：`"1"` 表示该选项为正确答案，`"0"` 表示非正确答案 |
-| `answer1` ~ `answer4` | string | 四个选项的 HTML 内容 |
-| `test_ans_right` | string | 正确答案字母（备选回退字段） |
+|---|---|---|
+| `examResultsId` | string | 本次作答记录 ID |
+| `examInfoId` | string | 考试信息 ID |
+| `uuid` | string/null | 上游题目请求所需 UUID |
+| `testIds` | string[] | 题目 ID 列表 |
+| `questionStates` | array | 题卡状态列表 |
+| `sections` | object | 分区统计，来自内部 `sectionMap` |
 
-#### 正确答案判断逻辑
-
-按优先级：
-
-1. 遍历 `key1` ~ `key4`，值为 `"1"` 者即为正确答案
-2. 若四项均为 `"0"`，则回退使用 `test_ans_right` 字段
-
-| `keyN` | 对应选项 | 答案字母 |
-|--------|---------|:------:|
-| `key1` | `answer1` | A |
-| `key2` | `answer2` | B |
-| `key3` | `answer3` | C |
-| `key4` | `answer4` | D |
-
----
-
-### 2.7 提交答案
-
-作答后上报单题答案。
-
-#### 请求
-
-```http
-POST /exam/exam_start_ing_multi
-Content-Type: application/x-www-form-urlencoded; charset=UTF-8
-```
-
-#### 请求参数
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| `examTestList` | string | JSON 序列化的答案数组（需 URL encode） |
-| `timeStamp` | string | 毫秒时间戳 |
-
-`examTestList` 解码后结构：
+#### 失败响应
 
 ```json
-[{
-  "exam_results_id": "87380582",
-  "test_id": "661e26a4ee9c16509b879ea7",
-  "test_ans": "key3,",
-  "exam_info_id": "1439658",
-  "correct": false
-}]
+{
+  "error": "Failed to enter exam",
+  "examResultsId": null
+}
 ```
 
-| 字段 | 说明 |
-|------|------|
-| `exam_results_id` | 考试结果 ID |
-| `test_id` | 题目 questionsId |
-| `test_ans` | 答案键，格式 `keyN,`，多选用逗号拼接，如 `key1,key3,` |
-| `exam_info_id` | 考试信息 ID |
-| `correct` | 是否正确 |
-
-答案键对照：
-
-| `test_ans` | 含义 |
-|-----------|------|
-| `key1,` | 选 A |
-| `key2,` | 选 B |
-| `key3,` | 选 C |
-| `key4,` | 选 D |
-| `key1,key3,` | 选 A 和 C（多选） |
-
-> **注意**：即使单选，末尾逗号也需保留。
+HTTP 状态码为 `500`。
 
 ---
 
-## 3. 考试页面 HTML 解析规范
+### 2.5 获取题目与答案
 
-考试页面（`/exam/exam_start/{id}`）为服务端渲染的完整 HTML 页面，需从中提取以下结构化数据。
+获取当前考试的题目详情、选项、正确答案和解析。
 
-### 3.1 JavaScript 变量提取
+调用前必须先成功调用 `/api/exams/:id/enter`，否则后端没有 `examCache`。
 
-从 `<script>` 标签中按正则提取：
+```http
+GET /api/exams/:id/questions
+```
+
+#### 成功响应
+
+```json
+{
+  "questions": [
+    {
+      "_id": "6620dfdfee9c16509b87a928",
+      "question": "<p>题干 HTML</p>",
+      "answer1": "<p>选项 A</p>",
+      "answer2": "<p>选项 B</p>",
+      "answer3": "<p>选项 C</p>",
+      "answer4": "<p>选项 D</p>",
+      "key1": "1",
+      "key2": "0",
+      "key3": "0",
+      "key4": "0",
+      "test_ans_right": "A",
+      "analysis": "<p>解析 HTML</p>",
+      "_isMulti": false,
+      "_answers": ["A"],
+      "_answer": "A",
+      "_answerHtml": "<p>选项 A</p>",
+      "_analysis": "<p>解析 HTML</p>"
+    }
+  ],
+  "states": [
+    {
+      "questionsId": "6620dfdfee9c16509b87a928",
+      "uuId": "7404753692344238080",
+      "num": 1,
+      "section": "科技常识",
+      "state": "unanswered",
+      "marked": false
+    }
+  ],
+  "sections": {
+    "科技常识": {
+      "total": 50,
+      "right": 0,
+      "error": 0,
+      "unanswered": 50
+    }
+  }
+}
+```
+
+后端会按每批 50 题调用上游 `/exam/get_question_info/`。
+
+增强字段说明：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `_isMulti` | boolean | 是否多选，依据 `key1` 到 `key4` 中正确项数量判断 |
+| `_answers` | string[] | 正确答案字母数组，例如 `["A", "C"]` |
+| `_answer` | string | 第一个正确答案；如果无 `keyN=1`，回退到 `test_ans_right` |
+| `_answerHtml` | string | 正确选项 HTML，多个正确答案用 `<br>` 拼接 |
+| `_analysis` | string | 解析 HTML，来自上游 `analysis` |
+
+#### 失败响应
+
+未先进入考试：
+
+```json
+{
+  "error": "Exam not entered yet"
+}
+```
+
+HTTP 状态码为 `400`。
+
+---
+
+### 2.6 提交单题答案
+
+将单题作答结果上报到上游。
+
+```http
+POST /api/exams/:id/answer
+Content-Type: application/json
+```
+
+#### 请求体
+
+```json
+{
+  "testId": "6620dfdfee9c16509b87a928",
+  "testAns": "key1,",
+  "correct": true
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|:---:|---|
+| `testId` | string | 是 | 题目 ID |
+| `testAns` | string | 是 | 上游答案键，单选也需要保留末尾逗号 |
+| `correct` | boolean | 是 | 前端判定的是否正确 |
+
+`testAns` 对照：
+
+| 值 | 含义 |
+|---|---|
+| `key1,` | 选择 A |
+| `key2,` | 选择 B |
+| `key3,` | 选择 C |
+| `key4,` | 选择 D |
+| `key1,key3,` | 选择 A 和 C |
+
+#### 成功响应
+
+```json
+{
+  "success": true,
+  "code": 10000
+}
+```
+
+#### 失败响应
+
+未先进入考试：
+
+```json
+{
+  "error": "Exam not entered"
+}
+```
+
+HTTP 状态码为 `400`。
+
+---
+
+### 2.7 标记或取消标记题目
+
+切换某道题的标记状态，并同步到上游。
+
+```http
+POST /api/exams/:id/mark
+Content-Type: application/json
+```
+
+#### 请求体
+
+```json
+{
+  "testId": "6620dfdfee9c16509b87a928",
+  "isMark": true
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|:---:|---|
+| `testId` | string | 是 | 题目 ID |
+| `isMark` | boolean | 是 | `true` 标记，`false` 取消标记 |
+
+#### 成功响应
+
+```json
+{
+  "success": true
+}
+```
+
+#### 失败响应
+
+未先进入考试：
+
+```json
+{
+  "error": "Exam not entered"
+}
+```
+
+HTTP 状态码为 `400`。
+
+---
+
+### 2.8 交卷并获取结果
+
+结束考试，跟随上游跳转到结果页，并从 HTML 中解析成绩、击败比例和排名。
+
+```http
+POST /api/exams/:id/submit
+```
+
+#### 行为
+
+如果当前考试不在 `examCache` 中，后端会轻量访问一次：
+
+```http
+GET https://test.lanjingweike.com/exam/exam_start/:id
+```
+
+只提取 `exam_results_id` 和 `exam_info_id`，不拉取全部题目。
+
+随后依次调用：
+
+1. `POST /exam/get_remian_time`
+2. `GET /exam/exam_ending?examInfoId=...&examResultsId=...&isForce=0&switchScreen=0&noOpsAutoCommit=0`
+
+注意：上游接口名为 `get_remian_time`，代码保持了上游拼写。
+
+#### 成功响应
+
+```json
+{
+  "success": true,
+  "score": "95",
+  "beatRate": "88",
+  "rank": "12"
+}
+```
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `score` | string | 成绩文本，解析失败时为 `"0"` |
+| `beatRate` | string | 击败比例，解析失败时为 `"?"` |
+| `rank` | string | 排名，解析失败时为 `"?"` |
+
+#### 失败响应
+
+无法从考试页解析 `exam_results_id`：
+
+```json
+{
+  "error": "Cannot find exam_results_id"
+}
+```
+
+HTTP 状态码为 `400`。
+
+---
+
+### 2.9 刷新题卡状态
+
+重新进入考试页并刷新题卡状态、标记状态和分区统计。
+
+```http
+GET /api/exams/:id/states
+```
+
+#### 成功响应
+
+响应结构与 `/api/exams/:id/enter` 相同：
+
+```json
+{
+  "examResultsId": "87380582",
+  "examInfoId": "1439658",
+  "uuid": "7404753692344238080",
+  "testIds": [
+    "6620dfdfee9c16509b87a928"
+  ],
+  "questionStates": [
+    {
+      "questionsId": "6620dfdfee9c16509b87a928",
+      "uuId": "7404753692344238080",
+      "num": 1,
+      "section": "科技常识",
+      "state": "right",
+      "marked": true
+    }
+  ],
+  "sections": {
+    "科技常识": {
+      "total": 50,
+      "right": 1,
+      "error": 0,
+      "unanswered": 49
+    }
+  }
+}
+```
+
+#### 失败响应
+
+```json
+{
+  "error": "Failed to get states"
+}
+```
+
+HTTP 状态码为 `500`。
+
+---
+
+### 2.10 退出登录
+
+清空后端进程内会话、考试缓存，并删除 `session_cookies.txt`。
+
+```http
+GET /api/logout
+```
+
+#### 成功响应
+
+```json
+{
+  "success": true
+}
+```
+
+---
+
+## 3. 上游接口映射
+
+| 本地接口 | 上游接口 | 说明 |
+|---|---|---|
+| `POST /api/login` | `GET /login/account/login/1` | 获取 `JSESSIONID` |
+| `POST /api/login` | `POST /login/account/login` | 登录并获取 `sessionId` |
+| `GET /api/exams` | `POST /exam/current_exam_list` | 获取考试列表 |
+| `POST /api/exams/:id/enter` | `GET /exam/exam_start/:id` | 继续考试或最终进入考试 |
+| `POST /api/exams/:id/enter` | `GET /exam/enter_exam/1/:id` | 新考试入口 |
+| `POST /api/exams/:id/enter` | `POST /exam/faceCheckCondition` | 新考试人脸校验条件检查 |
+| `POST /api/exams/:id/enter` | `POST /exam/start_exam_queue` | 新考试排队 |
+| `POST /api/exams/:id/enter` | `POST /exam/check_queue_status` | 新考试排队状态轮询 |
+| `POST /api/exams/:id/enter` | `POST /exam/test_complete` | 新考试组卷完成轮询 |
+| `GET /api/exams/:id/questions` | `POST /exam/get_question_info/` | 批量获取题目详情 |
+| `POST /api/exams/:id/answer` | `POST /exam/exam_start_ing_multi` | 上报单题答案 |
+| `POST /api/exams/:id/mark` | `POST /exam/exam_question_mark` | 标记或取消标记题目 |
+| `POST /api/exams/:id/submit` | `POST /exam/get_remian_time` | 交卷前获取剩余时间 |
+| `POST /api/exams/:id/submit` | `GET /exam/exam_ending` | 结束考试并进入结果页 |
+| `GET /api/exams/:id/states` | `GET /exam/exam_start/:id` | 刷新题卡状态 |
+
+---
+
+## 4. 数据结构
+
+### 4.1 `questionStates[]`
+
+题卡状态来自考试页 HTML 中的答题卡 DOM。
+
+```json
+{
+  "questionsId": "6620dfdfee9c16509b87a928",
+  "uuId": "7404753692344238080",
+  "num": 1,
+  "section": "科技常识",
+  "state": "unanswered",
+  "marked": false
+}
+```
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `questionsId` | string | 题目 ID |
+| `uuId` | string/null | 上游题目详情接口需要的 UUID |
+| `num` | number | 题号 |
+| `section` | string | 分区标题，单区试卷可能为空字符串 |
+| `state` | string | `unanswered`、`right` 或 `error` |
+| `marked` | boolean | 是否已标记 |
+
+### 4.2 `sections`
+
+分区统计对象。键为分区标题；没有分区标题时，内部使用 `"(无分类"` 作为默认键。
+
+```json
+{
+  "科技常识": {
+    "total": 50,
+    "right": 20,
+    "error": 5,
+    "unanswered": 25
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `total` | number | 分区总题数 |
+| `right` | number | 已答且正确 |
+| `error` | number | 已答且错误 |
+| `unanswered` | number | 未作答 |
+
+### 4.3 题目详情对象
+
+上游题目对象字段较多，前端主要使用以下字段：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `_id` | string/number | 题目 ID |
+| `question` | string | 题干 HTML |
+| `answer1` 到 `answer4` | string | 选项 HTML |
+| `key1` 到 `key4` | string | `"1"` 表示该选项正确，`"0"` 表示不正确 |
+| `test_ans_right` | string | 上游备用正确答案字母 |
+| `analysis` | string | 解析 HTML |
+| `_isMulti` | boolean | 后端增强字段，是否多选 |
+| `_answers` | string[] | 后端增强字段，正确答案数组 |
+| `_answer` | string | 后端增强字段，首个正确答案或备用答案 |
+| `_answerHtml` | string | 后端增强字段，正确选项 HTML |
+| `_analysis` | string | 后端增强字段，解析 HTML |
+
+正确答案判断优先级：
+
+1. 遍历 `key1` 到 `key4`，值为 `"1"` 的选项为正确答案
+2. 如果没有任何 `keyN` 为 `"1"`，使用 `test_ans_right`
+
+---
+
+## 5. 错误与会话处理
+
+### 5.1 本地鉴权中间件
+
+除 `/api/login` 和 `/api/status` 外，所有 `/api/...` 路由都会先检查：
 
 ```js
-var exam_results_id = '87380582';      // 考试结果 ID（本次作答会话）
-var exam_info_id    = '1439658';       // 考试信息 ID
-var uuId            = '7404753692344238080';  // 用户唯一标识
+cookieJar.includes("sessionId=")
 ```
 
-正则模式：`/var\s+变量名\s*=\s*['"]([^'"]+)['"]/`
+不满足时直接返回 `401`：
 
-### 3.2 答题卡题目状态解析
-
-每道题在答题卡中以 `<a>` 包裹的 `<div>` 呈现，class 直接反映作答状态。
-
-#### HTML 结构
-
-```html
-<a href="#6620dfdfee9c16509b87a928">
-  <div class="box normal-box question_cbox s2 practice-mode-2 right">
-    <span class="iconBox currentThemeBackgroundColor questions_xxx"
-          questionsId="6620dfdfee9c16509b87a928"
-          uuId="7404753692344238080"
-          num="questions_xxx" perScore="" timeInterval="">1</span>
-    <span class="icon-box question_marked icon-p_exam_tag_se"></span>
-    <span class="icon-box unsaved_mark icon-a_warning"></span>
-  </div>
-</a>
+```json
+{
+  "error": "Not logged in"
+}
 ```
 
-#### 作答状态对照
+### 5.2 上游会话过期
 
-| `<div>` class 模式 | 含义 |
+`proxyRequest` 会识别以下情况为会话过期：
+
+- 上游返回 `302`，并且 `Location` 包含 `/login/account/login`
+- 响应 HTML 中同时包含 `/login/account/login` 和 `<!DOCTYPE`
+- 响应文本中出现 `"onlineStatus": 0` 或 `"onlineStatus": "0"`
+
+识别到过期后，后端会调用 `clearSession()`：
+
+- 清空 `cookieJar`
+- 清空 `examCache`
+- 清空 `examsCache`
+- 删除 `session_cookies.txt`
+
+并返回：
+
+```json
+{
+  "error": "Session expired"
+}
+```
+
+HTTP 状态码为 `401`。
+
+### 5.3 常见 HTTP 状态码
+
+| 状态码 | 场景 |
 |---|---|
-| `question_cbox s1 practice-mode-N` | 尚未作答 |
-| `question_cbox s2 practice-mode-N right` | 已作答，回答正确 |
-| `question_cbox s2 practice-mode-N error` | 已作答，回答错误 |
-
-- `s1` = Section 1（未作答阶段）
-- `s2` = Section 2（已作答阶段）
-- `right` / `error` 仅在 `s2` 状态下出现
-
-#### 关于 `marked` 与 `unsaved` 标记
-
-```html
-<span class="icon-box question_marked icon-p_exam_tag_se"></span>
-<span class="icon-box unsaved_mark icon-a_warning"></span>
-```
-
-这两个 `<span>` 在服务端渲染的 HTML 中**每题均存在**（为模板固定元素），其是否可见由前端 JavaScript 动态控制。通过解析静态 HTML **无法可靠判断**某题是否真的被标记或未保存，不应作为提取依据。
-
-#### 提取参数汇总
-
-| 参数 | 来源 | 提取方式 |
-|------|------|---------|
-| `examResultsId` | JS 变量 `exam_results_id` | 正则提取 |
-| `examInfoId` | JS 变量 `exam_info_id` | 正则提取 |
-| `uuid` | `<span>` 属性 `uuId` | 正则提取（所有题目共享同一值） |
-| `questionsId` | `<span>` 属性 `questionsId` | 正则提取 |
-| 题号 | `<span>` 文本内容 | 正则提取 `>(\d+)<\/span>` |
-| 作答状态 | `<div>` class 中的 `right` / `error` | 正则提取，无则为 `unanswered` |
-
-### 3.3 分区（Section）结构
-
-部分考试试卷按知识板块分节，每节在答题卡中对应一个 `card-content` 区块。
-
-#### HTML 结构
-
-```html
-<div class="card-content-list">
-  <div class="card-content">
-    <div class="card-content-title">科技常识(共50题,每题1分,合计50.0分)</div>
-    <div class="box-list">
-      <!-- 该节全部题目卡片 -->
-    </div>
-  </div>
-  <div class="card-content">
-    <div class="card-content-title">人文常识(共50题,每题1分,合计50.0分)</div>
-    <div class="box-list">
-      <!-- 该节全部题目卡片 -->
-    </div>
-  </div>
-</div>
-```
-
-#### 分区归属判断
-
-- 提取所有 `card-content-title` 文本及其在 HTML 中的位置
-- 对每道题，根据其 `questionsId` 在 HTML 中出现的位置，判断归属于哪个分区
+| `200` | 请求成功 |
+| `400` | 请求前置条件不满足，例如未进入考试就请求题目 |
+| `401` | 未登录、登录失败或上游会话过期 |
+| `500` | 上游业务失败、解析失败或进入考试失败 |
 
 ---
 
-## 4. 业务流程
+## 6. 业务流程
 
-### 4.1 继续考试（`wfs = 0`）
+### 6.1 首次使用
 
-```
-① GET  /                            → 获取 JSESSIONID
-② POST /login/account/login         → 登录，获取 sessionId
-③ POST /exam/current_exam_list      → 获取考试列表
-④ GET  /exam/exam_start/{id}        → 获取考试页面 HTML（含答题卡）
-⑤ POST /exam/get_question_info/     → 分批获取题目详情与答案
-⑥ POST /exam/exam_start_ing_multi   → 逐题提交作答结果
-```
-
-### 4.2 新考试初始化（`wfs = 1`）
-
-```
-① GET  /                            → 获取 JSESSIONID
-② POST /login/account/login         → 登录，获取 sessionId
-③ POST /exam/current_exam_list      → 获取考试列表
-④ GET  /exam/enter_exam/1/{id}      → 进入考试入口（跟随 302）
-⑤ POST /exam/faceCheckCondition     → 检查人脸核验
-⑥ POST /exam/start_exam_queue       → 发起排队
-⑦ POST /exam/check_queue_status     → 轮询排队（如需排队）
-⑧ POST /exam/test_complete          → 轮询组卷
-⑨ GET  /exam/exam_start/{id}        → 获取考试页面 HTML（含答题卡）
-⑩ POST /exam/get_question_info/     → 分批获取题目详情与答案
-⑪ POST /exam/exam_start_ing_multi   → 逐题提交作答结果
+```text
+GET  /api/status
+POST /api/login
+GET  /api/exams
+POST /api/exams/:id/enter
+GET  /api/exams/:id/questions
+POST /api/exams/:id/answer
+POST /api/exams/:id/submit
 ```
 
----
+### 6.2 已有保存会话
 
-## 5. 附录
+```text
+GET  /api/status
+GET  /api/exams
+POST /api/exams/:id/enter
+GET  /api/exams/:id/questions
+```
 
-### A. 错误码表
+如果任一接口返回 `401` 且 `error` 为 `Session expired` 或 `Not logged in`，前端应回到登录页。
 
-| code | 含义 |
-|:----:|------|
-| `10000` | 操作成功 |
-| `-1` | 通用失败（详见 `desc` 字段） |
-| `60011` | 免排队（`start_exam_queue` 特返回此码表示可直接进入组卷） |
-| `50012` | 考试尚未到达开放时间 |
+### 6.3 新考试进入流程
 
-### B. `examInfoModelList` 完整字段
+当前端先调用 `/api/exams` 后，后端可根据 `wfs` 判断是否为新考试。
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `id` | int | 考试唯一标识 |
-| `examName` | string | 考试名称 |
-| `examStyle` | int | 分类 ID |
-| `examStyleName` | string | 分类名称 |
-| `paperInfoId` | int | 试卷模板 ID |
-| `practiceMode` | int | `0` 模拟考试 / `1` MOCK / `2` 练习 |
-| `examMode` | string | 考试模式 |
-| `examTime` | int | 限时（分钟），`0` 不限时 |
-| `examTimeRestrict` | string | 是否限时 |
-| `examTimesNum` | int | 允许作答次数 |
-| `examTimesRestrict` | string | 是否限次 |
-| `wfs` | int | `0` 有作答记录 / `1` 新试卷 |
-| `timeLeft` | int | 剩余时间（秒） |
-| `paid` | bool | 是否已付费 |
-| `joinStatus` | int | 参与状态 |
-| `status` | string | 发布状态 |
-| `sortOrder` | int | 排序 |
-| `createTime` | string | 创建时间 |
-| `modifiedTime` | string | 修改时间 |
-| `examStartTime` | string | 开放起始时间 |
-| `examEndTime` | string | 开放截止时间 |
-| `beforeAnswerNotice` | string | 考前须知 |
-| `setReleaseNotice` | string | 发布公告 |
-| `coverFile` | string | 封面图 URL |
-| `prohibitScreenCutout` | int | 禁止切屏 |
-| `setDisablePaste` | string | 禁止粘贴 |
-| `setFullScreen` | string | 强制全屏 |
-| `setRandomOrderTest` | string | 随机乱序 |
-| `onebyoneMode` | int | 逐题模式 |
-| `feedback` | int | 允许反馈 |
-| `forSale` | int | 是否付费考试 |
-| `isArchive` | int | 是否归档 |
-| `isVisible` | int | 是否可见 |
+当 `wfs === 1` 时，`POST /api/exams/:id/enter` 内部流程为：
 
-### C. 接口参数命名差异
+```text
+GET  /exam/enter_exam/1/:id
+POST /exam/faceCheckCondition
+POST /exam/start_exam_queue
+POST /exam/check_queue_status    可选，最多 30 次，每 2 秒一次
+POST /exam/test_complete         最多 30 次，每 2 秒一次
+GET  /exam/exam_start/:id
+```
 
-| 接口 | 参数名 |
-|------|--------|
-| `/exam/faceCheckCondition` | `examInfoId` |
-| `/exam/start_exam_queue` | `examId` |
-| `/exam/check_queue_status` | `examId` |
-| `/exam/check_hard_over_count` | `examId` |
-| `/exam/test_complete` | `examId` |
-| `/exam/get_question_info/` | `examInfoId` |
-| `/exam/exam_start/{id}` | 路径参数 |
+### 6.4 继续考试进入流程
 
-> ⚠️ 排队与组卷相关接口的参数名为 `examId`，而非列表/进入接口使用的 `examInfoId`。二者值相同（均为考试 ID），但 key 不同。用错将导致服务端错误。
+当 `wfs !== 1`，或未命中 `examsCache` 时，`POST /api/exams/:id/enter` 会直接：
 
-### D. 重要注意事项
+```text
+GET /exam/exam_start/:id
+```
 
-1. **密码双哈希**：登录时须同时提交 SHA256 和 MD5 两种明文密码哈希，缺一不可。
-2. **Cookie 持久化**：登录成功后将 Cookie 保存至文件，后续运行可直接读取以跳过登录（有效期约 48 小时）。
-3. **重定向手动处理**：所有请求设置 `redirect: "manual"`，自行捕获并处理重定向响应，以保存 `Set-Cookie`。
-4. **题目 ID 去重**：答题卡中同一 `questionsId` 可能在多处 DOM 位置出现，需做去重处理。
-5. **批量请求分片**：`get_question_info` 单次建议不超过 50 题，超过时需分批并发请求。
-6. **时间单位差异**：`examTime` 单位为**分钟**，`timeLeft` 单位为**秒**，`examStartTime` / `examEndTime` 为**日期字符串**。
-7. **新/旧考试流程不同**：`wfs = 1` 必须走完整的初始化链（[4.2](#42-新考试初始化wfs--1)），不可直接访问 `exam_start`。
-8. **分区信息**：`card-content-title` 元素仅在分节考试中存在，单区考试无此元素。
+然后解析考试页 HTML。
+
+### 6.5 交卷流程
+
+```text
+POST /api/exams/:id/submit
+  -> POST /exam/get_remian_time
+  -> GET  /exam/exam_ending
+  -> 解析结果页 HTML
+```
+
+返回的 `score`、`beatRate`、`rank` 都是从上游 HTML 中按正则解析出的字符串。若上游页面结构变化，字段可能回退为 `"0"` 或 `"?"`。

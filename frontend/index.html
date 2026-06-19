@@ -3,245 +3,1613 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>答题助手</title>
+<title>蓝鲸助手 · Duolingo 学习模式</title>
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="答题助手">
-<meta name="theme-color" content="#1a8cfe">
+<meta name="apple-mobile-web-app-title" content="蓝鲸助手">
+<meta name="theme-color" content="#58cc02">
 <style>
-/* ========== Theme ========== */
+/* ========== Duolingo Theme Variables ========== */
 :root {
-  --bg: #f5f6fa; --card: #fff; --text: #27274a; --text2: #656577; --text3: #9090a4;
-  --border: #ebeef6; --accent: #1a8cfe; --accent-hover: #1985f1;
-  --green: #1dc88c; --red: #ff4b50; --gray: #c1c1cb;
-  --green-bg: rgba(29,200,140,.08); --red-bg: rgba(255,75,80,.08); --gray-bg: #f1f3f8;
-  --radius: 8px; --shadow: 0 1px 4px rgba(58,62,81,.08);
-  --sidebar-w: 320px;
+  /* Light theme values */
+  --light-bg: #ffffff;
+  --light-surface: #f7f7f7;
+  --light-card: #ffffff;
+  --light-text: #3c3c3c;
+  --light-text2: #777777;
+  --light-text3: #afafaf;
+  --light-border: #e5e5e5;
+  --light-elev-raised: 0 4px 0 #e5e5e5;
+  --light-elev-card: 0 4px 0 #e5e5e5;
+
+  /* Dark theme values */
+  --dark-bg: #131f24;
+  --dark-surface: #1f2f38;
+  --dark-card: #1f2f38;
+  --dark-text: #f1f7fb;
+  --dark-text2: #afc2cb;
+  --dark-text3: #6b7d86;
+  --dark-border: #3b4d54;
+  --dark-elev-raised: 0 4px 0 #3b4d54;
+  --dark-elev-card: 0 4px 0 #3b4d54;
+
+  /* Active theme bindings (defaults to Light) */
+  --bg: var(--light-bg);
+  --surface: var(--light-surface);
+  --card: var(--light-card);
+  --text: var(--light-text);
+  --text2: var(--light-text2);
+  --text3: var(--light-text3);
+  --border: var(--light-border);
+  --elev-raised: var(--light-elev-raised);
+  --elev-card: var(--light-elev-card);
+  
+  /* Shared Constants */
+  --accent: #58cc02;
+  --accent-hover: #61e002;
+  --accent-active: #58a700;
+  
+  --orange: #ff9600;
+  --orange-active: #cc7a00;
+  --blue: #1cb0f6;
+  --blue-hover: #4cd0ff;
+  --pink: #ce82ff;
+  --red: #ff4b4b;
+  --red-active: #cc3b3b;
+  --yellow: #ffc800;
+  --gray: #afafaf;
+  
+  --success-bg: #dbf8c5;
+  --danger-bg: #ffdfe0;
+  --gray-bg: #f1f3f8;
+  
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-pill: 9999px;
+  
+  --elev-accent: 0 4px 0 #58a700;
+  --elev-orange: 0 4px 0 #cc7a00;
+  --elev-danger: 0 4px 0 #cc3b3b;
+  --elev-blue: 0 4px 0 #1494cf;
+  
+  --font-display: "DIN Next Rounded LT Pro", "DIN Round Pro", "Mona Sans", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-body: "Mona Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+
+  /* Feature cards alternate color variables */
+  --feat-bg-1: #e8f5e9;
+  --feat-fg-1: #58cc02;
+  --feat-bg-2: #e3f2fd;
+  --feat-fg-2: #1cb0f6;
+  --feat-bg-3: #f3e5f5;
+  --feat-fg-3: #ce82ff;
+  --feat-bg-4: #fff3e0;
+  --feat-fg-4: #ff9600;
+
+  /* Mascot SVG fill bindings */
+  --mascot-feet: var(--orange);
+  --mascot-body: var(--accent);
+  --mascot-belly: var(--accent-hover);
+  --mascot-belly-stroke: var(--accent-active);
+  --mascot-eye-pupil: var(--text);
+  --mascot-cheeks: var(--red);
 }
+
 [data-theme="dark"] {
-  --bg: #1a1a2e; --card: #222240; --text: #dbdbdb; --text2: #b3b3b3; --text3: #838383;
-  --border: #3b3b4a; --accent: #4da6ff; --gray-bg: #2a2a3a;
-  --green: #34d99e; --red: #ff6b70; --gray: #666;
-  --green-bg: rgba(29,200,140,.15); --red-bg: rgba(255,75,80,.15);
-  --shadow: 0 1px 8px rgba(0,0,0,.3);
+  --bg: var(--dark-bg);
+  --surface: var(--dark-surface);
+  --card: var(--dark-card);
+  --text: var(--dark-text);
+  --text2: var(--dark-text2);
+  --text3: var(--dark-text3);
+  --border: var(--dark-border);
+  --elev-raised: var(--dark-elev-raised);
+  --elev-card: var(--dark-elev-card);
+  
+  --gray-bg: #28373f;
+  --success-bg: rgba(88, 204, 2, 0.15);
+  --danger-bg: rgba(255, 75, 75, 0.15);
 }
-* { margin:0; padding:0; box-sizing:border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); height:100vh; overflow:hidden; }
-input, button { font-family: inherit; }
 
-/* ========== Page visibility ========== */
-.page { display:none; flex-direction:column; height:100vh; }
-.page.active { display:flex; }
+/* ========== Base Reset ========== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
-/* ========== Login ========== */
-.login-page { justify-content:center; align-items:center; padding:20px; }
-.login-card { background:var(--card); border-radius:12px; padding:40px 32px; box-shadow:var(--shadow); width:100%; max-width:400px; }
-.login-card h1 { text-align:center; margin-bottom:8px; font-size:24px; }
-.login-card .sub { text-align:center; color:var(--text3); margin-bottom:32px; font-size:14px; }
-.login-card label { display:block; font-size:14px; color:var(--text2); margin-bottom:6px; }
-.login-card input { width:100%; padding:12px 16px; border:1px solid var(--border); border-radius:var(--radius); font-size:16px; background:var(--card); color:var(--text); margin-bottom:20px; outline:none; transition:border .2s; }
-.login-card input:focus { border-color:var(--accent); }
-.login-card .btn { width:100%; padding:14px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius); font-size:16px; cursor:pointer; font-weight:600; }
-.login-card .btn:hover { background:var(--accent-hover); }
-.login-card .err { color:var(--red); text-align:center; margin-top:12px; font-size:14px; display:none; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
 
-/* ========== Header ========== */
-.header { background:var(--card); border-bottom:1px solid var(--border); padding:10px 20px; display:flex; align-items:center; justify-content:space-between; gap:8px; flex-shrink:0; }
-.header h2 { font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.header-actions { display:flex; gap:8px; align-items:center; }
-.header-actions button { padding:6px 12px; border:1px solid var(--border); border-radius:var(--radius); background:var(--card); color:var(--text2); cursor:pointer; font-size:12px; }
-.header-actions button:hover { border-color:var(--accent); color:var(--accent); }
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+}
 
-/* ========== Exam List ========== */
-.exam-list { padding:20px; max-width:900px; margin:0 auto; width:100%; overflow-y:auto; flex:1; }
-.exam-list .stats { color:var(--text3); font-size:13px; margin-bottom:16px; }
-.category { margin-bottom:24px; }
-.category h3 { font-size:15px; color:var(--text2); margin-bottom:10px; padding:8px 12px; background:var(--gray-bg); border-radius:var(--radius); }
-.exam-card { background:var(--card); border-radius:var(--radius); padding:14px 16px; margin-bottom:8px; box-shadow:var(--shadow); cursor:pointer; transition:all .15s; border-left:4px solid transparent; }
-.exam-card:hover { border-left-color:var(--accent); transform:translateX(2px); }
-.exam-card .name { font-size:15px; font-weight:600; margin-bottom:6px; }
-.exam-card .meta { display:flex; gap:12px; flex-wrap:wrap; font-size:12px; color:var(--text3); }
-.badge { padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
-.badge-new { background:var(--accent); color:#fff; }
-.badge-cont { background:var(--green-bg); color:var(--green); }
-.badge-exam { background:#fff3e0; color:#e65100; }
-.badge-drill { background:#e8f5e9; color:#2e7d32; }
-.exam-card .id-tag { font-family:monospace; color:var(--text3); font-size:11px; }
+input, button {
+  font-family: inherit;
+  outline: none;
+}
+
+/* ========== Page Structures ========== */
+.page {
+  display: none;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg);
+}
+.page.active {
+  display: flex;
+}
+
+/* ========== Header Styling (Duolingo Header) ========== */
+.header {
+  background: var(--bg);
+  border-bottom: 2px solid var(--border);
+  padding: 16px 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  z-index: 10;
+}
+.header h2 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.header h2::before {
+  content: "🦉";
+  font-size: 24px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+/* Global 3D Button Style */
+.btn-style {
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: transform 0.1s, filter 0.1s;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.btn-theme-toggle {
+  background: var(--card);
+  color: var(--text);
+  border: 2px solid var(--border) !important;
+  border-bottom: 4px solid var(--border) !important;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-weight: 800;
+}
+.btn-theme-toggle:active {
+  transform: translateY(2px);
+  border-bottom-width: 2px !important;
+}
+
+.btn-header-login {
+  background: var(--accent);
+  color: white;
+  box-shadow: var(--elev-accent);
+}
+.btn-header-login:hover {
+  filter: brightness(1.05);
+}
+.btn-header-login:active {
+  transform: translateY(4px);
+  box-shadow: none;
+}
+
+.btn-header-logout {
+  background: var(--card);
+  color: var(--red);
+  border: 2px solid var(--border);
+  border-bottom: 4px solid var(--border);
+}
+.btn-header-logout:hover {
+  background: var(--surface);
+}
+.btn-header-logout:active {
+  transform: translateY(2px);
+  border-bottom-width: 2px;
+}
+
+/* ========== Landing / Home Page ========== */
+.home-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 60px 40px;
+  max-width: 1080px;
+  margin: 0 auto;
+  width: 100%;
+}
+.hero-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 48px;
+  padding: 40px 0 60px;
+}
+.hero-content {
+  flex: 1;
+  max-width: 540px;
+}
+.hero-content h1 {
+  font-family: var(--font-display);
+  font-size: 38px;
+  font-weight: 800;
+  margin-bottom: 20px;
+  line-height: 1.25;
+  color: var(--text);
+}
+.hero-content p {
+  font-size: 18px;
+  color: var(--text2);
+  line-height: 1.6;
+  margin-bottom: 36px;
+}
+
+.hero-mascot-container {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 320px;
+}
+
+.duo-mascot {
+  animation: float 4s ease-in-out infinite;
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.cta-btn {
+  padding: 14px 48px;
+  background: var(--accent);
+  color: white;
+  border-radius: var(--radius-md);
+  font-size: 18px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: var(--elev-accent);
+  border: none;
+  transition: transform 0.1s, filter 0.1s;
+}
+.cta-btn:hover {
+  filter: brightness(1.05);
+}
+.cta-btn:active {
+  transform: translateY(4px);
+  box-shadow: none;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 24px;
+  margin-top: 40px;
+}
+.feat-card {
+  background: var(--card);
+  border-radius: var(--radius-md);
+  padding: 28px 24px;
+  border: 2px solid var(--border);
+  box-shadow: var(--elev-card);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.feat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 var(--border);
+}
+.feat-card .icon {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+.feat-card .icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.feat-card:nth-of-type(4n+1) .icon { background: var(--feat-bg-1); color: var(--feat-fg-1); }
+.feat-card:nth-of-type(4n+2) .icon { background: var(--feat-bg-2); color: var(--feat-fg-2); }
+.feat-card:nth-of-type(4n+3) .icon { background: var(--feat-bg-3); color: var(--feat-fg-3); }
+.feat-card:nth-of-type(4n+4) .icon { background: var(--feat-bg-4); color: var(--feat-fg-4); }
+
+.feat-card h3 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+.feat-card p {
+  font-size: 14px;
+  color: var(--text2);
+  line-height: 1.6;
+}
+
+@media (max-width: 920px) {
+  .hero-section {
+    flex-direction: column-reverse;
+    text-align: center;
+    gap: 32px;
+    padding: 20px 0 40px;
+  }
+  .hero-content {
+    max-width: 100%;
+  }
+  .hero-content h1 {
+    font-size: 30px;
+  }
+  .hero-content p {
+    font-size: 16px;
+  }
+  .hero-mascot-container {
+    width: 200px;
+  }
+}
+
+/* ========== Login Page ========== */
+.login-page {
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  background: var(--surface);
+}
+.login-card {
+  background: var(--card);
+  border-radius: var(--radius-lg);
+  padding: 48px 40px;
+  border: 2px solid var(--border);
+  box-shadow: var(--elev-card);
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+}
+.login-card h1 {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--accent);
+  margin-top: 12px;
+  margin-bottom: 4px;
+}
+.login-card .sub {
+  color: var(--text2);
+  margin-bottom: 32px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.login-card label {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 8px;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.login-card input {
+  width: 100%;
+  padding: 14px 18px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 16px;
+  background: var(--card);
+  color: var(--text);
+  margin-bottom: 24px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.login-card input:focus {
+  border-color: var(--blue);
+  box-shadow: var(--focus-ring);
+}
+.login-card .btn {
+  width: 100%;
+  padding: 14px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 17px;
+  cursor: pointer;
+  font-weight: 800;
+  box-shadow: var(--elev-accent);
+  transition: transform 0.1s, filter 0.1s;
+}
+.login-card .btn:hover {
+  filter: brightness(1.05);
+}
+.login-card .btn:active {
+  transform: translateY(4px);
+  box-shadow: none;
+}
+.login-card .err {
+  color: var(--red);
+  background: var(--danger-bg);
+  border: 2px solid var(--red);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  margin-top: 20px;
+  font-size: 14px;
+  font-weight: bold;
+  display: none;
+}
+
+/* ========== Exam List Page ========== */
+.exam-list {
+  padding: 40px 16px;
+  max-width: 860px;
+  margin: 0 auto;
+  width: 100%;
+  overflow-y: auto;
+  flex: 1;
+}
+.exam-list .stats {
+  color: var(--text2);
+  font-size: 14px;
+  font-weight: bold;
+  margin-bottom: 24px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.category {
+  margin-bottom: 36px;
+}
+.category h3 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  color: white;
+  margin-bottom: 16px;
+  padding: 16px 24px;
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 0 rgba(0,0,0,0.15);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* Duolingo unit alternating colors */
+.category:nth-of-type(4n+1) h3 { background: var(--accent); }
+.category:nth-of-type(4n+2) h3 { background: var(--blue); }
+.category:nth-of-type(4n+3) h3 { background: var(--pink); }
+.category:nth-of-type(4n+4) h3 { background: var(--orange); }
+
+.exam-card {
+  position: relative;
+  background: var(--card);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  border: 2px solid var(--border);
+  box-shadow: var(--elev-card);
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.exam-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 var(--border);
+}
+.exam-card-inner {
+  display: flex;
+  align-items: center;
+  transition: transform .2s ease;
+  padding: 18px 24px 18px 19px;
+  cursor: pointer;
+  gap: 20px;
+}
+/* Cute graphic representation on the left of each exam card using Duolingo-styled CSS/SVG icons */
+.exam-card-inner::before {
+  content: "";
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--gray-bg) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23777777" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>') no-repeat center/24px;
+  border: 3px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 3px 0 var(--border);
+  transition: transform 0.15s ease;
+}
+.exam-card-inner:has(.badge-new)::before {
+  content: "";
+  background: var(--feat-bg-2) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%231cb0f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>') no-repeat center/24px;
+  border-color: color-mix(in oklch, var(--blue) 50%, white);
+  box-shadow: 0 3px 0 color-mix(in oklch, var(--blue) 50%, white);
+}
+.exam-card-inner:has(.badge-cont)::before {
+  content: "";
+  background: color-mix(in oklch, var(--yellow) 15%, white) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23ffc800" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>') no-repeat center/24px;
+  border-color: color-mix(in oklch, var(--yellow) 50%, white);
+  box-shadow: 0 3px 0 color-mix(in oklch, var(--yellow) 50%, white);
+}
+
+.exam-card-inner.open {
+  transform: translateX(-100px);
+}
+.exam-card .card-info {
+  flex: 1;
+  min-width: 0;
+}
+.exam-card .card-dots {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: bold;
+  cursor: pointer;
+  color: var(--text2);
+  border-radius: 50%;
+  transition: background 0.15s, color 0.15s;
+  user-select: none;
+}
+.exam-card .card-dots:hover {
+  background: var(--gray-bg);
+  color: var(--text);
+}
+.exam-card .card-abandon {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 100px;
+  background: var(--red);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(100px);
+  transition: all .2s ease;
+  line-height: 1.4;
+  text-align: center;
+  box-shadow: inset 4px 0 0 rgba(0,0,0,0.1);
+}
+.exam-card-inner.open + .card-abandon,
+.exam-card-inner.open ~ .card-abandon {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+.exam-card .card-abandon:hover {
+  filter: brightness(0.9);
+}
+
+.exam-card .name {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  color: var(--text);
+  word-break: break-all;
+  white-space: normal;
+}
+.exam-card .meta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--text2);
+  font-weight: 600;
+}
+.badge {
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.badge-new {
+  background: var(--blue);
+  color: white;
+  display:inline-block;
+  font-size:11px;
+  padding:1px 7px;
+  border-radius:3px;
+}
+.badge-cont {
+  background: var(--accent);
+  color: white;
+  display:inline-block;
+  font-size:11px;
+  padding:1px 7px;
+  border-radius:3px;
+}
+.badge-exam {
+  background: rgba(255, 150, 0, 0.15);
+  color: var(--orange);
+}
+.badge-drill {
+  background: rgba(28, 176, 246, 0.15);
+  color: var(--blue);
+}
+.exam-card .id-tag {
+  font-family: var(--font-mono);
+  color: var(--text3);
+  font-size: 11px;
+  font-weight: normal;
+}
 
 /* ========== Quiz Layout ========== */
-.quiz-layout { display:flex; flex:1; overflow:hidden; }
-.quiz-main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
-.quiz-sidebar { width:var(--sidebar-w); border-left:1px solid var(--border); background:var(--card); display:flex; flex-direction:column; overflow:hidden; flex-shrink:0; }
+.quiz-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  background: var(--bg);
+}
+.quiz-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.quiz-sidebar {
+  width: 320px;
+  border-left: 2px solid var(--border);
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+  z-index: 5;
+}
+
+/* Duolingo Quiz Header Styles */
+.quiz-header {
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.btn-close {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  font-weight: bold;
+  color: var(--text2);
+  cursor: pointer;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-close:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* Progress bar container mimicking Duolingo */
+.duo-progress-bar-container {
+  flex: 1;
+  height: 16px;
+  background: var(--border);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  position: relative;
+}
+.duo-progress-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  width: 0%;
+  transition: width 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+}
+.duo-progress-bar-flash {
+  position: absolute;
+  top: 3px;
+  left: 6px;
+  right: 6px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: var(--radius-pill);
+}
+
+.heart-indicator {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--red);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--gray-bg);
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+}
 
 /* Question area */
-.quiz-top { padding:10px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; font-size:13px; color:var(--text3); }
-.quiz-top .q-progress { font-weight:600; color:var(--accent); }
-.quiz-scroll { flex:1; overflow-y:auto; padding:0 24px 0; display:flex; flex-direction:column; position:relative; }
-.q-block { max-width:860px; display:grid; grid-template-rows:auto 1fr auto auto; min-height:100%; }
-.q-block.answered-mode { display:block; min-height:0; }
-.answered-mode .q-text { max-height:35vh; }
-.q-num { font-size:13px; color:var(--text3); padding:12px 0 8px; }
-.q-num .badge-q { padding:2px 8px; border-radius:4px; font-size:11px; margin-left:8px; }
-.q-num .badge-multi { background:#fff3e0; color:#e65100; }
-.q-text { font-size:16px; line-height:1.7; overflow-y:auto; min-height:0; padding-right:8px; }
-.q-text img { max-width:100%; }
-.q-text p { margin-bottom:8px; }
+.quiz-top {
+  padding: 14px 28px;
+  border-bottom: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text2);
+  background: var(--surface);
+}
+.quiz-top .q-progress {
+  color: var(--accent);
+  font-family: var(--font-display);
+}
+.quiz-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 40px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.q-block {
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  min-height: 100%;
+  padding-bottom: 40px;
+}
+.q-block.answered-mode {
+  display: block;
+  min-height: 0;
+}
+.answered-mode .q-text {
+  max-height: 35vh;
+}
+.q-num {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text2);
+  padding: 24px 0 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.q-num .badge-q {
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  background: var(--gray-bg);
+  color: var(--text2);
+}
+.q-num .badge-multi {
+  background: rgba(255, 150, 0, 0.15);
+  color: var(--orange);
+}
+
+.btn-mark {
+  margin-left: auto;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  border: 2px solid var(--border);
+  border-bottom: 4px solid var(--border);
+  background: var(--card);
+  color: var(--text2);
+  transition: all 0.15s;
+  user-select: none;
+  white-space: nowrap;
+}
+.btn-mark:hover {
+  border-color: var(--orange);
+  color: var(--orange);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 0 var(--border);
+}
+.btn-mark:active {
+  transform: translateY(2px);
+  border-bottom-width: 2px;
+}
+.btn-mark.marked {
+  border-color: var(--orange);
+  background: rgba(255, 150, 0, 0.1);
+  color: var(--orange);
+  box-shadow: 0 3px 0 var(--orange-active);
+}
+.btn-mark.marked:hover {
+  filter: brightness(0.95);
+}
+
+/* Mark indicator on answer dots */
+.answer-dot.marked-dot::after {
+  content: "🔖";
+  position: absolute;
+  font-size: 8px;
+  top: -4px;
+  right: -4px;
+}
+.answer-dot {
+  position: relative;
+}
+
+.q-text {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.6;
+  color: var(--text);
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 8px;
+  margin-bottom: 20px;
+}
+.q-text img {
+  max-width: 100%;
+  border-radius: var(--radius-md);
+  margin-top: 12px;
+}
+.q-text p {
+  margin-bottom: 12px;
+}
+
 /* Strip inline backgrounds from API content (white bg in dark mode) */
 .q-text *, .q-text table, .q-text td, .q-text th, .q-text span,
 .options .opt-row > div:last-child *,
 .opt-row table, .opt-row td, .opt-row th, .opt-row span,
-.explain *, .ex-answer * { background:transparent !important; color:inherit !important; }
-.options { padding:12px 0 0; }
-.opt-row { display:flex; align-items:flex-start; gap:10px; padding:12px 14px; margin-bottom:8px; border:2px solid var(--border); border-radius:var(--radius); cursor:pointer; transition:all .15s; font-size:15px; }
-.opt-row.compact { flex:1; text-align:center; justify-content:center; align-items:center; margin:0 4px; padding:10px 8px; min-width:0; }
-.options.row { display:flex; flex-direction:row; gap:0; }
-.opt-row:hover { border-color:var(--accent); }
-.opt-row.selected { border-color:var(--accent); }
-.opt-row.correct { border-color:var(--green) !important; }
-.opt-row.wrong { border-color:var(--red) !important; }
-.opt-row.answered { pointer-events:none; }
-.opt-dot { width:22px; height:22px; border-radius:50%; border:2px solid var(--gray); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:12px; font-weight:700; transition:all .15s; }
-.opt-dot.sel { border-color:var(--accent); background:var(--accent); color:#fff; }
-.opt-row.correct .opt-dot { border-color:var(--green); background:var(--green); color:#fff; }
-.opt-row.wrong .opt-dot { border-color:var(--red); background:var(--red); color:#fff; }
-.opt-row.answered.correct .opt-dot { border-color:var(--green); background:var(--green); color:#fff; }
-.opt-row.answered:not(.correct):not(.wrong) .opt-dot { border-color:var(--gray); background:var(--card); color:var(--text2); }
-.opt-btn { width:20px; height:20px; border:2px solid var(--gray); border-radius:4px; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:all .15s; }
-.opt-btn.sel { border-color:var(--accent); background:var(--accent); }
-.opt-btn.sel::after { content:'✓'; color:#fff; font-size:13px; }
-.opt-row.correct .opt-btn { border-color:var(--green); background:var(--green); }
-.opt-row.correct .opt-btn::after { content:'✓'; color:#fff; font-size:13px; }
-.opt-row.wrong .opt-btn { border-color:var(--red); background:var(--red); }
-.opt-row.wrong .opt-btn::after { content:'✕'; color:#fff; font-size:13px; }
-/* Explanation popup */
-.explain { margin-top:8px; padding:12px 14px; border-radius:var(--radius); display:none; animation:fadeIn .3s; border:2px solid var(--border); }
-.answered-mode .explain { max-height:none; overflow-y:visible; }
-.explain.show { display:block; }
-.explain.correct-explain { border-color:var(--green); }
-.explain.wrong-explain { border-color:var(--red); }
-.explain .ex-title { font-weight:700; font-size:14px; margin-bottom:6px; }
-.explain .ex-answer { font-size:14px; margin-bottom:4px; }
-.explain .ex-analysis { font-size:13px; color:var(--text2); line-height:1.6; }
-.ex-analysis img { max-width:100%; height:auto; }
-@keyframes fadeIn { from{opacity:0;transform:translateY(-4px);} to{opacity:1;transform:translateY(0);} }
+.explain *, .ex-answer * {
+  background: transparent !important;
+  color: inherit !important;
+}
 
-/* Sidebar */
-.sidebar-header { padding:8px 14px; border-bottom:1px solid var(--border); font-size:12px; font-weight:600; display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none; }
-.sidebar-header .expand-icon { font-size:14px; transition:transform .2s; color:var(--text3); }
-.sidebar-header .expand-icon.open { transform:rotate(180deg); }
-.sidebar-tabs { display:flex; border-bottom:1px solid var(--border); overflow-x:auto; flex-shrink:0; }
-.sidebar-tab { flex:1; text-align:center; padding:6px 4px; font-size:11px; cursor:pointer; border-bottom:2px solid transparent; color:var(--text3); white-space:nowrap; }
-.sidebar-tab.active { border-bottom-color:var(--accent); color:var(--accent); font-weight:600; }
-.answer-grid { padding:6px 10px; overflow-x:auto; overflow-y:hidden; display:flex; flex-wrap:nowrap; gap:4px; height:42px; flex-shrink:0; }
-.answer-grid .answer-dot { flex-shrink:0; }
-.answer-grid.expanded { overflow-y:auto; overflow-x:hidden; flex:1; height:auto; flex-wrap:wrap; }
-.answer-grid.expanded .answer-dot { flex-shrink:0; }
-.answer-dot { width:30px; height:30px; border-radius:5px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:12px; font-weight:600; border:1px solid var(--border); background:var(--card); color:var(--text2); transition:all .15s; }
-.answer-dot:hover { border-color:var(--accent); }
-.answer-dot.done { background:var(--green); color:#fff; border-color:var(--green); }
-.answer-dot.wrong-dot { background:var(--red); color:#fff; border-color:var(--red); }
-.answer-dot.cur { border:2px solid var(--accent); box-shadow:0 1px 6px rgba(26,140,254,.3); }
-.stats-bar { display:flex; gap:14px; padding:8px 14px; border-top:1px solid var(--border); font-size:12px; color:var(--text3); flex-shrink:0; }
-.stats-bar .s-green { color:var(--green); font-weight:600; }
-.stats-bar .s-red { color:var(--red); font-weight:600; }
+.options {
+  padding: 12px 0 0;
+}
+.opt-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  border: 2px solid var(--border);
+  border-bottom: 4px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: transform 0.1s, border-color .15s, box-shadow .15s, background .15s;
+  font-size: 16px;
+  font-weight: 600;
+  background: var(--card);
+}
+.opt-row.compact {
+  flex: 1;
+  text-align: center;
+  justify-content: center;
+  align-items: center;
+  margin: 0 6px;
+  padding: 14px 12px;
+  min-width: 0;
+}
+.options.row {
+  display: flex;
+  flex-direction: row;
+  gap: 0;
+}
+.opt-row:hover:not(.answered) {
+  border-color: var(--text2);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 var(--border);
+}
+.opt-row:active:not(.answered) {
+  transform: translateY(2px);
+  border-bottom-width: 2px;
+}
+.opt-row.selected {
+  border-color: var(--blue) !important;
+  background: rgba(28, 176, 246, 0.05);
+  box-shadow: 0 4px 0 var(--blue) !important;
+}
+.opt-row.correct {
+  border-color: var(--green) !important;
+  background: var(--success-bg) !important;
+  box-shadow: 0 4px 0 var(--accent-active) !important;
+  color: var(--accent-active) !important;
+}
+.opt-row.wrong {
+  border-color: var(--red) !important;
+  background: var(--danger-bg) !important;
+  box-shadow: 0 4px 0 var(--red-active) !important;
+  color: var(--red-active) !important;
+}
+.opt-row.answered {
+  pointer-events: none;
+}
 
-/* Loading */
-.loading { text-align:center; padding:60px 20px; color:var(--text3); }
-.spinner { display:inline-block; width:40px; height:40px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; margin-bottom:12px; }
-@keyframes spin { to { transform:rotate(360deg); } }
+/* Indicators on the left of options, designed to look like keycaps */
+.opt-dot, .opt-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 2px solid var(--border);
+  border-bottom: 4px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 800;
+  transition: all .15s;
+  background: var(--bg);
+  color: var(--text2);
+}
+.opt-dot.sel, .opt-btn.sel {
+  border-color: var(--blue);
+  border-bottom-color: var(--blue-hover);
+  background: var(--blue);
+  color: white;
+}
+.opt-row.correct .opt-dot, .opt-row.correct .opt-btn {
+  border-color: var(--accent);
+  border-bottom-color: var(--accent-active);
+  background: var(--accent);
+  color: white;
+}
+.opt-row.wrong .opt-dot, .opt-row.wrong .opt-btn {
+  border-color: var(--red);
+  border-bottom-color: var(--red-active);
+  background: var(--red);
+  color: white;
+}
+.opt-row.answered.correct .opt-dot, .opt-row.answered.correct .opt-btn {
+  border-color: var(--accent);
+  border-bottom-color: var(--accent-active);
+  background: var(--accent);
+  color: white;
+}
+.opt-row.answered:not(.correct):not(.wrong) .opt-dot, 
+.opt-row.answered:not(.correct):not(.wrong) .opt-btn {
+  border-color: var(--border);
+  background: var(--gray-bg);
+  color: var(--text3);
+}
 
-/* ========== Mobile ========== */
-@media (max-width:768px) {
-  .quiz-layout { flex-direction:column; }
-  .quiz-sidebar { width:100%; border-left:none; border-top:1px solid var(--border); max-height:220px; }
-  .quiz-scroll { padding:16px; }
-  .header { padding:8px 14px; }
-  .exam-list { padding:12px; }
+.opt-btn.sel::after, .opt-row.correct .opt-btn::after {
+  content: '✓';
+  color: white;
+  font-size: 14px;
+}
+.opt-row.wrong .opt-btn::after {
+  content: '✕';
+  color: white;
+  font-size: 14px;
+}
+
+/* Explanation banner (Duolingo-style sliding feedback banner) */
+.explain {
+  margin-top: 24px;
+  padding: 20px 24px;
+  border-radius: var(--radius-md);
+  display: none;
+  animation: fadeIn .3s ease-out;
+  border: 2px solid var(--border);
+  background: var(--card);
+}
+.answered-mode .explain {
+  max-height: none;
+  overflow-y: visible;
+}
+.explain.show {
+  display: block;
+}
+.explain.correct-explain {
+  border-color: var(--accent);
+  background-color: var(--success-bg);
+  color: var(--accent-active);
+  box-shadow: 0 4px 0 rgba(88,204,2,0.1);
+}
+.explain.wrong-explain {
+  border-color: var(--red);
+  background-color: var(--danger-bg);
+  color: var(--red-active);
+  box-shadow: 0 4px 0 rgba(255,75,75,0.1);
+}
+/* Cute owl headers via pseudo-elements */
+.explain.correct-explain::before {
+  content: "🦉 棒极了！回答正确！";
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  display: block;
+  margin-bottom: 8px;
+  color: var(--accent-active);
+}
+.explain.wrong-explain::before {
+  content: "🦉 加油！再接再厉！";
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  display: block;
+  margin-bottom: 8px;
+  color: var(--red-active);
+}
+
+.explain .ex-title {
+  font-weight: 800;
+  font-size: 15px;
+  margin-bottom: 8px;
+  display: none; /* Hidden because we use ::before mascot greeting */
+}
+.explain .ex-answer {
+  font-size: 15px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+.explain .ex-analysis {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.6;
+  border-top: 1px dashed rgba(0,0,0,0.15);
+  padding-top: 10px;
+}
+[data-theme="dark"] .explain .ex-analysis {
+  border-top-color: rgba(255,255,255,0.15);
+}
+.ex-analysis img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+  margin-top: 8px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+/* ========== Sidebar Styling ========== */
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 2px solid var(--border);
+  overflow-x: auto;
+  flex-shrink: 0;
+  background: var(--surface);
+}
+.sidebar-tab {
+  flex: 1;
+  text-align: center;
+  padding: 12px 6px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  color: var(--text2);
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.sidebar-tab.active {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+}
+.sidebar-tab:hover:not(.active) {
+  color: var(--text);
+  background: var(--border);
+}
+
+.answer-grid {
+  padding: 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  height: 68px;
+  flex-shrink: 0;
+}
+.answer-grid .answer-dot {
+  flex-shrink: 0;
+}
+.answer-grid.expanded {
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  height: auto;
+  flex-wrap: wrap;
+  align-content: flex-start;
+}
+
+/* Little round circles mimicking Duolingo bubbles */
+.answer-dot {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  border: 2px solid var(--border);
+  background: var(--card);
+  color: var(--text2);
+  transition: all .15s;
+  box-shadow: 0 2px 0 var(--border);
+}
+.answer-dot:hover {
+  border-color: var(--text);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 0 var(--border);
+}
+.answer-dot:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+.answer-dot.done {
+  background: var(--accent) !important;
+  color: white !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 3px 0 var(--accent-active) !important;
+}
+.answer-dot.wrong-dot {
+  background: var(--red) !important;
+  color: white !important;
+  border-color: var(--red) !important;
+  box-shadow: 0 3px 0 var(--red-active) !important;
+}
+.answer-dot.cur {
+  border: 3px solid var(--blue) !important;
+  color: var(--blue) !important;
+  box-shadow: 0 0 0 3px rgba(28,176,246,0.3) !important;
+}
+
+.stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 2px solid var(--border);
+  font-size: 13px;
+  color: var(--text2);
+  font-weight: 800;
+  flex-shrink: 0;
+  background: var(--surface);
+}
+.stats-bar .s-green {
+  color: var(--accent);
+}
+.stats-bar .s-red {
+  color: var(--red);
+}
+
+.stats-bar button {
+  margin-left: auto;
+  padding: 8px 16px;
+  background: var(--red);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: var(--elev-danger);
+  transition: transform 0.1s, filter 0.1s;
+}
+.stats-bar button:hover {
+  filter: brightness(1.05);
+}
+.stats-bar button:active {
+  transform: translateY(4px);
+  box-shadow: none;
+}
+
+/* Collapse / expand sidebar */
+.quiz-sidebar.collapsed .sidebar-tabs,
+.quiz-sidebar.collapsed .answer-grid {
+  display: none;
+}
+.sidebar-collapse-btn {
+  padding: 6px 12px;
+  background: var(--red);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: var(--elev-danger);
+}
+.sidebar-collapse-btn:hover {
+  filter: brightness(1.05);
+}
+.sidebar-collapse-btn:active {
+  transform: translateY(4px);
+  box-shadow: none;
+}
+
+/* ========== Loading indicators ========== */
+.loading {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text2);
+  font-weight: 800;
+}
+.spinner {
+  display: inline-block;
+  width: 44px;
+  height: 44px;
+  border: 4px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+  margin-bottom: 16px;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ========== Responsive Breakpoints ========== */
+@media (max-width: 768px) {
+  .header {
+    padding: 12px 20px;
+  }
+  .quiz-layout {
+    flex-direction: column;
+  }
+  .quiz-sidebar {
+    width: 100%;
+    border-left: none;
+    border-top: 2px solid var(--border);
+    max-height: 200px;
+  }
+  .quiz-scroll {
+    padding: 0 20px;
+  }
+  .q-block {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+    padding-bottom: 0;
+  }
+  .q-num {
+    padding: 16px 0 8px;
+    flex-shrink: 0;
+  }
+  .q-text {
+    flex: 1 1 0;
+    overflow-y: auto;
+    min-height: 0;
+    margin-bottom: 8px;
+    font-size: 17px;
+  }
+  .options {
+    flex-shrink: 0;
+    padding: 4px 0 0;
+  }
+  .explain {
+    flex-shrink: 0;
+  }
+  .opt-row {
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    font-size: 15px;
+  }
+  .exam-list {
+    padding: 20px 12px;
+  }
 }
 
 /* Hidden for fresh-answer questions: answer NOT revealed until user answers */
-.q-block.fresh .opt-row.answered { pointer-events:none; }
+.q-block.fresh .opt-row.answered {
+  pointer-events: none;
+}
 </style>
 </head>
 <body>
 
-<!-- ========== Login Page ========== -->
-<div class="page active login-page" id="loginPage">
+<!-- ========== 展示页 (Home Page - Unauthenticated) ========== -->
+<section class="page" id="homePage" data-od-id="home">
+  <div class="header">
+    <h2>答题助手</h2>
+    <div class="header-actions">
+      <button onclick="toggleTheme()" class="btn-theme-toggle">🌓</button>
+      <button onclick="navigateTo('/login')" class="btn-style btn-header-login">登录</button>
+    </div>
+  </div>
+  <div class="home-container">
+    <div class="hero-section">
+      <div class="hero-content">
+        <h1>更智能的蓝鲸微课考试助手</h1>
+        <p>为广大考生设计的第三方刷题与模考工具。支持即时判题、深色模式与离线 PWA 支持，助您像玩游戏一样高效备考。</p>
+        <button class="cta-btn" onclick="navigateTo('/login')">开始使用</button>
+      </div>
+      <div class="hero-mascot-container">
+        <!-- Stylized Duo Owl Mascot (Blinks & Floats) -->
+        <svg class="duo-mascot" viewBox="0 0 100 100" width="220" height="220">
+          <!-- Feet -->
+          <ellipse cx="40" cy="88" rx="10" ry="5" fill="var(--mascot-feet)" />
+          <ellipse cx="60" cy="88" rx="10" ry="5" fill="var(--mascot-feet)" />
+          <!-- Body -->
+          <rect x="20" y="20" width="60" height="70" rx="30" fill="var(--mascot-body)" />
+          <!-- Belly -->
+          <path d="M 30 62 Q 50 50 70 62 Q 50 85 30 62" fill="var(--mascot-belly)" />
+          <!-- Belly Feathers -->
+          <path d="M 45 66 Q 50 62 55 66" stroke="var(--mascot-belly-stroke)" stroke-width="2" fill="none" />
+          <path d="M 40 72 Q 45 68 50 72" stroke="var(--mascot-belly-stroke)" stroke-width="2" fill="none" />
+          <path d="M 50 72 Q 55 68 60 72" stroke="var(--mascot-belly-stroke)" stroke-width="2" fill="none" />
+          <!-- Wings -->
+          <path d="M 20 40 Q 5 50 20 70 Z" fill="var(--mascot-body)" />
+          <path d="M 80 40 Q 95 50 80 70 Z" fill="var(--mascot-body)" />
+          <!-- Eyes -->
+          <circle cx="36" cy="42" r="12" fill="white" />
+          <circle cx="64" cy="42" r="12" fill="white" />
+          <!-- Pupil -->
+          <circle cx="36" cy="42" r="5" fill="var(--mascot-eye-pupil)" />
+          <circle cx="64" cy="42" r="5" fill="var(--mascot-eye-pupil)" />
+          <!-- Eye highlights -->
+          <circle cx="38" cy="40" r="2" fill="white" />
+          <circle cx="66" cy="40" r="2" fill="white" />
+          <!-- Beak -->
+          <polygon points="50,46 44,54 56,54" fill="var(--mascot-feet)" />
+          <!-- Cheeks -->
+          <circle cx="27" cy="52" r="4" fill="var(--mascot-cheeks)" opacity="0.25" />
+          <circle cx="73" cy="52" r="4" fill="var(--mascot-cheeks)" opacity="0.25" />
+        </svg>
+      </div>
+    </div>
+    <div class="features-grid">
+      <div class="feat-card">
+        <div class="icon">
+          <!-- Monoline checkmark SVG -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 6L9 17l-5-5"/>
+          </svg>
+        </div>
+        <h3>即时判对错</h3>
+        <p>选择选项后即时判定正误，并展示详细解析，让学习反馈更及时。</p>
+      </div>
+      <div class="feat-card">
+        <div class="icon">
+          <!-- Monoline smartphone SVG -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+            <path d="M12 18h.01"/>
+          </svg>
+        </div>
+        <h3>移动端优化</h3>
+        <p>适配横竖屏、支持滑动切题手势，答题卡收放自如，体验如原生 App。</p>
+      </div>
+      <div class="feat-card">
+        <div class="icon">
+          <!-- Monoline moon SVG -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </div>
+        <h3>深色模式</h3>
+        <p>内置护眼深色主题，支持一键无缝切换，保护视力。</p>
+      </div>
+      <div class="feat-card">
+        <div class="icon">
+          <!-- Monoline desktop/package SVG -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+            <path d="M8 21h8M12 17v4"/>
+          </svg>
+        </div>
+        <h3>PWA 桌面版</h3>
+        <p>支持添加至主屏幕，实现应用化启动，更轻量、更快捷。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 登录页 (Login Page) ========== -->
+<section class="page active login-page" id="loginPage" data-od-id="login">
   <div class="login-card">
+    <!-- Inline SVG Duo for Login Greeting -->
+    <svg viewBox="0 0 100 100" width="90" height="90" style="margin:0 auto;">
+      <!-- Body -->
+      <rect x="25" y="25" width="50" height="60" rx="25" fill="var(--mascot-body)" />
+      <!-- Belly -->
+      <path d="M 30 65 Q 50 55 70 65 Q 50 82 30 65" fill="var(--mascot-belly)" />
+      <!-- Eyes -->
+      <circle cx="40" cy="45" r="9" fill="white" />
+      <circle cx="60" cy="45" r="9" fill="white" />
+      <!-- Wink pupil left, normal right -->
+      <path d="M 34 45 Q 40 38 46 45" stroke="var(--mascot-eye-pupil)" stroke-width="2.5" fill="none" stroke-linecap="round" />
+      <circle cx="60" cy="45" r="4" fill="var(--mascot-eye-pupil)" />
+      <!-- Beak -->
+      <polygon points="50,49 45,55 55,55" fill="var(--mascot-feet)" />
+    </svg>
     <h1>答题助手</h1>
     <div class="sub">蓝鲸微课考试平台</div>
+    
     <label>手机号</label>
     <input type="tel" id="phone" placeholder="请输入手机号" />
+    
     <label>密码</label>
     <input type="password" id="pwd" placeholder="请输入密码" />
+    
     <button class="btn" onclick="doLogin()">登 录</button>
     <div class="err" id="loginErr"></div>
   </div>
-</div>
+</section>
 
-<!-- ========== Exam List Page ========== -->
-<div class="page" id="examListPage">
+<!-- ========== 考试列表页 (Exam List Page) ========== -->
+<section class="page" id="examListPage" data-od-id="exam-list">
   <div class="header">
     <h2>考试列表</h2>
     <div class="header-actions">
-      <button onclick="toggleTheme()">🌓</button>
-      <button onclick="doLogout()">退出</button>
+      <button onclick="toggleTheme()" class="btn-theme-toggle">🌓</button>
+      <button onclick="doLogout()" class="btn-style btn-header-logout">退出</button>
     </div>
   </div>
   <div class="exam-list" id="examList"></div>
-</div>
+</section>
 
-<!-- ========== Quiz Page ========== -->
-<div class="page" id="quizPage">
-  <div class="header">
-    <h2 id="quizTitle">题目</h2>
+<!-- ========== 答题页 (Quiz Page) ========== -->
+<section class="page" id="quizPage" data-od-id="quiz">
+  <div class="header quiz-header">
+    <!-- Fallback node for JS matching quizTitle -->
+    <h2 id="quizTitle" style="display: none;">题目</h2>
+    
+    <!-- Duolingo close button -->
+    <button onclick="showExamList()" class="btn-close" title="返回列表">✕</button>
+    
+    <!-- Duolingo styled progress bar -->
+    <div class="duo-progress-bar-container">
+      <div class="duo-progress-bar-fill" id="duoProgressBarFill">
+        <div class="duo-progress-bar-flash"></div>
+      </div>
+    </div>
+    
     <div class="header-actions">
-      <button onclick="showExamList()">← 返回</button>
-      <button onclick="toggleTheme()">🌓</button>
+      <span class="heart-indicator" title="生命值">❤️ <span class="num" id="heartCount">5</span></span>
+      <button onclick="toggleTheme()" class="btn-theme-toggle">🌓</button>
     </div>
   </div>
+  
   <div class="quiz-layout">
     <div class="quiz-main">
       <div class="quiz-top">
-        <span id="qProgress"></span>
-        <span id="qSection" style="color:var(--text3)"></span>
+        <span id="qProgress" class="q-progress"></span>
+        <span id="qSection" style="color:var(--text2)"></span>
       </div>
-      <div class="quiz-scroll" id="quizScroll"><div class="q-block" id="qBlock"></div></div>
+      <div class="quiz-scroll" id="quizScroll">
+        <div class="q-block" id="qBlock"></div>
+      </div>
     </div>
+    
     <div class="quiz-sidebar">
-      <div class="sidebar-header" onclick="toggleSidebar()">
-        <span id="sidebarLabel">答题卡</span>
-        <span class="expand-icon" id="expandIcon">▲</span>
-      </div>
       <div class="sidebar-tabs" id="sectionTabs"></div>
       <div class="answer-grid" id="answerGrid"></div>
       <div class="stats-bar" id="statsBar"></div>
     </div>
   </div>
-</div>
+</section>
 
 <script>
 // ========== State ==========
-const S = { exams:[], currentExam:null, questions:[], states:[], stateMap:{}, sectionMap:{}, qIdx:0, answered:{} };
+const S = { exams:[], currentExam:null, questions:[], states:[], stateMap:{}, sectionMap:{}, qIdx:0, answered:{}, examLoadToken:0 };
 const $ = s=>document.querySelector(s);
+function $$(s){ return document.querySelectorAll(s); }
 
+(function(){ const t=localStorage.getItem("theme"); if(t) document.documentElement.setAttribute("data-theme",t); })();
 function toggleTheme() {
   const el=document.documentElement, cur=el.getAttribute("data-theme");
-  el.setAttribute("data-theme",cur==="dark"?"light":"dark");
+  const next=cur==="dark"?"light":"dark";
+  el.setAttribute("data-theme",next);
+  localStorage.setItem("theme",next);
 }
 function showPage(id){ $$(".page").forEach(p=>p.classList.remove("active")); $(id).classList.add("active"); }
-function $$(s){ return document.querySelectorAll(s); }
+
+function resetQuizView(title="Loading..."){
+  S.currentExam=null;
+  S.questions=[];
+  S.states=[];
+  S.stateMap={};
+  S.sectionMap={};
+  S.qIdx=0;
+  S.answered={};
+  $("#quizTitle").textContent=title;
+  $("#qProgress").textContent="";
+  $("#qSection").textContent="";
+  $("#sectionTabs").innerHTML="";
+  $("#answerGrid").innerHTML="";
+  $("#statsBar").innerHTML="";
+  const progress=$("#duoProgressBarFill");
+  if(progress) progress.style.width="0%";
+  const hearts=$("#heartCount");
+  if(hearts) hearts.textContent="5";
+}
+
+function navigateTo(path){
+  history.pushState(null,"",path);
+  route();
+}
+function route(){
+  const p=location.pathname;
+  api("/api/status").then(r=>{
+    if(!r.loggedIn){
+      // 未登录状态
+      if(p==="/login"){
+        showPage("#loginPage");
+      } else {
+        // 访问其他任何页面都展示首页，并保持/更新地址为 /
+        if(p!=="/") history.replaceState(null,"","/");
+        showPage("#homePage");
+      }
+    } else {
+      // 已登录状态
+      if(p==="/login" || p==="/"){
+        if(p!=="/") history.replaceState(null,"","/");
+        showExamList();
+      } else if(p.startsWith("/quiz/")){
+        const id=parseInt(p.split("/quiz/")[1]);
+        if(id&&S.currentExam?.examInfoId!==String(id)) enterExam(id,false);
+        else if(!S.currentExam) enterExam(id,false);
+      } else {
+        showExamList();
+      }
+    }
+  });
+}
+window.addEventListener("popstate",route);
 
 // ========== API ==========
 async function api(url,opts={}){
   const r=await fetch(url,{headers:{"Content-Type":"application/json"},...opts});
-  if(r.status===401){ sessionStorage.clear(); showPage("#loginPage"); return {error:"Session expired"}; }
+  if(r.status===401){ sessionStorage.clear(); navigateTo("/login"); return {error:"Session expired"}; }
   const data=await r.json();
-  // Detect auth failures in responses
   if(data.error&&(data.error.includes("Not logged")||data.error.includes("expired")||data.error.includes("login"))){
-    sessionStorage.clear(); showPage("#loginPage");
+    sessionStorage.clear(); navigateTo("/login");
   }
   return data;
 }
@@ -253,10 +1621,10 @@ async function doLogin(){
   showLoginErr("");
   const r=await api("/api/login",{method:"POST",body:JSON.stringify({phone:ph,password:pw})});
   if(r.error) return showLoginErr(r.error);
-  loadExams();
+  navigateTo("/");
 }
 function showLoginErr(m){ const e=$("#loginErr"); e.textContent=m; e.style.display=m?"block":"none"; }
-async function doLogout(){ await api("/api/logout"); sessionStorage.clear(); showPage("#loginPage"); }
+async function doLogout(){ await api("/api/logout"); sessionStorage.clear(); navigateTo("/login"); }
 
 // ========== Exam List ==========
 async function loadExams(){
@@ -265,16 +1633,19 @@ async function loadExams(){
   const r=await api("/api/exams");
   if(r.error){ el.innerHTML=`<div class="loading">${r.error}</div>`; return; }
   S.exams=r.exams;
+  history.replaceState(null,"","/");
   renderExamList(r.exams);
 }
 
 function renderExamList(exams){
   const el=$("#examList");
+  // Filter out 常识判断
+  exams=exams.filter(e=>!e.name.includes("常识判断"));
   const grouped={};
   for(const e of exams) (grouped[e.style]??=[]).push(e);
   const keys=Object.keys(grouped);
   keys.sort((a,b)=>{if(a.includes("机考题库"))return -1;if(b.includes("机考题库"))return 1;return 0;});
-  let html=`<div class="stats">共 ${exams.length} 场考试，${keys.length} 个分类</div>`;
+  let html="";
   for(const k of keys){
     html+=`<div class="category"><h3>${k}</h3>`;
     for(const e of grouped[k]){
@@ -282,9 +1653,15 @@ function renderExamList(exams){
       const tl=e.totalTime===0?"不限时":`${e.totalTime}分钟`;
       const sl=e.wfs===1?'<span class="badge badge-new">新试卷</span>':'<span class="badge badge-cont">继续考试</span>';
       const mb=`<span class="badge ${e.practiceMode===0?'badge-exam':'badge-drill'}">${ml}</span>`;
-      html+=`<div class="exam-card" onclick="enterExam(${e.id},${e.wfs===1})">
-        <div class="name">${sl} ${e.name} <span class="id-tag">#${e.id}</span></div>
-        <div class="meta">${mb} | ${tl}</div></div>`;
+      html+=`<div class="exam-card" id="card-${e.id}">
+        <div class="exam-card-inner" onclick="enterExam(${e.id},${e.wfs===1})">
+          <div class="card-info">
+            <div class="name"><div style="margin-bottom:4px;line-height:1;">${sl}</div>${e.name}</div>
+            <div class="meta">${mb} | ${tl}</div>
+          </div>
+          <div class="card-dots" onclick="event.stopPropagation();toggleAbandon(${e.id})">⋯</div>
+        </div>
+        <div class="card-abandon" onclick="event.stopPropagation();abandonExam(${e.id})">放弃<br>考试</div></div>`;
     }
     html+=`</div>`;
   }
@@ -293,16 +1670,20 @@ function renderExamList(exams){
 
 // ========== Enter Exam ==========
 async function enterExam(id,isNew){
+  const loadToken=++S.examLoadToken;
+  const exam=S.exams.find(e=>String(e.id)===String(id));
   showPage("#quizPage");
-  sessionStorage.setItem("lastExam",id);
-  sessionStorage.setItem("lastPage","quiz");
+  history.replaceState(null,"","/quiz/"+id);
+  resetQuizView(exam?.name||"Loading...");
   const sc=$("#quizScroll");
   sc.innerHTML='<div class="q-block" id="qBlock"><div class="loading"><div class="spinner"></div><div>'+(isNew?'初始化...':'加载中...')+'</div></div></div>';
   const r=await api(`/api/exams/${id}/enter`,{method:"POST"});
+  if(loadToken!==S.examLoadToken) return;
   if(r.error){ sc.innerHTML=`<div class="q-block" id="qBlock"><div class="loading">${r.error} — <a href="#" onclick="showExamList()">返回</a></div></div>`; return; }
   S.currentExam=r; S.sectionMap=r.sections||{};
   sc.innerHTML='<div class="q-block" id="qBlock"><div class="loading"><div class="spinner"></div><div>加载题目...</div></div></div>';
   const qr=await api(`/api/exams/${id}/questions`);
+  if(loadToken!==S.examLoadToken) return;
   if(qr.error){ sc.innerHTML=`<div class="q-block"><div class="loading">${qr.error}</div></div>`; return; }
   S.questions=qr.questions; S.states=qr.states;
   // Build state map
@@ -341,6 +1722,19 @@ function renderQuestion(){
   $("#qProgress").textContent=`第 ${S.qIdx+1} / ${S.questions.length} 题`;
   $("#qSection").textContent=st.section||"";
 
+  // Update Duolingo progress bar
+  const duoProgressBarFill = document.getElementById("duoProgressBarFill");
+  if(duoProgressBarFill) {
+    const percent = S.questions.length ? ((S.qIdx + 1) / S.questions.length) * 100 : 0;
+    duoProgressBarFill.style.width = percent + "%";
+  }
+
+  // Auto update hearts based on errors
+  const errorCount = S.states.filter(s=>s.state==="error").length;
+  const hearts = Math.max(0, 5 - errorCount);
+  const heartCountEl = document.getElementById("heartCount");
+  if(heartCountEl) heartCountEl.textContent = hearts;
+
   // Build question HTML
   // Detect short-answer options (logic/推理 type) → horizontal layout
   const map=["A","B","C","D"];
@@ -354,6 +1748,8 @@ function renderQuestion(){
   else html+=`⬜ 未作答`;
   html+=` <span class="badge-q">第 ${st.num||(S.qIdx+1)} 题</span>`;
   if(q._isMulti) html+=` <span class="badge-q badge-multi">多选</span>`;
+  const isMarked = st.marked;
+  html+=` <button class="btn-mark${isMarked?' marked':''}" onclick="event.stopPropagation();toggleMark('${q._id}')">${isMarked?'🔖 已标记':'🔖 标记'}</button>`;
   html+=`</div>`;
   html+=`<div class="q-text">${q.question||""}</div>`;
 
@@ -395,8 +1791,6 @@ function renderQuestion(){
     box.classList.add(st.state==="right"?"correct-explain":"wrong-explain");
   }
 
-  // Save position
-  sessionStorage.setItem("qIdx",S.qIdx);
   // Scroll to top
   $("#quizScroll").scrollTop=0;
 
@@ -452,6 +1846,12 @@ async function selectOpt(letter){
   renderAnswerGrid();
   renderStatsBar();
 
+  // Update hearts UI
+  const errorCount = S.states.filter(s=>s.state==="error").length;
+  const hearts = Math.max(0, 5 - errorCount);
+  const heartCountEl = document.getElementById("heartCount");
+  if(heartCountEl) heartCountEl.textContent = hearts;
+
   // Auto-advance only if correct
   if(isCorrect){
     setTimeout(()=>{
@@ -460,6 +1860,29 @@ async function selectOpt(letter){
       else if(S.qIdx+1<S.questions.length) S.qIdx++;
       renderQuestion();
     },1200);
+  }
+}
+
+async function toggleMark(qId){
+  const st = S.stateMap[qId];
+  if (!st) return;
+  const newMark = !st.marked;
+  st.marked = newMark;
+
+  // Immediately update UI (optimistic)
+  renderQuestion();
+  renderAnswerGrid();
+
+  const examId = S.currentExam.examInfoId;
+  const r = await api(`/api/exams/${examId}/mark`, {
+    method: "POST",
+    body: JSON.stringify({ testId: qId, isMark: newMark }),
+  });
+  if (r.error) {
+    // Revert on failure
+    st.marked = !newMark;
+    renderQuestion();
+    renderAnswerGrid();
   }
 }
 
@@ -480,12 +1903,18 @@ function renderAnswerGrid(){
     if(s.state==="right") cls+=" done";
     else if(s.state==="error") cls+=" wrong-dot";
     if(i===S.qIdx) cls+=" cur";
-    return `<div class="${cls}" onclick="S.qIdx=${i};renderQuestion()" title="第${s.num}题">${s.num}</div>`;
+    if(s.marked) cls+=" marked-dot";
+    return `<div class="${cls}" onclick="S.qIdx=${i};renderQuestion()" title="第${s.num}题${s.marked?' (已标记)':''}">${s.num}</div>`;
   }).join("");
   // Auto-scroll to current dot
   setTimeout(()=>{
     const cur=grid.querySelector(".cur");
-    if(cur) cur.scrollIntoView({behavior:"smooth",block:"nearest",inline:"center"});
+    if(cur) {
+      const gridLeft = grid.getBoundingClientRect().left;
+      const curLeft = cur.getBoundingClientRect().left;
+      const scrollOffset = curLeft - gridLeft - (grid.clientWidth / 2) + (cur.clientWidth / 2);
+      grid.scrollBy({ left: scrollOffset, behavior: "smooth" });
+    }
   },50);
 }
 
@@ -505,7 +1934,11 @@ function renderSectionTabs(){
 
 function renderStatsBar(){
   const sts=S.states, r=sts.filter(s=>s.state==="right").length, e=sts.filter(s=>s.state==="error").length, u=sts.filter(s=>s.state==="unanswered").length;
-  $("#statsBar").innerHTML=`✅<span class="s-green">${r}</span> ❌<span class="s-red">${e}</span> ⬜${u} | 共${sts.length}题`;
+  const sidebar=document.querySelector('.quiz-sidebar');
+  const isCollapsed=sidebar?.classList.contains('collapsed');
+  $("#statsBar").innerHTML=`<span>✅<span class="s-green">${r}</span> ❌<span class="s-red">${e}</span> ⬜${u}</span>
+    <button onclick="toggleSidebarCollapse()" class="sidebar-collapse-btn">${isCollapsed?'▼ 展开':'▲ 收起'}</button>
+    <button onclick="submitExam()" style="margin-left:auto;padding:4px 14px;background:var(--red);color:var(--bg);border:none;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;">交卷</button>`;
 }
 
 function jumpToSection(title,el){
@@ -521,16 +1954,69 @@ function jumpToSection(title,el){
 
 function setSidebar(expand){
   const grid=$("#answerGrid");
-  const icon=$("#expandIcon");
-  if(expand){ grid.classList.add("expanded"); icon.classList.add("open"); $("#sidebarLabel").textContent="答题卡 ▼"; }
-  else { grid.classList.remove("expanded"); icon.classList.remove("open"); $("#sidebarLabel").textContent="答题卡 ▲"; }
-  // Re-render to re-scroll to current dot
+  if(expand){ grid.classList.add("expanded"); }
+  else { grid.classList.remove("expanded"); }
   if(S.states.length) renderAnswerGrid();
 }
-function toggleSidebar(){
-  const isExpanded=$("#answerGrid").classList.contains("expanded");
-  setSidebar(!isExpanded);
+function toggleSidebarCollapse(){
+  const sidebar=document.querySelector('.quiz-sidebar');
+  sidebar.classList.toggle('collapsed');
+  renderStatsBar();
 }
+// ========== Abandon exam ==========
+let abandonState={}; // {id: "idle"|"confirm"}
+function toggleAbandon(id,force){
+  const inner=document.querySelector(`#card-${id} .exam-card-inner`);
+  const btn=document.querySelector(`#card-${id} .card-abandon`);
+  const open=force!==undefined?force:!inner.classList.contains("open");
+  if(open){ inner.classList.add("open"); abandonState[id]="idle"; btn.innerHTML="放弃<br>考试"; }
+  else { inner.classList.remove("open"); delete abandonState[id]; }
+}
+async function abandonExam(id){
+  if(abandonState[id]!=="confirm"){
+    abandonState[id]="confirm";
+    const btn=document.querySelector(`#card-${id} .card-abandon`);
+    btn.innerHTML="确认<br>放弃";
+    btn.style.animation="none"; btn.offsetHeight; btn.style.animation="pulse .3s ease";
+    return;
+  }
+  // Slide back with animation
+  const inner=document.querySelector(`#card-${id} .exam-card-inner`);
+  inner.classList.remove("open");
+  delete abandonState[id];
+  const btn=document.querySelector(`#card-${id} .card-abandon`);
+  setTimeout(()=>{ btn.innerHTML="放弃<br>考试"; },250);
+  const r=await api("/api/exams/"+id+"/submit",{method:"POST"});
+  if(r.error){ alert(r.error); return; }
+  loadExams();
+}
+// Click outside to close any open abandon
+document.addEventListener("click",e=>{
+  for(const id of Object.keys(abandonState)){
+    const card=document.getElementById("card-"+id);
+    if(card&&!card.contains(e.target)){
+      delete abandonState[id];
+      const inner=card.querySelector(".exam-card-inner");
+      inner.classList.remove("open");
+    }
+  }
+});
+
+// Swipe on exam cards → reveal/hide abandon
+let cardTouchX=0;
+document.addEventListener("touchstart",e=>{
+  const card=e.target.closest(".exam-card");
+  if(card) cardTouchX=e.touches[0].clientX;
+},{passive:true});
+document.addEventListener("touchend",e=>{
+  const card=e.target.closest(".exam-card");
+  if(!card||!S.exams.length) return;
+  const dx=e.changedTouches[0].clientX-cardTouchX;
+  const id=parseInt(card.id.replace("card-",""));
+  if(dx<-50) toggleAbandon(id,true);      // swipe left → open
+  else if(dx>50) toggleAbandon(id,false); // swipe right → close
+});
+
 // ========== Swipe navigation ==========
 let touchX=0,touchY=0;
 document.addEventListener("touchstart",e=>{
@@ -554,8 +2040,60 @@ orientMQ.addEventListener("change",e=>setSidebar(e.matches));
 // Init: landscape→expand, portrait→collapse
 if(orientMQ.matches) setSidebar(true);
 
-function showExamsFromCache(){ showPage("#examListPage"); renderExamList(S.exams); }
-function showExamList(){ showPage("#examListPage"); loadExams(); }
+function showExamList(){
+  S.examLoadToken++;
+  showPage("#examListPage");
+  history.pushState(null,"","/");
+  loadExams();
+}
+
+// ========== Submit Exam ==========
+async function submitExam(){
+  if(!confirm("确定提交试卷吗？")) return;
+  const id=S.currentExam.examInfoId;
+  const sc=$("#quizScroll");
+  sc.innerHTML='<div class="q-block" id="qBlock"><div class="loading"><div class="spinner"></div><div>提交中...</div></div></div>';
+  const r=await api(`/api/exams/${id}/submit`,{method:"POST"});
+  if(r.error){ sc.innerHTML=`<div class="q-block" id="qBlock"><div class="loading">${r.error}</div></div>`; return; }
+  sc.innerHTML=`
+    <div class="q-block" id="qBlock" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;text-align:center;gap:24px;padding:20px;">
+      <!-- Celebration Owl Mascot -->
+      <svg viewBox="0 0 100 100" width="140" height="140" style="animation: bounce 0.6s ease infinite alternate;">
+        <!-- Body -->
+        <rect x="20" y="20" width="60" height="70" rx="30" fill="var(--mascot-body)" />
+        <!-- Belly -->
+        <path d="M 30 62 Q 50 50 70 62 Q 50 85 30 62" fill="var(--mascot-belly)" />
+        <!-- Crown -->
+        <polygon points="50,15 40,25 45,23 50,18 55,23 60,25" fill="var(--yellow)" />
+        <!-- Eyes -->
+        <path d="M 28 45 Q 36 38 44 45" stroke="white" stroke-width="4" fill="none" stroke-linecap="round" />
+        <path d="M 56 45 Q 64 38 72 45" stroke="white" stroke-width="4" fill="none" stroke-linecap="round" />
+        <!-- Beak -->
+        <polygon points="50,47 45,54 55,54" fill="var(--mascot-feet)" />
+        <!-- Cheeks -->
+        <circle cx="26" cy="52" r="3" fill="var(--mascot-cheeks)" opacity="0.3" />
+        <circle cx="74" cy="52" r="3" fill="var(--mascot-cheeks)" opacity="0.3" />
+      </svg>
+      <style>
+        @keyframes bounce {
+          from { transform: translateY(0); }
+          to { transform: translateY(-8px); }
+        }
+      </style>
+      
+      <div style="font-family:var(--font-display);font-size:36px;font-weight:800;color:var(--accent);">单元挑战完成！</div>
+      
+      <div style="background:var(--surface);border:2px solid var(--border);border-bottom:4px solid var(--border);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:360px;">
+        <div style="font-family:var(--font-display);font-size:54px;font-weight:800;color:var(--orange);margin-bottom:8px;" class="num">${r.score}<span style="font-size:20px;color:var(--text2)"> 分</span></div>
+        <div style="font-size:15px;color:var(--text2);font-weight:800;line-height:1.8;">
+          击败全国 <b style="color:var(--accent);font-size:17px;">${r.beatRate}%</b> 的考生<br>
+          当前排名 <b style="color:var(--blue);font-size:17px;">#${r.rank}</b>
+        </div>
+      </div>
+      
+      <button onclick="showExamList()" class="cta-btn" style="padding:14px 48px;font-size:16px;">返回路线图</button>
+    </div>`;
+}
 
 // ========== Init ==========
 if("serviceWorker"in navigator){
@@ -564,20 +2102,7 @@ if("serviceWorker"in navigator){
     .catch(e=>console.warn("SW failed:",e.message));
 }
 (async function(){
-  let r=await api("/api/status").catch(()=>({}));
-  if(!r.loggedIn){ showPage("#loginPage"); return; }
-  // Verify session still valid by trying to fetch exams
-  r=await api("/api/exams");
-  if(r.error){ showPage("#loginPage"); return; }
-  // Restore last page on refresh
-  const lastPage=sessionStorage.getItem("lastPage");
-  const lastExam=sessionStorage.getItem("lastExam");
-  S.exams=r.exams;
-  if(lastPage==="quiz"&&lastExam){
-    enterExam(parseInt(lastExam),false);
-  } else {
-    showExamsFromCache();
-  }
+  route();
 })();
 </script>
 </body>

@@ -74,6 +74,9 @@ node server.js
 | `POST` | `/api/exams/:id/enter` | 进入考试 / Enter exam |
 | `GET` | `/api/exams/:id/questions` | 题目 + 答案 / Questions & answers |
 | `POST` | `/api/exams/:id/answer` | 上报答案 / Submit answer |
+| `POST` | `/api/exams/:id/mark` | 标记题目 / Toggle question mark |
+| `POST` | `/api/exams/:id/submit` | 交卷并获取结果 / Submit exam |
+| `GET` | `/api/exams/:id/states` | 刷新题卡状态 / Refresh answer states |
 | `GET` | `/api/logout` | 退出 / Logout |
 
 详见 / See [API.md](API.md)

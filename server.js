@@ -49,6 +49,16 @@ async function proxyRequest(path, opts = {}) {
   const resp = await fetchWithTimeout(BASE_URL + path, init);
   cookieJar = setCookies(cookieJar, resp.headers);
   const text = await resp.text();
+
+  // Detect upstream session expiry
+  const isExpired = resp.status === 302 && (resp.headers.get("location")||"").includes("/login/account/login")
+    || (typeof text === "string" && text.includes("/login/account/login") && text.includes("<!DOCTYPE"))
+    || (typeof text === "string" && /"onlineStatus"\s*:\s*"?0"?/.test(text));
+  if (isExpired) {
+    console.log("[auth] Session expired, clearing cookies");
+    clearSession();
+    return { status: 401, data: { error: "Session expired" } };
+  }
   try { return { status: resp.status, data: JSON.parse(text) }; }
   catch { return { status: resp.status, data: text }; }
 }
@@ -57,6 +67,13 @@ async function proxyRequest(path, opts = {}) {
 let cookieJar = "";
 let examCache = {};   // { examInfoId: { questionStates, testIds, uuid, examResultsId, examInfoId } }
 let examsCache = null; // stored exam list with metadata
+
+function clearSession() {
+  cookieJar = "";
+  examCache = {};
+  examsCache = null;
+  try { fs.unlinkSync("session_cookies.txt"); } catch {}
+}
 
 (function loadCookies() {
   try {
@@ -70,6 +87,28 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "frontend")));
+
+// Check proxy result for auth expiry
+function isAuthError(result) {
+  return result && (
+    result.status === 401
+    || result.data?.onlineStatus === "0"
+    || result.data?.onlineStatus === 0
+    || (result.data && result.data.error && result.data.error.includes("Session expired"))
+  );
+}
+
+// Auth middleware — skip login and status
+app.use((req, res, next) => {
+  if (req.path === "/api/login" || req.path === "/api/status" || !req.path.startsWith("/api/")) return next();
+  if (!cookieJar.includes("sessionId=")) return res.status(401).json({ error: "Not logged in" });
+  next();
+});
+
+// SPA fallback — serve index.html for all non-API routes
+app.get(/^(?!\/api\/).*/, (req, res) => {
+  res.sendFile(path.join(__dirname, "frontend", "index.html"));
+});
 
 // ========== API routes ==========
 
@@ -115,12 +154,13 @@ app.post("/api/login", async (req, res) => {
 // GET  /api/exams — list all exams
 app.get("/api/exams", async (req, res) => {
   if (!cookieJar.includes("sessionId=")) return res.status(401).json({ error: "Not logged in" });
-  if (examsCache) return res.json(examsCache);
 
-  const { data } = await proxyRequest("/exam/current_exam_list", {
+  const result = await proxyRequest("/exam/current_exam_list", {
     method: "POST",
     form: { examStyle: "0", timeSort: "", status: "", setProcess: "-1", page: "1", firstVisit: "true", name: "", rowCount: "100", participation: "" },
   });
+  if (isAuthError(result)) return res.status(401).json(result.data);
+  const { data } = result;
   if (!data.success) return res.status(500).json({ error: data.desc });
 
   const { total, styles, examInfoModelList } = data.bizContent;
@@ -179,6 +219,51 @@ app.get("/api/exams/:id/questions", async (req, res) => {
   res.json({ questions, states: cached.questionStates, sections: cached.sectionMap });
 });
 
+// POST /api/exams/:id/submit — finish exam and get results
+app.post("/api/exams/:id/submit", async (req, res) => {
+  let cached = examCache[req.params.id];
+  // Lightweight enter if not cached — just get examResultsId
+  if (!cached) {
+    console.log("[submit] Quick enter for exam", req.params.id);
+    const r = await fetchWithTimeout(BASE_URL + `/exam/exam_start/${req.params.id}`, {
+      headers: { "User-Agent": UA, Cookie: cookieJar.replace(/\s+$/, ""), Referer: `${BASE_URL}/exam` },
+      redirect: "manual",
+    });
+    const html = await r.text();
+    const m = html.match(/var\s+exam_results_id\s*=\s*['"](\d+)['"]/);
+    if (!m) return res.status(400).json({ error: "Cannot find exam_results_id" });
+    const eid = html.match(/var\s+exam_info_id\s*=\s*['"](\d+)['"]/)?.[1]||req.params.id;
+    cached = { examResultsId: m[1], examInfoId: eid };
+  }
+
+  // Step 1: get remain time
+  await proxyRequest("/exam/get_remian_time", {
+    method: "POST", form: { examResultId: cached.examResultsId },
+  });
+
+  // Step 2: end exam (follow redirect, it goes to result page)
+  const endUrl = `${BASE_URL}/exam/exam_ending?examInfoId=${req.params.id}&examResultsId=${cached.examResultsId}&isForce=0&switchScreen=0&noOpsAutoCommit=0`;
+  const endResp = await fetchWithTimeout(endUrl, {
+    headers: { "User-Agent": UA, Cookie: cookieJar.replace(/\s+$/, ""), Referer: `${BASE_URL}/exam/exam_start/${req.params.id}` },
+    redirect: "follow",
+  });
+  cookieJar = setCookies(cookieJar, endResp.headers);
+  const html = await endResp.text();
+
+  // Parse: score, beat rate, rank (more flexible patterns)
+  const scoreM = html.match(/class="score"[^>]*>\s*([\d.]+)\s*</);
+  const nums = [...html.matchAll(/exam-result-percentage[^>]*>\s*(\d+)/g)];
+  // First percentage = beat rate, second (if different color) = rank
+  const beatM = nums[0];
+  const rankM = nums.length > 1 ? nums[1] : beatM;
+  res.json({
+    success: true,
+    score: scoreM?.[1] || "0",
+    beatRate: beatM?.[1] || "?",
+    rank: rankM?.[1] || "?",
+  });
+});
+
 // POST /api/exams/:id/answer — submit answer to upstream
 app.post("/api/exams/:id/answer", async (req, res) => {
   const { testId, testAns, correct } = req.body;
@@ -196,18 +281,39 @@ app.post("/api/exams/:id/answer", async (req, res) => {
     examTestList: JSON.stringify([item]),
     timeStamp: String(Date.now()),
   };
-  const { data } = await proxyRequest("/exam/exam_start_ing_multi", {
+  const result = await proxyRequest("/exam/exam_start_ing_multi", {
     method: "POST", form,
     referer: `${BASE_URL}/exam/exam_start/${req.params.id}`,
   });
+  if (isAuthError(result)) return res.status(401).json(result.data);
+  const { data } = result;
   res.json({ success: !!data?.success, code: data?.code });
+});
+
+// POST /api/exams/:id/mark — toggle mark on a question
+app.post("/api/exams/:id/mark", async (req, res) => {
+  const { testId, isMark } = req.body;
+  const cached = examCache[req.params.id];
+  if (!cached) return res.status(400).json({ error: "Exam not entered" });
+
+  const result = await proxyRequest("/exam/exam_question_mark", {
+    method: "POST",
+    form: {
+      test_id: testId,
+      exam_results_id: cached.examResultsId,
+      exam_info_id: cached.examInfoId,
+      isMark: isMark ? "1" : "0",
+      timeStamp: String(Date.now()),
+    },
+    referer: `${BASE_URL}/exam/exam_start/${req.params.id}`,
+  });
+  if (isAuthError(result)) return res.status(401).json(result.data);
+  res.json({ success: !!result.data?.success });
 });
 
 // GET  /api/logout — clear session
 app.get("/api/logout", (req, res) => {
-  cookieJar = "";
-  try { fs.unlinkSync("session_cookies.txt"); } catch {}
-  examsCache = null; examCache = {};
+  clearSession();
   res.json({ success: true });
 });
 
@@ -242,14 +348,17 @@ function parseExamHtml(html, examInfoId, knownResultsId) {
 
   for (let i = 1; i < cards.length; i++) {
     const chunk = cards[i];
-    const qId = chunk.match(/questionsId="([^"]+)"/)?.[1];
+    const qId = chunk.match(/questionsId="([^"]+)"/)?.[1]?.trim();
     if (!qId || seen.has(qId)) continue;
     seen.add(qId);
-    const uId = chunk.match(/uuId="([^"]+)"/)?.[1] ?? null;
+    const uId = chunk.match(/uuId="([^"]+)"/)?.[1]?.trim() ?? null;
     const num = parseInt(chunk.match(/>\s*(\d+)\s*<\/span>/)?.[1] ?? "0", 10);
-    const stateMatch = chunk.match(/question_cbox\s+(s\d+)\s+practice-mode-\d+\s*(right|error)?/);
+    const boxClass = chunk.match(/<div\b[^>]*class=["']([^"']*\bquestion_cbox\b[^"']*)["'][^>]*>/)?.[1] ?? "";
+    const boxClasses = new Set(boxClass.trim().split(/\s+/).filter(Boolean));
+    const state = boxClasses.has("right") ? "right" : boxClasses.has("error") ? "error" : "unanswered";
+    const marked = boxClasses.has("marked");
 
-    const cardPos = html.indexOf(`questionsId="${qId}"`);
+    const cardPos = html.indexOf(`questionsId="${qId}`);
     let section = "";
     for (let s = sectionBounds.length - 1; s >= 0; s--) {
       if (cardPos > sectionBounds[s].pos) { section = sectionBounds[s].title; break; }
@@ -257,7 +366,8 @@ function parseExamHtml(html, examInfoId, knownResultsId) {
 
     questionStates.push({
       questionsId: qId, uuId: uId, num, section,
-      state: stateMatch?.[2] || "unanswered",
+      state,
+      marked,
     });
   }
 
