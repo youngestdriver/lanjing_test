@@ -752,16 +752,29 @@ input, button {
   border-radius: var(--radius-pill);
 }
 
-.heart-indicator {
+.timer-indicator {
   font-size: 16px;
   font-weight: 800;
-  color: var(--red);
+  color: var(--orange);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   background: var(--gray-bg);
   padding: 6px 12px;
   border-radius: var(--radius-pill);
+  min-width: 92px;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+.timer-indicator.paused {
+  color: var(--text2);
+}
+.timer-indicator.expired {
+  color: var(--red);
+  background: var(--danger-bg);
+}
+.heart-indicator {
+  display: none;
 }
 
 /* Question area */
@@ -1511,6 +1524,7 @@ input, button {
     </div>
     
     <div class="header-actions">
+      <span class="timer-indicator paused" id="questionTimerWrap" title="1分钟倒计时">⏱ <span class="num" id="questionTimer">01:00</span></span>
       <span class="heart-indicator" title="生命值">❤️ <span class="num" id="heartCount">5</span></span>
       <button onclick="toggleTheme()" class="btn-theme-toggle">🌓</button>
     </div>
@@ -1537,7 +1551,7 @@ input, button {
 
 <script>
 // ========== State ==========
-const S = { exams:[], currentExam:null, questions:[], states:[], stateMap:{}, sectionMap:{}, qIdx:0, answered:{}, examLoadToken:0 };
+const S = { exams:[], currentExam:null, questions:[], states:[], stateMap:{}, sectionMap:{}, qIdx:0, answered:{}, examLoadToken:0, timerByQuestion:{}, activeTimerId:null, timerHandle:null };
 const $ = s=>document.querySelector(s);
 function $$(s){ return document.querySelectorAll(s); }
 
@@ -1548,9 +1562,68 @@ function toggleTheme() {
   el.setAttribute("data-theme",next);
   localStorage.setItem("theme",next);
 }
-function showPage(id){ $$(".page").forEach(p=>p.classList.remove("active")); $(id).classList.add("active"); }
+function showPage(id){
+  if(id!=="#quizPage"){
+    stopQuestionTimer();
+    updateQuestionTimerDisplay(60,"paused");
+  }
+  $$(".page").forEach(p=>p.classList.remove("active"));
+  $(id).classList.add("active");
+}
+
+function formatQuestionTimer(seconds){
+  const s=Math.max(0,seconds);
+  const mm=String(Math.floor(s/60)).padStart(2,"0");
+  const ss=String(s%60).padStart(2,"0");
+  return `${mm}:${ss}`;
+}
+function updateQuestionTimerDisplay(seconds,mode="active"){
+  const timer=$("#questionTimer");
+  const wrap=$("#questionTimerWrap");
+  if(timer) timer.textContent=formatQuestionTimer(seconds);
+  if(wrap){
+    wrap.classList.toggle("paused",mode==="paused");
+    wrap.classList.toggle("expired",mode==="expired");
+  }
+}
+function stopQuestionTimer(){
+  if(S.timerHandle){
+    clearInterval(S.timerHandle);
+    S.timerHandle=null;
+  }
+  S.activeTimerId=null;
+}
+function startQuestionTimer(questionId,isAnswered){
+  if(isAnswered){
+    stopQuestionTimer();
+    updateQuestionTimerDisplay(60,"paused");
+    return;
+  }
+  if(S.timerByQuestion[questionId] == null) S.timerByQuestion[questionId]=60;
+  updateQuestionTimerDisplay(S.timerByQuestion[questionId],S.timerByQuestion[questionId]===0?"expired":"active");
+  if(S.activeTimerId===questionId && S.timerHandle) return;
+  stopQuestionTimer();
+  S.activeTimerId=questionId;
+  if(S.timerByQuestion[questionId]===0) return;
+  S.timerHandle=setInterval(()=>{
+    const q=S.questions[S.qIdx];
+    const st=S.stateMap[questionId]||{};
+    const stillCurrent=q&&q._id===questionId;
+    const nowAnswered=S.answered[questionId]||st.state!=="unanswered";
+    if(!stillCurrent||nowAnswered){
+      stopQuestionTimer();
+      if(nowAnswered) updateQuestionTimerDisplay(60,"paused");
+      return;
+    }
+    S.timerByQuestion[questionId]=Math.max(0,(S.timerByQuestion[questionId]??60)-1);
+    const left=S.timerByQuestion[questionId];
+    updateQuestionTimerDisplay(left,left===0?"expired":"active");
+    if(left===0) stopQuestionTimer();
+  },1000);
+}
 
 function resetQuizView(title="Loading..."){
+  stopQuestionTimer();
   S.currentExam=null;
   S.questions=[];
   S.states=[];
@@ -1558,6 +1631,7 @@ function resetQuizView(title="Loading..."){
   S.sectionMap={};
   S.qIdx=0;
   S.answered={};
+  S.timerByQuestion={};
   $("#quizTitle").textContent=title;
   $("#qProgress").textContent="";
   $("#qSection").textContent="";
@@ -1566,8 +1640,7 @@ function resetQuizView(title="Loading..."){
   $("#statsBar").innerHTML="";
   const progress=$("#duoProgressBarFill");
   if(progress) progress.style.width="0%";
-  const hearts=$("#heartCount");
-  if(hearts) hearts.textContent="5";
+  updateQuestionTimerDisplay(60, "paused");
 }
 
 function navigateTo(path){
@@ -1729,11 +1802,7 @@ function renderQuestion(){
     duoProgressBarFill.style.width = percent + "%";
   }
 
-  // Auto update hearts based on errors
-  const errorCount = S.states.filter(s=>s.state==="error").length;
-  const hearts = Math.max(0, 5 - errorCount);
-  const heartCountEl = document.getElementById("heartCount");
-  if(heartCountEl) heartCountEl.textContent = hearts;
+  startQuestionTimer(q._id,isAnswered);
 
   // Build question HTML
   // Detect short-answer options (logic/推理 type) → horizontal layout
@@ -1809,6 +1878,8 @@ async function selectOpt(letter){
 
   const isCorrect=q._answers.includes(letter);
   S.answered[q._id]=true;
+  stopQuestionTimer();
+  updateQuestionTimerDisplay(60,"paused");
 
   // Update state
   st.state=isCorrect?"right":"error";
@@ -1845,12 +1916,6 @@ async function selectOpt(letter){
   // Update sidebar
   renderAnswerGrid();
   renderStatsBar();
-
-  // Update hearts UI
-  const errorCount = S.states.filter(s=>s.state==="error").length;
-  const hearts = Math.max(0, 5 - errorCount);
-  const heartCountEl = document.getElementById("heartCount");
-  if(heartCountEl) heartCountEl.textContent = hearts;
 
   // Auto-advance only if correct
   if(isCorrect){

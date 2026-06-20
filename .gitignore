@@ -3,6 +3,8 @@ session_cookies.txt
 
 # Saved exam data
 *_2026-*/
+frontend/index.backup.html
+patch_frontend.js
 
 # Debug files
 debug_notice.html
@@ -20,3 +22,5 @@ node_modules/
 # OS
 Thumbs.db
 .DS_Store
+
+.od-skills

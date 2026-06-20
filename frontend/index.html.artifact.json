@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "kind": "html",
+  "title": "frontend/index.html",
+  "entry": "frontend/index.html",
+  "renderer": "html",
+  "status": "complete",
+  "exports": [
+    "html",
+    "pdf",
+    "zip"
+  ],
+  "createdAt": "2026-06-15T12:02:49.714Z",
+  "updatedAt": "2026-06-15T12:02:49.714Z",
+  "metadata": {
+    "inferred": true,
+    "reconciled": true
+  }
+}
