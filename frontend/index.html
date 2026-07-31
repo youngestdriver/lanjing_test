@@ -1551,7 +1551,7 @@ input, button {
 
 <script>
 // ========== State ==========
-const S = { exams:[], currentExam:null, questions:[], states:[], stateMap:{}, sectionMap:{}, qIdx:0, answered:{}, examLoadToken:0, timerByQuestion:{}, activeTimerId:null, timerHandle:null };
+const S = { exams:[], currentExam:null, questions:[], states:[], stateMap:{}, sectionMap:{}, qIdx:0, answered:{}, selectedOptionByQuestion:{}, examLoadToken:0, timerByQuestion:{}, activeTimerId:null, timerHandle:null };
 const $ = s=>document.querySelector(s);
 function $$(s){ return document.querySelectorAll(s); }
 
@@ -1631,6 +1631,7 @@ function resetQuizView(title="Loading..."){
   S.sectionMap={};
   S.qIdx=0;
   S.answered={};
+  S.selectedOptionByQuestion={};
   S.timerByQuestion={};
   $("#quizTitle").textContent=title;
   $("#qProgress").textContent="";
@@ -1785,11 +1786,44 @@ function renderQuiz(){
   renderQuestion();
 }
 
+function getOptionLetters(question){
+  return ["A","B","C","D"].filter((_,index)=>Boolean(question[`answer${index+1}`]));
+}
+
+function getSelectedOption(question){
+  const options=getOptionLetters(question);
+  const selected=S.selectedOptionByQuestion[question._id];
+  return options.includes(selected)?selected:null;
+}
+
+function highlightSelectedOption(letter){
+  const q=S.questions[S.qIdx];
+  if(!q || S.answered[q._id]) return;
+  if(!getOptionLetters(q).includes(letter)) return;
+  S.selectedOptionByQuestion[q._id]=letter;
+  $$("#qBlock .opt-row").forEach(row=>{
+    const isSelected=row.dataset.opt===letter;
+    row.classList.toggle("selected",isSelected);
+    row.querySelector(".opt-dot, .opt-btn")?.classList.toggle("sel",isSelected);
+  });
+}
+
+function clearSelectedOption(){
+  const q=S.questions[S.qIdx];
+  if(!q || S.answered[q._id]) return;
+  delete S.selectedOptionByQuestion[q._id];
+  $$("#qBlock .opt-row").forEach(row=>{
+    row.classList.remove("selected");
+    row.querySelector(".opt-dot, .opt-btn")?.classList.remove("sel");
+  });
+}
+
 function renderQuestion(){
   const q=S.questions[S.qIdx];
   if(!q) return;
   const st=S.stateMap[q._id]||{};
   const isAnswered=S.answered[q._id]||st.state!=="unanswered";
+  const selectedOption=isAnswered?null:getSelectedOption(q);
 
   // Progress
   $("#qProgress").textContent=`第 ${S.qIdx+1} / ${S.questions.length} 题`;
@@ -1832,13 +1866,14 @@ function renderQuestion(){
     const isCorrect=q._answers.includes(l);
     let cls="opt-row";
     if(isCompact) cls+=" compact";
+    if(selectedOption===l) cls+=" selected";
     if(isAnswered){
       cls+=" answered";
       if(isCorrect) cls+=" correct";
     }
     const multiType=q._isMulti?"opt-btn":"opt-dot";
     html+=`<div class="${cls}" data-opt="${l}" onclick="${isAnswered?'':'selectOpt(\''+l+'\')'}">
-      <div class="${multiType}">${q._isMulti?'':l}</div>
+      <div class="${multiType}${selectedOption===l?' sel':''}">${q._isMulti?'':l}</div>
       <div>${q[`answer${i}`]}</div></div>`;
   }
   html+=`</div>`;
@@ -2097,6 +2132,64 @@ document.addEventListener("touchend",e=>{
   if(dx<0&&S.qIdx<S.states.length-1) S.qIdx++;
   else if(dx>0&&S.qIdx>0) S.qIdx--;
   renderQuestion();
+});
+
+// Keyboard navigation is deliberately limited to unmodified keys on the quiz page.
+document.addEventListener("keydown",event=>{
+  if(event.ctrlKey||event.altKey||event.metaKey||event.shiftKey||event.isComposing) return;
+  if(!$("#quizPage").classList.contains("active")||!S.questions.length) return;
+
+  const target=event.target;
+  if(target instanceof HTMLElement&&(target.matches("input, textarea, select")||target.isContentEditable)) return;
+
+  const key=event.key;
+  const q=S.questions[S.qIdx];
+  if(!q) return;
+
+  if(key==="ArrowUp"){
+    event.preventDefault();
+    if(S.qIdx>0){ S.qIdx--; renderQuestion(); }
+    return;
+  }
+  if(key==="ArrowDown"){
+    event.preventDefault();
+    if(S.qIdx<S.questions.length-1){ S.qIdx++; renderQuestion(); }
+    return;
+  }
+
+  if(S.answered[q._id]) return;
+
+  const optionKey=key.toUpperCase();
+  if(["A","B","C","D"].includes(optionKey)){
+    event.preventDefault();
+    highlightSelectedOption(optionKey);
+    return;
+  }
+  if(key==="Enter"){
+    event.preventDefault();
+    const selected=getSelectedOption(q);
+    if(selected) selectOpt(selected);
+    else if(S.qIdx<S.questions.length-1){ S.qIdx++; renderQuestion(); }
+    return;
+  }
+  if(key==="Escape"){
+    event.preventDefault();
+    clearSelectedOption();
+    return;
+  }
+  if(key!=="ArrowLeft"&&key!=="ArrowRight") return;
+
+  event.preventDefault();
+  const options=getOptionLetters(q);
+  if(!options.length) return;
+  const selected=getSelectedOption(q);
+  const currentIndex=options.indexOf(selected);
+  const nextIndex=currentIndex===-1
+    ?(key==="ArrowLeft"?options.length-1:0)
+    :(key==="ArrowLeft"
+      ?Math.max(0,currentIndex-1)
+      :Math.min(options.length-1,currentIndex+1));
+  highlightSelectedOption(options[nextIndex]);
 });
 
 // Auto expand/collapse by orientation
