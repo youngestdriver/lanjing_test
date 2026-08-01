@@ -5,6 +5,8 @@ struct OptionRowView: View {
     let question: Question
     let letter: String
     var compact = false
+    /// Image-based options (isImageOptions): render the letter tile only.
+    var imageOnly = false
 
     private var optionText: String? {
         let idx = question.letters.firstIndex(of: letter) ?? 0
@@ -45,13 +47,15 @@ struct OptionRowView: View {
         Button {
             vm.tapOption(letter)
         } label: {
-            if compact {
+            if imageOnly {
+                letterTile
+            } else if compact {
                 compactTile
             } else {
-                HStack(spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
                     keycap
                     if let optionText {
-                        HTMLText(html: optionText)
+                        RichHTMLContent(html: optionText)
                             .font(.system(size: 16))
                     }
                     Spacer(minLength: 0)
@@ -67,26 +71,44 @@ struct OptionRowView: View {
         .disabled(isAnswered)
     }
 
-    /// 4 options with ≤2-char texts render as horizontal keycap tiles (SPA .options.row).
+    /// 52pt letter-only tile for image-based options; state conveyed by color.
+    private var letterTile: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: DS.radiusMD)
+                .fill(background)
+                .frame(width: 52, height: 52)
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.radiusMD)
+                        .stroke(borderColor, lineWidth: 2)
+                )
+            Text(letter)
+                .font(.system(size: 18, weight: .heavy))
+                .foregroundStyle(tileTextColor)
+        }
+    }
+
+    /// 4 options with ≤2-char texts render as horizontal keycap tiles pinned at the
+    /// bottom (SPA .options.row). Shows the STRIPPED text centered — the raw option
+    /// HTML would display literal tags like <p>圆</p>.
     private var compactTile: some View {
-        ZStack(alignment: .topLeading) {
+        ZStack {
             RoundedRectangle(cornerRadius: DS.radiusSM)
                 .fill(background)
                 .frame(width: 64, height: 64)
                 .overlay(RoundedRectangle(cornerRadius: DS.radiusSM).stroke(borderColor, lineWidth: 2))
             if let optionText {
-                Text(optionText)
-                    .font(.system(size: 13, weight: .bold))
+                Text(Question.plainText(optionText))
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(tileTextColor)
                     .frame(width: 64, height: 64)
             }
-            Text(letter)
-                .font(.system(size: 10, weight: .heavy))
-                .foregroundStyle(.white)
-                .frame(width: 18, height: 18)
-                .background(keycapFill)
-                .clipShape(Circle())
-                .padding(5)
         }
+    }
+
+    private var tileTextColor: Color {
+        if isAnswered && (isCorrect || isTappedWrong) { return .white }
+        if isSelected && !isAnswered { return DS.blue }
+        return .primary
     }
 
     private var keycap: some View {
@@ -114,8 +136,10 @@ struct OptionRowView: View {
         }
     }
 
+    /// Must only colorize after answering — otherwise the correct answer would be
+    /// visibly highlighted on unanswered questions.
     private var keycapFill: Color {
-        if isCorrect { return DS.accent }
+        if isAnswered && isCorrect { return DS.accent }
         if isTappedWrong { return DS.red }
         return Color(.systemGray4)
     }

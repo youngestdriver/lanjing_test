@@ -17,20 +17,68 @@ struct QuestionView: View {
     }
 
     var body: some View {
+        if let question, let state {
+            if question.isLogicLayout {
+                logicLayout(question, state)
+            } else {
+                regularLayout(question, state)
+            }
+        }
+    }
+
+    /// Standard questions: everything scrolls in one column.
+    private func regularLayout(_ question: Question, _ state: QuestionState) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                if let question, let state {
-                    headerRow(question, state)
-                    HTMLText(html: question.text)
-                        .font(.system(size: 17))
-                    options(for: question)
-                    if isAnswered {
-                        explainBanner(for: question, state: state)
-                    }
+                headerRow(question, state)
+                RichHTMLContent(html: question.text)
+                    .font(.system(size: 17))
+                options(for: question)
+                if isAnswered {
+                    explainBanner(for: question, state: state)
                 }
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// 逻辑推理 questions: scrollable stem, four compact tiles pinned at the bottom.
+    private func logicLayout(_ question: Question, _ state: QuestionState) -> some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    headerRow(question, state)
+                    RichHTMLContent(html: question.text)
+                        .font(.system(size: 17))
+                    if isAnswered {
+                        explainBanner(for: question, state: state)
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            VStack(spacing: 10) {
+                HStack(spacing: 12) {
+                    ForEach(question.letters, id: \.self) { letter in
+                        OptionRowView(
+                            vm: vm,
+                            question: question,
+                            letter: letter,
+                            compact: question.isCompactLayout,
+                            imageOnly: question.isImageOptions
+                        )
+                    }
+                }
+                if question.isMulti, !isAnswered, !(vm.selectionByQuestion[question.id]?.isEmpty ?? true) {
+                    Button("提交") {
+                        vm.confirmSelection()
+                    }
+                    .buttonStyle(KeycapButtonStyle(color: DS.accent, radius: DS.radiusSM))
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 12)
         }
     }
 
@@ -63,19 +111,12 @@ struct QuestionView: View {
         }
     }
 
+    /// Regular questions only (logic layouts use the bottom-pinned bar).
     @ViewBuilder
     private func options(for question: Question) -> some View {
-        if question.isCompactLayout {
-            HStack(spacing: 10) {
-                ForEach(question.letters, id: \.self) { letter in
-                    OptionRowView(vm: vm, question: question, letter: letter, compact: true)
-                }
-            }
-        } else {
-            VStack(spacing: 12) {
-                ForEach(question.letters, id: \.self) { letter in
-                    OptionRowView(vm: vm, question: question, letter: letter, compact: false)
-                }
+        VStack(spacing: 12) {
+            ForEach(question.letters, id: \.self) { letter in
+                OptionRowView(vm: vm, question: question, letter: letter)
             }
         }
         if question.isMulti, !isAnswered, !(vm.selectionByQuestion[question.id]?.isEmpty ?? true) {
@@ -101,7 +142,7 @@ struct QuestionView: View {
                     .foregroundStyle(DS.accent)
             }
             if let analysis = question.analysis, !analysis.isEmpty {
-                HTMLText(html: analysis)
+                RichHTMLContent(html: analysis)
                     .font(.system(size: 14))
             }
         }

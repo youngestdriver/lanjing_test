@@ -54,6 +54,32 @@ final class AnswerMappingTests: XCTestCase {
         XCTAssertFalse(longOption.isCompactLayout)
     }
 
+    func testCompactLayoutExcludesImageOptions() {
+        let imageOptions = Question(dto: Fixtures.questionDTO(answers: [
+            #"<img src="/a.png">"#, #"<img src="/b.png">"#,
+            #"<img src="/c.png">"#, #"<img src="/d.png">"#,
+        ]))
+        XCTAssertFalse(imageOptions.isCompactLayout)
+        XCTAssertTrue(imageOptions.isImageOptions)
+
+        let textOptions = Question(dto: Fixtures.questionDTO(
+            answers: ["<p>苹果汁</p>", "<p>香蕉汁</p>", "<p>橘子汁</p>", "<p>葡萄汁</p>"]
+        ))
+        XCTAssertFalse(textOptions.isImageOptions)
+
+        let mixed = Question(dto: Fixtures.questionDTO(answers: [
+            "<p>文字</p>", #"<img src="/b.png">"#, "<p>文字</p>", #"<img src="/d.png">"#,
+        ]))
+        XCTAssertFalse(mixed.isImageOptions)
+
+        // Logic layout: compact short-text tiles and image options both pin at bottom
+        let compact = Question(dto: Fixtures.questionDTO(answers: ["对", "错", "对", "错"]))
+        XCTAssertTrue(compact.isLogicLayout)
+        XCTAssertTrue(imageOptions.isLogicLayout)
+        XCTAssertFalse(textOptions.isLogicLayout)
+        XCTAssertFalse(mixed.isLogicLayout)
+    }
+
     func testMultiSelectionCorrectness() {
         XCTAssertTrue(QuizLogic.isMultiSelectionCorrect(selected: ["A", "C"], correct: ["A", "C"]))
         XCTAssertFalse(QuizLogic.isMultiSelectionCorrect(selected: ["A"], correct: ["A", "C"]))

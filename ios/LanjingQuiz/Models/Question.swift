@@ -53,15 +53,28 @@ struct Question: Identifiable, Equatable {
     }
 
     /// Horizontal keycap layout when exactly 4 options and every option text ≤ 2 chars
-    /// (SPA renderQuestion optTexts check).
+    /// (SPA renderQuestion optTexts check). Image options and empty options are excluded.
     var isCompactLayout: Bool {
-        answers.count == 4 && answers.allSatisfy {
-            Self.plainText($0).trimmingCharacters(in: .whitespacesAndNewlines).count <= 2
+        answers.count == 4 && answers.allSatisfy { answer in
+            guard answer.range(of: "<img", options: .caseInsensitive) == nil else { return false }
+            let text = Self.plainText(answer).trimmingCharacters(in: .whitespacesAndNewlines)
+            return !text.isEmpty && text.count <= 2
         }
     }
 
     func isCorrectAnswer(_ letter: String) -> Bool {
         correctAnswers.contains(letter)
+    }
+
+    /// All options are image-based (逻辑推理 with picture sequences): the option
+    /// content duplicates the stem, so only the A/B/C/D letters are shown.
+    var isImageOptions: Bool {
+        !answers.isEmpty && answers.allSatisfy { $0.range(of: "<img", options: .caseInsensitive) != nil }
+    }
+
+    /// 逻辑推理-style layout: four compact tiles pinned side by side at the bottom.
+    var isLogicLayout: Bool {
+        isCompactLayout || isImageOptions
     }
 
     /// Port of the SPA letter→key mapping (A→1 … D→4). Trailing comma is mandatory

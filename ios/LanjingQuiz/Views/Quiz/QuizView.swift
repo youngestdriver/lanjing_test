@@ -19,6 +19,11 @@ struct QuizView: View {
             await vm?.enterAndLoad()
         }
         .onDisappear { vm?.cancel() }
+        .onChange(of: vm?.currentIndex) { _, _ in
+            // TabView swipes update currentIndex via the binding — the view model
+            // must pause the previous question's timer and restart for the new one.
+            vm?.indexDidChange()
+        }
         .onChange(of: vm?.result) { _, newValue in
             if let result = newValue {
                 appState.route = .result(result)
