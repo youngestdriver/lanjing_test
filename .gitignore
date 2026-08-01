@@ -23,4 +23,8 @@ node_modules/
 Thumbs.db
 .DS_Store
 
+# iOS build artifacts
+ios/build/
+ios/*.xcuserstate
+
 .od-skills
