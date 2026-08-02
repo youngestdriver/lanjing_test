@@ -30,6 +30,11 @@ final class QuizViewModel {
     // Timer state
     private var remainingByQuestion: [String: Int] = [:]
     private var timerTask: Task<Void, Never>?
+    /// Identifies the one timer task that is allowed to publish UI state.
+    /// Navigation can move A → B → A, so a question ID alone is not enough
+    /// to distinguish an old task from the newly-started task for the same
+    /// question.
+    private var timerRunID = 0
     private(set) var displayedSeconds = 60
     private(set) var timerMode: TimerMode = .paused
 
@@ -115,8 +120,7 @@ final class QuizViewModel {
     }
 
     func cancel() {
-        timerTask?.cancel()
-        timerTask = nil
+        stopTimer()
         autoAdvanceTask?.cancel()
         autoAdvanceTask = nil
     }
@@ -269,6 +273,15 @@ final class QuizViewModel {
 
     // MARK: - Private
 
+    /// Cancels the current countdown and invalidates any in-flight tick before
+    /// another task can be started. The run ID prevents a cancelled task from
+    /// clearing or overwriting the replacement task's state.
+    private func stopTimer() {
+        timerRunID &+= 1
+        timerTask?.cancel()
+        timerTask = nil
+    }
+
     private func setMarked(_ id: String, _ value: Bool) {
         markedByID[id] = value
         if let idx = states.firstIndex(where: { $0.questionsId == id }) {
@@ -284,8 +297,7 @@ final class QuizViewModel {
         }
         answeredIDs.insert(question.id)
         selectionByQuestion[question.id] = Set(letters)
-        timerTask?.cancel()
-        timerTask = nil
+        stopTimer()
         timerMode = .paused
         displayedSeconds = 60
 
@@ -319,8 +331,7 @@ final class QuizViewModel {
     }
 
     private func restartTimerForCurrent() {
-        timerTask?.cancel()
-        timerTask = nil
+        stopTimer()
         guard let question = currentQuestion else {
             timerMode = .paused
             return
@@ -340,21 +351,32 @@ final class QuizViewModel {
         timerMode = .active
         displayedSeconds = remaining
         let qId = question.id
+        let runID = timerRunID
         timerTask = Task { [weak self] in
             var seconds = remaining
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
-                guard let self else { return }
+            while seconds > 0 {
+                do {
+                    try await Task.sleep(for: .seconds(1))
+                } catch {
+                    // Switching questions or leaving the quiz cancels this
+                    // task. A cancelled task must never publish one more tick.
+                    return
+                }
+                guard !Task.isCancelled,
+                      let self,
+                      self.timerRunID == runID,
+                      self.currentQuestion?.id == qId,
+                      !self.answeredIDs.contains(qId) else {
+                    return
+                }
                 seconds -= 1
-                if seconds <= 0 {
-                    self.remainingByQuestion[qId] = 0
-                    self.displayedSeconds = 0
+                self.remainingByQuestion[qId] = seconds
+                self.displayedSeconds = seconds
+                if seconds == 0 {
                     self.timerMode = .expired
                     self.timerTask = nil
                     return
                 }
-                self.remainingByQuestion[qId] = seconds
-                self.displayedSeconds = seconds
             }
         }
     }

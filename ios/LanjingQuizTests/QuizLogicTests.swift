@@ -37,6 +37,84 @@ final class QuizLogicTests: XCTestCase {
         XCTAssertEqual(QuizLogic.nextIndex(after: 0, states: []), 0)
     }
 
+    func testOptionResultMarksOnlyReferenceAndSelectedWrongOptions() {
+        // Correct single-choice submission: only the reference option is ✅.
+        XCTAssertEqual(
+            QuizLogic.optionResult(
+                isAnswered: true,
+                isSelected: true,
+                isCorrect: true,
+                isMulti: false,
+                questionState: .right
+            ),
+            .correct
+        )
+        XCTAssertNil(
+            QuizLogic.optionResult(
+                isAnswered: true,
+                isSelected: false,
+                isCorrect: false,
+                isMulti: false,
+                questionState: .right
+            )
+        )
+
+        // Wrong single-choice submission: selected option is ❌, reference is ✅,
+        // and untouched options keep their letters.
+        XCTAssertEqual(
+            QuizLogic.optionResult(
+                isAnswered: true,
+                isSelected: true,
+                isCorrect: false,
+                isMulti: false,
+                questionState: .error
+            ),
+            .wrong
+        )
+        XCTAssertEqual(
+            QuizLogic.optionResult(
+                isAnswered: true,
+                isSelected: false,
+                isCorrect: true,
+                isMulti: false,
+                questionState: .error
+            ),
+            .correct
+        )
+        XCTAssertNil(
+            QuizLogic.optionResult(
+                isAnswered: true,
+                isSelected: false,
+                isCorrect: false,
+                isMulti: false,
+                questionState: .error
+            )
+        )
+
+        // A multi-choice result can contain both a selected reference and a
+        // selected wrong option.
+        XCTAssertEqual(
+            QuizLogic.optionResult(
+                isAnswered: true,
+                isSelected: true,
+                isCorrect: true,
+                isMulti: true,
+                questionState: .error
+            ),
+            .correct
+        )
+        XCTAssertEqual(
+            QuizLogic.optionResult(
+                isAnswered: true,
+                isSelected: true,
+                isCorrect: false,
+                isMulti: true,
+                questionState: .error
+            ),
+            .wrong
+        )
+    }
+
     func testMMSSFormatting() {
         XCTAssertEqual(Formatters.mmss(0), "00:00")
         XCTAssertEqual(Formatters.mmss(1), "00:01")

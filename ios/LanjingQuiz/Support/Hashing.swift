@@ -1,8 +1,10 @@
-import CommonCrypto
 import CryptoKit
 import Foundation
 
-/// Port of server.js helpers: sha256 / md5 (lowercase hex).
+/// Port of server.js helpers: SHA-256 / MD5 (lowercase hex).
+///
+/// MD5 is retained only for the legacy `passwordMD5` API field. It must not
+/// be used for security-sensitive hashing; use `sha256Hex` for new code.
 enum Hashing {
     static func sha256Hex(_ string: String) -> String {
         let digest = SHA256.hash(data: Data(string.utf8))
@@ -10,11 +12,7 @@ enum Hashing {
     }
 
     static func md5Hex(_ string: String) -> String {
-        let data = Data(string.utf8)
-        var digest = [UInt8](repeating: 0, count: Int(CC_MD5_DIGEST_LENGTH))
-        data.withUnsafeBytes { buffer in
-            _ = CC_MD5(buffer.baseAddress, CC_LONG(data.count), &digest)
-        }
+        let digest = Insecure.MD5.hash(data: Data(string.utf8))
         return digest.map { String(format: "%02x", $0) }.joined()
     }
 }

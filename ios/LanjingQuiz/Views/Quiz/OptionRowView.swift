@@ -26,19 +26,39 @@ struct OptionRowView: View {
         question.isCorrectAnswer(letter)
     }
 
-    /// The tapped-wrong state: selected (or confirmed) but not part of the answer.
-    private var isTappedWrong: Bool { isAnswered && isSelected && !isCorrect }
+    private var questionResult: QuestionState.State? {
+        vm.states.first { $0.questionsId == question.id }?.state
+    }
+
+    /// Result marker for this option after the answer is submitted. The
+    /// selected wrong option takes precedence over the reference-answer marker;
+    /// every other non-reference option remains an ordinary letter.
+    private var resultMark: QuizLogic.OptionResult? {
+        QuizLogic.optionResult(
+            isAnswered: isAnswered,
+            isSelected: isSelected,
+            isCorrect: isCorrect,
+            isMulti: question.isMulti,
+            questionState: questionResult
+        )
+    }
 
     private var background: Color {
-        if isCorrect && isAnswered { return DS.accent.opacity(0.12) }
-        if isTappedWrong { return DS.red.opacity(0.12) }
+        switch resultMark {
+        case .correct: return DS.accent.opacity(0.12)
+        case .wrong: return DS.red.opacity(0.12)
+        case nil: break
+        }
         if isSelected && !isAnswered { return DS.blue.opacity(0.12) }
         return Color(.secondarySystemBackground)
     }
 
     private var borderColor: Color {
-        if isCorrect && isAnswered { return DS.accent }
-        if isTappedWrong { return DS.red }
+        switch resultMark {
+        case .correct: return DS.accent
+        case .wrong: return DS.red
+        case nil: break
+        }
         if isSelected && !isAnswered { return DS.blue }
         return Color(.systemGray4)
     }
@@ -106,7 +126,7 @@ struct OptionRowView: View {
     }
 
     private var tileTextColor: Color {
-        if isAnswered && (isCorrect || isTappedWrong) { return .white }
+        if resultMark != nil { return .white }
         if isSelected && !isAnswered { return DS.blue }
         return .primary
     }
@@ -114,13 +134,31 @@ struct OptionRowView: View {
     private var keycap: some View {
         Group {
             if isAnswered {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(keycapFill)
-                        .frame(width: 30, height: 30)
-                    Image(systemName: keycapIconName)
-                        .font(.system(size: 13, weight: .heavy))
-                        .foregroundStyle(.white)
+                if let resultMark {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(keycapFill)
+                            .frame(width: 30, height: 30)
+                        Image(systemName: resultMark == .correct ? "checkmark" : "xmark")
+                            .font(.system(size: 13, weight: .heavy))
+                            .foregroundStyle(.white)
+                    }
+                } else {
+                    // Leave unselected, incorrect options unchanged after the
+                    // answer is revealed; only the correct answer and a tapped
+                    // wrong answer receive result icons.
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color(.secondarySystemBackground))
+                            .frame(width: 30, height: 30)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color(.systemGray4), lineWidth: 2)
+                            )
+                        Text(letter)
+                            .font(.system(size: 13, weight: .heavy))
+                            .foregroundStyle(Color(.systemGray))
+                    }
                 }
             } else {
                 ZStack {
@@ -139,14 +177,10 @@ struct OptionRowView: View {
     /// Must only colorize after answering — otherwise the correct answer would be
     /// visibly highlighted on unanswered questions.
     private var keycapFill: Color {
-        if isAnswered && isCorrect { return DS.accent }
-        if isTappedWrong { return DS.red }
-        return Color(.systemGray4)
-    }
-
-    private var keycapIconName: String {
-        if isCorrect { return "checkmark" }
-        if isTappedWrong { return "xmark" }
-        return "checkmark"
+        switch resultMark {
+        case .correct: return DS.accent
+        case .wrong: return DS.red
+        default: return Color(.systemGray4)
+        }
     }
 }

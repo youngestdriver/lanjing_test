@@ -19,11 +19,6 @@ struct QuizView: View {
             await vm?.enterAndLoad()
         }
         .onDisappear { vm?.cancel() }
-        .onChange(of: vm?.currentIndex) { _, _ in
-            // TabView swipes update currentIndex via the binding — the view model
-            // must pause the previous question's timer and restart for the new one.
-            vm?.indexDidChange()
-        }
         .onChange(of: vm?.result) { _, newValue in
             if let result = newValue {
                 appState.route = .result(result)
@@ -34,7 +29,9 @@ struct QuizView: View {
     private var currentIndexBinding: Binding<Int> {
         Binding(
             get: { vm?.currentIndex ?? 0 },
-            set: { vm?.currentIndex = $0 }
+            // Keep swipes and programmatic navigation on the same path so a
+            // timer is restarted exactly once for every question change.
+            set: { vm?.goTo($0) }
         )
     }
 

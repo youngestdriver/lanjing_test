@@ -134,7 +134,7 @@ struct QuestionView: View {
             ? question.firstAnswer
             : question.correctAnswers.joined(separator: "、")
         return VStack(alignment: .leading, spacing: 10) {
-            Text(correct ? "🦉 棒极了！回答正确！" : "🦉 加油！再接再厉！")
+            Text(correct ? "棒极了！回答正确！" : "加油！再接再厉！")
                 .font(.system(size: 15, weight: .heavy))
             if !correct {
                 Text("正确答案：\(answerLabel)")
