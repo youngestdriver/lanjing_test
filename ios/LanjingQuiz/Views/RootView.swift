@@ -56,24 +56,21 @@ struct RootView: View {
             if isSplashVisible {
                 SplashView {
                     splashAnimationIsFinished = true
-                    dismissSplashIfPossible()
                 }
                 .transition(.opacity)
                 .zIndex(100)
             }
         }
         .animation(.easeInOut(duration: 0.25), value: appState.notice)
+        .onChange(of: initialRouteIsReady && splashAnimationIsFinished) { _, isReadyToDismiss in
+            guard isReadyToDismiss else { return }
+            withAnimation(.easeInOut(duration: 0.45)) {
+                isSplashVisible = false
+            }
+        }
         .task {
             await appState.start()
             initialRouteIsReady = true
-            dismissSplashIfPossible()
-        }
-    }
-
-    private func dismissSplashIfPossible() {
-        guard initialRouteIsReady, splashAnimationIsFinished, isSplashVisible else { return }
-        withAnimation(.easeInOut(duration: 0.45)) {
-            isSplashVisible = false
         }
     }
 }
