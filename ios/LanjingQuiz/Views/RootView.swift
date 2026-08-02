@@ -1,7 +1,14 @@
 import SwiftUI
 
+private enum HomeTab: Hashable {
+    case exams
+    case practice
+    case profile
+}
+
 struct RootView: View {
     @Environment(AppState.self) private var appState
+    @State private var selectedTab: HomeTab = .exams
 
     var body: some View {
         ZStack {
@@ -9,7 +16,7 @@ struct RootView: View {
             case .login:
                 LoginView()
             case .examList:
-                ExamListView()
+                HomeTabView(selectedTab: $selectedTab)
             case .quiz(let exam):
                 QuizView(exam: exam)
             case .result(let result):
@@ -43,5 +50,91 @@ struct RootView: View {
         }
         .animation(.easeInOut(duration: 0.25), value: appState.notice)
         .task { await appState.start() }
+    }
+}
+
+private struct HomeTabView: View {
+    @Binding var selectedTab: HomeTab
+
+    var body: some View {
+        TabView(selection: $selectedTab) {
+            ExamListView()
+                .tabItem {
+                    Label("考试列表", systemImage: "list.bullet.rectangle")
+                }
+                .tag(HomeTab.exams)
+
+            PracticeView(showExamList: { selectedTab = .exams })
+                .tabItem {
+                    Label("练习", systemImage: "target")
+                }
+                .tag(HomeTab.practice)
+
+            ProfileView()
+                .tabItem {
+                    Label("我的", systemImage: "person.crop.circle")
+                }
+                .tag(HomeTab.profile)
+        }
+    }
+}
+
+private struct PracticeView: View {
+    let showExamList: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            ContentUnavailableView {
+                Label("开始练习", systemImage: "target")
+            } description: {
+                Text("从考试列表选择一份试卷开始答题")
+            } actions: {
+                Button("前往考试列表", action: showExamList)
+                    .buttonStyle(.borderedProminent)
+            }
+            .navigationTitle("练习")
+        }
+    }
+}
+
+private struct ProfileView: View {
+    @Environment(AppState.self) private var appState
+
+    private var themeBinding: Binding<Theme> {
+        Binding(
+            get: { appState.theme },
+            set: { newTheme in
+                appState.theme = newTheme
+                newTheme.save()
+            }
+        )
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Label("已登录", systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(DS.accent)
+                } header: {
+                    Text("账户")
+                }
+
+                Section("外观") {
+                    Picker("主题", selection: themeBinding) {
+                        Text("浅色").tag(Theme.light)
+                        Text("深色").tag(Theme.dark)
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                Section {
+                    Button("退出登录", role: .destructive) {
+                        appState.logout()
+                    }
+                }
+            }
+            .navigationTitle("我的")
+        }
     }
 }

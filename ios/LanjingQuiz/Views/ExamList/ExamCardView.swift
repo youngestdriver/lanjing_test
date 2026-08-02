@@ -41,10 +41,11 @@ struct ExamCardView: View {
             .padding(.vertical, 4)
         }
         .buttonStyle(.plain)
-        .swipeActions(edge: .trailing) {
-            Button("放弃", role: .destructive) {
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button("放弃") {
                 confirmAbandon = true
             }
+            .tint(DS.red)
         }
         .confirmationDialog("确定放弃「\(exam.name)」吗？放弃后本次作答将直接交卷。",
                             isPresented: $confirmAbandon, titleVisibility: .visible) {

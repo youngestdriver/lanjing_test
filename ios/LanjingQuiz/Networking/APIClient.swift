@@ -297,6 +297,11 @@ final class APIClient: NSObject, URLSessionDelegate {
         // Step 2: end exam — redirects to the result page
         let path = "/exam/exam_ending?examInfoId=\(infoId)&examResultsId=\(resultsId)&isForce=0&switchScreen=0&noOpsAutoCommit=0"
         let end = try await request(path, method: "GET", referer: examReferer(examInfoId))
+        // A non-result response (such as the still-active exam page) must not be
+        // interpreted as a completed submission with the parser's fallback values.
+        guard end.text.range(of: "class=\"score\"", options: .caseInsensitive) != nil else {
+            throw APIError.upstream("考试未能结束，请刷新后重试")
+        }
         return ResultPageParser.parse(end.text)
     }
 

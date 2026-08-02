@@ -10,6 +10,9 @@ final class ExamListViewModel {
     var errorMessage: String?
 
     private let appState: AppState
+    /// Exam IDs whose current server state has just been ended locally. A stale
+    /// list response must not make an unusable "continue" record tappable again.
+    private var suppressedExamStates: [Int: Int] = [:]
 
     init(appState: AppState) {
         self.appState = appState
@@ -20,8 +23,7 @@ final class ExamListViewModel {
         defer { isLoading = false }
         do {
             let list = try await appState.api.examList()
-            exams = list.exams
-            grouped = Self.groupExams(list.exams)
+            apply(list.exams)
             errorMessage = nil
         } catch {
             appState.handle(error)
@@ -46,10 +48,17 @@ final class ExamListViewModel {
         return keys.map { ($0, byStyle[$0] ?? []) }
     }
 
-    /// 放弃考试 (two-step confirmed in the UI): submit the exam upstream, then reload.
+    /// 放弃考试 (two-step confirmed in the UI): end the upstream attempt, immediately
+    /// invalidate its current list state, then synchronize with the service.
     func abandon(_ exam: Exam) async {
         do {
             _ = try await appState.api.submitExam(examInfoId: String(exam.id), session: nil)
+            suppressedExamStates[exam.id] = exam.wfs
+            apply(exams)
+            await load()
+            // The upstream exam list can lag just behind exam_ending. Retry once so a
+            // replacement "new exam" state appears without exposing the old attempt.
+            try? await Task.sleep(for: .seconds(1))
             await load()
         } catch {
             appState.handle(error)
@@ -58,6 +67,19 @@ final class ExamListViewModel {
                 errorMessage = "放弃失败：\(apiError.message)"
             }
         }
+    }
+
+    private func apply(_ freshExams: [Exam]) {
+        // Keep suppression only while the service returns the exact old state. If it
+        // returns the same exam ID with a changed wfs value, that is a new valid state.
+        suppressedExamStates = suppressedExamStates.filter { id, wfs in
+            freshExams.contains { $0.id == id && $0.wfs == wfs }
+        }
+        let visibleExams = freshExams.filter { exam in
+            suppressedExamStates[exam.id] != exam.wfs
+        }
+        exams = visibleExams
+        grouped = Self.groupExams(visibleExams)
     }
 
     func logout() {

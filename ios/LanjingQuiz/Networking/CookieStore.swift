@@ -67,7 +67,8 @@ final class CookieStore {
             return HTTPCookie(properties: properties)
         }
         guard !cookies.isEmpty else { return }
-        storage.setCookies(cookies, for: nil, mainDocumentURL: APIClient.baseURL)
+        // Pass a non-nil URL for both parameters to avoid CFNetwork dereferencing nil on iOS 27 Beta
+        storage.setCookies(cookies, for: APIClient.baseURL, mainDocumentURL: APIClient.baseURL)
     }
 
     func clear() {
@@ -77,3 +78,4 @@ final class CookieStore {
         persistence.clear()
     }
 }
+

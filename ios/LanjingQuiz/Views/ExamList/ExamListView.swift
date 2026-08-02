@@ -14,18 +14,6 @@ struct ExamListView: View {
                 }
             }
             .navigationTitle("考试列表")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(appState.theme.toggleLabel) {
-                        appState.toggleTheme()
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("退出") {
-                        appState.logout()
-                    }
-                }
-            }
         }
         .task {
             if vm == nil { vm = ExamListViewModel(appState: appState) }
