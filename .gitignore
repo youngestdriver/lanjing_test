@@ -26,5 +26,6 @@ Thumbs.db
 # iOS build artifacts
 ios/build/
 ios/*.xcuserstate
+ios/**/xcuserdata/
 
 .od-skills
