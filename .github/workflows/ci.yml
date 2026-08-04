@@ -30,20 +30,24 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: apps/web/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm --prefix apps/web ci
 
       - name: Check JavaScript syntax
-        run: |
-          node --check server.js
-          node --check login_demo.js
-          node --check frontend/sw.js
+        run: npm --prefix apps/web run check
+
+      - name: Run Web unit tests
+        run: npm --prefix apps/web test
+
+      - name: Run browser smoke test
+        run: npm --prefix apps/web run test:browser
 
       - name: Smoke test server
         shell: bash
         run: |
-          env PORT=43127 node server.js > "$RUNNER_TEMP/lanjing-server.log" 2>&1 &
+          env PORT=43127 node apps/web/server.js > "$RUNNER_TEMP/lanjing-server.log" 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
 
@@ -90,7 +94,7 @@ jobs:
       - name: Build and test
         run: |
           xcodebuild \
-            -project ios/LanjingQuiz.xcodeproj \
+            -project apps/ios/LanjingQuiz.xcodeproj \
             -scheme LanjingQuiz \
             -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.id }}" \
             -derivedDataPath "$RUNNER_TEMP/LanjingQuizDerivedData" \

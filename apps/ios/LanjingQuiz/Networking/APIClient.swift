@@ -1,6 +1,6 @@
 import Foundation
 
-/// Faithful port of server.js proxy logic: browser header spoofing, cookie jar,
+/// Faithful port of apps/web/server.js proxy logic: browser header spoofing, cookie jar,
 /// session-expiry detection and every upstream flow (login → exam list → enter →
 /// questions → answer → mark → submit).
 @MainActor
@@ -93,7 +93,7 @@ final class APIClient: NSObject, URLSessionDelegate {
         completionHandler(request)
     }
 
-    /// Port of the proxyRequest session-expiry block (server.js:53-64).
+    /// Port of the proxyRequest session-expiry logic in apps/web/server.js.
     nonisolated static func detectSessionExpiry(status: Int, text: String, redirectTargets: [URL]) -> Bool {
         // Rule 1: redirect to the login page
         if redirectTargets.contains(where: { $0.path.contains("/login/account/login") }) {
@@ -128,7 +128,7 @@ final class APIClient: NSObject, URLSessionDelegate {
         return form.map { "\(encode($0.key))=\(encode($0.value))" }.joined(separator: "&")
     }
 
-    /// Port of the login form in server.js:139-144.
+    /// Port of the login form construction in apps/web/server.js.
     nonisolated static func loginForm(phone: String, password: String) -> [String: String] {
         let normalizedPhone = normalizePhone(phone)
         return [
@@ -156,7 +156,7 @@ final class APIClient: NSObject, URLSessionDelegate {
     // MARK: - Endpoints
 
     func login(phone: String, password: String) async throws {
-        // Warm up JSESSIONID (server.js:127-136) — login page must not trigger expiry detection
+        // Warm up JSESSIONID as in apps/web/server.js; the login page must not trigger expiry detection.
         if !cookieStore.hasJSESSIONID {
             _ = try await request("/login/account/login/1", method: "GET", detectExpiry: false)
         }
@@ -188,7 +188,7 @@ final class APIClient: NSObject, URLSessionDelegate {
         let examInfoId = String(exam.id)
         let html: String
         if exam.isNew {
-            // Step 0: enter_exam, follow redirects (server.js:402-410)
+            // Step 0: enter_exam and follow redirects, matching apps/web/server.js.
             _ = try await request("/exam/enter_exam/1/\(examInfoId)", method: "GET")
             let referer = Self.baseURL.absoluteString + "/exam/before_answer_notice/\(examInfoId)"
             // Step 1: faceCheckCondition

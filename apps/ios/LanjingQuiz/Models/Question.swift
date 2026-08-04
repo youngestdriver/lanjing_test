@@ -1,7 +1,7 @@
 import Foundation
 
 /// One exam question with derived correct-answer fields — port of the server-side
-/// enrichment in server.js fetchAllQuestions (_isMulti / _answers / _answerHtml / _analysis).
+/// enrichment in apps/web/server.js fetchAllQuestions (_isMulti / _answers / _answerHtml / _analysis).
 struct Question: Identifiable, Equatable {
     let id: String
     let text: String

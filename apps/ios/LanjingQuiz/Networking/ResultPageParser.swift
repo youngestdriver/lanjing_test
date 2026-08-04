@@ -1,6 +1,6 @@
 import Foundation
 
-/// Port of the score / beatRate / rank regexes in server.js /api/exams/:id/submit.
+/// Port of the score / beatRate / rank regexes in apps/web/server.js /api/exams/:id/submit.
 enum ResultPageParser {
 
     static func parse(_ html: String) -> ExamResult {

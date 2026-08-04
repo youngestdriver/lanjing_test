@@ -1,0 +1,22 @@
+{
+  "name": "lanjing-quiz-assistant",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local quiz assistant proxy for Lanjing Weike.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js",
+    "test:browser": "node test/browser-smoke.js",
+    "check": "node --check server.js && node --check lib/parsers.js && node --check public/js/app.js && node --check public/js/quiz-core.js && node --check public/sw.js && node --check tools/login-demo.js && node --check test/browser-smoke.js && node --check test/parsers.test.js && node --check test/quiz-core.test.js && node --check test/server-security.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.62.1"
+  }
+}

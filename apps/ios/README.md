@@ -1,6 +1,6 @@
 # LanjingQuiz iOS
 
-`LanjingQuiz` is the native iOS client for the Lanjing Weike quiz platform. It is a SwiftUI rewrite of the web workflow and communicates directly with the upstream service; it does not require the repository's Node.js server to run.
+`LanjingQuiz` is the native iOS client for the Lanjing Weike quiz platform. It is a SwiftUI rewrite of the web workflow and communicates directly with the upstream service; it does not require `apps/web/server.js` to run.
 
 ## Requirements
 
@@ -74,7 +74,7 @@ After a confirmed upstream completion, the app immediately hides the old active-
 ## Project Layout
 
 ```text
-ios/
+apps/ios/
 ├── LanjingQuiz.xcodeproj/       Xcode project
 ├── LanjingQuiz/
 │   ├── App/                     App entry point, route and theme state

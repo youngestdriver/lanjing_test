@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-/// Port of server.js helpers: SHA-256 / MD5 (lowercase hex).
+/// Port of apps/web/server.js helpers: SHA-256 / MD5 (lowercase hex).
 ///
 /// MD5 is retained only for the legacy `passwordMD5` API field. It must not
 /// be used for security-sensitive hashing; use `sha256Hex` for new code.

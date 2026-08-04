@@ -1,5 +1,5 @@
-const CACHE="quiz-v2";
-const SHELL=["/","/manifest.json"];
+const CACHE="quiz-v4";
+const SHELL=["/","/manifest.json","/styles.css","/js/quiz-core.js","/js/app.js"];
 
 self.addEventListener("install",e=>{
   e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));
@@ -12,9 +12,9 @@ self.addEventListener("activate",e=>{
 });
 
 self.addEventListener("fetch",e=>{
-  // API calls: network first
+  // Exam data is never cached; all business operations require the live service.
   if(e.request.url.includes("/api/")){
-    e.respondWith(fetch(e.request).catch(()=>caches.match(e.request)));
+    e.respondWith(fetch(e.request));
     return;
   }
   // Static: cache first, network fallback

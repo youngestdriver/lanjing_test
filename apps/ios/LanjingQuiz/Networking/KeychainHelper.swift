@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-/// Minimal generic-password Keychain wrapper (replaces session_cookies.txt).
+/// Minimal generic-password Keychain wrapper (replaces apps/web/.local/session_cookies.txt).
 enum KeychainHelper {
     static let service = "com.qzh.lanjingquiz"
 

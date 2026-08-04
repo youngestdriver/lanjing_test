@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Duolingo palette + keycap 3D button style, ported from frontend/index.html CSS variables.
+/// Duolingo palette + keycap 3D button style, ported from apps/web/public/index.html CSS variables.
 enum DS {
     static let accent = Color(hex: 0x58cc02)
     static let accentHover = Color(hex: 0x61e002)

@@ -1,10 +1,10 @@
 # 蓝鲸答题助手 API 文档
 
-> 文档版本：3.0
+> 文档版本：3.1
 >
-> 最后更新：2026-06-19
+> 最后更新：2026-08-05
 >
-> 对应代码：`server.js`
+> 对应代码：`apps/web/server.js`
 
 本文档描述本项目本地 Express 后端对前端开放的 `/api/...` 接口，以及这些接口背后调用的蓝鲸微课考试平台上游接口。
 
@@ -26,7 +26,7 @@
 默认端口由 `PORT` 环境变量控制，未设置时使用 `3000`。
 
 ```http
-http://localhost:3000
+http://127.0.0.1:3000
 ```
 
 ### 1.2 请求格式
@@ -37,14 +37,16 @@ http://localhost:3000
 Content-Type: application/json
 ```
 
-GET 请求无请求体。POST 请求体为 JSON 对象。
+GET 请求无请求体。POST 请求体为 JSON 对象；所有写请求都必须声明 `Content-Type: application/json`，否则返回 HTTP `415`。
+
+服务默认只监听 `127.0.0.1`。本地 API 只接受 `Host` 为 `127.0.0.1` 或 `localhost` 的请求；浏览器携带 `Origin` 时，其主机与端口还必须和当前请求完全一致。非法 Host 或跨源请求返回 HTTP `403`。这些边界用于保护进程级共享的上游会话，服务不应通过反向代理暴露到其他网络。
 
 ### 1.3 登录状态
 
 后端维护一个进程内 `cookieJar`，并在登录成功后将上游 Cookie 写入：
 
 ```text
-session_cookies.txt
+apps/web/.local/session_cookies.txt
 ```
 
 服务启动时会尝试读取该文件恢复会话。
@@ -55,6 +57,7 @@ session_cookies.txt
 |---|---|
 | `GET` | `/api/status` |
 | `POST` | `/api/login` |
+| `POST` | `/api/logout` |
 
 未登录时返回：
 
@@ -74,7 +77,7 @@ HTTP 状态码为 `401`。
 https://test.lanjingweike.com
 ```
 
-上游请求由 `server.js` 统一补充浏览器请求头、`Cookie`、`Origin`、`Referer`，并使用 `redirect: "manual"` 处理大多数接口。
+上游请求由 `apps/web/server.js` 统一补充浏览器请求头、`Cookie`、`Origin`、`Referer`，并使用 `redirect: "manual"` 处理大多数接口。
 
 ---
 
@@ -137,7 +140,7 @@ Content-Type: application/json
 
 登录成功后：
 
-- 后端保存上游 Cookie 到 `session_cookies.txt`
+- 后端保存上游 Cookie 到 `apps/web/.local/session_cookies.txt`
 - 清空考试列表缓存 `examsCache`
 
 #### 失败响应
@@ -359,6 +362,7 @@ GET /api/exams/:id/questions
       "analysis": "<p>解析 HTML</p>",
       "_isMulti": false,
       "_answers": ["A"],
+      "_previousAnswers": ["A"],
       "_answer": "A",
       "_answerHtml": "<p>选项 A</p>",
       "_analysis": "<p>解析 HTML</p>"
@@ -393,9 +397,12 @@ GET /api/exams/:id/questions
 |---|---|---|
 | `_isMulti` | boolean | 是否多选，依据 `key1` 到 `key4` 中正确项数量判断 |
 | `_answers` | string[] | 正确答案字母数组，例如 `["A", "C"]` |
+| `_previousAnswers` | string[] | 从上游 `test_ans` 解析出的历史作答字母，去重并按 A-D 顺序排列；未作答或原始值无效时为 `[]` |
 | `_answer` | string | 第一个正确答案；如果无 `keyN=1`，回退到 `test_ans_right` |
 | `_answerHtml` | string | 正确选项 HTML，多个正确答案用 `<br>` 拼接 |
 | `_analysis` | string | 解析 HTML，来自上游 `analysis` |
+
+例如，上游 `test_ans` 为 `"key3,key1,key3,unknown,"` 时，`_previousAnswers` 为 `["A", "C"]`。
 
 #### 失败响应
 
@@ -433,8 +440,8 @@ Content-Type: application/json
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|:---:|---|
 | `testId` | string | 是 | 题目 ID |
-| `testAns` | string | 是 | 上游答案键，单选也需要保留末尾逗号 |
-| `correct` | boolean | 是 | 前端判定的是否正确 |
+| `testAns` | string | 是 | 完整选择集合的上游答案键；每个选项键（包括最后一个）都保留末尾逗号 |
+| `correct` | boolean | 是 | 前端对完整选择集合的判定结果；仅当所选集合与正确答案集合完全相同时为 `true` |
 
 `testAns` 对照：
 
@@ -445,6 +452,18 @@ Content-Type: application/json
 | `key3,` | 选择 C |
 | `key4,` | 选择 D |
 | `key1,key3,` | 选择 A 和 C |
+
+Web 多选题会先切换选项的选中状态，不会在每次点击后立即提交；用户确认后才一次性发送完整选择集合。选中字母先按 A-D 顺序归一化，再逐项转换为 `keyN,` 并直接拼接。因此即使点击顺序为 C、A，A + C 仍编码为 `"key1,key3,"`。
+
+多选请求示例：
+
+```json
+{
+  "testId": "6620dfdfee9c16509b87a928",
+  "testAns": "key1,key3,",
+  "correct": true
+}
+```
 
 #### 成功响应
 
@@ -466,6 +485,19 @@ Content-Type: application/json
 ```
 
 HTTP 状态码为 `400`。
+
+上游拒绝本次答题同步时，本地接口仍可能返回 HTTP `200`，但响应中的 `success` 为 `false`：
+
+```json
+{
+  "success": false,
+  "code": 12345
+}
+```
+
+HTTP `200` 只表示本地请求已完成，不代表答题同步成功。Web 客户端把响应包含 `error` 或 `success !== true` 都视为同步失败，显示可重试状态，并且在同步成功前不会自动进入下一题或允许交卷。答案与交卷请求都绑定到发起时的考试会话；离开或重新进入考试后，迟到响应不会覆盖当前题目或成绩页。
+
+没有有效登录会话或上游会话过期时返回 HTTP `401` 和错误对象；上游请求超时返回 HTTP `504`，其他未处理的服务端错误返回 HTTP `500`。
 
 ---
 
@@ -552,9 +584,9 @@ GET https://test.lanjingweike.com/exam/exam_start/:id
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `score` | string | 成绩文本，解析失败时为 `"0"` |
-| `beatRate` | string | 击败比例，解析失败时为 `"?"` |
-| `rank` | string | 排名，解析失败时为 `"?"` |
+| `score` | string | 从结果页中 `class` 包含 `score` 的元素解析出的数值文本；缺失或不是数值时接口失败 |
+| `beatRate` | string | 结果页中的第一个百分比，解析失败时为 `"?"` |
+| `rank` | string | 结果页中的第二个百分比；缺失时复用第一个百分比，两者都缺失时为 `"?"` |
 
 #### 失败响应
 
@@ -567,6 +599,16 @@ GET https://test.lanjingweike.com/exam/exam_start/:id
 ```
 
 HTTP 状态码为 `400`。
+
+结果页没有可解析的数值成绩时，不返回成功结果：
+
+```json
+{
+  "error": "考试未能结束，请刷新后重试"
+}
+```
+
+HTTP 状态码为 `502`。
 
 ---
 
@@ -625,10 +667,15 @@ HTTP 状态码为 `500`。
 
 ### 2.10 退出登录
 
-清空后端进程内会话、考试缓存，并删除 `session_cookies.txt`。
+清空后端进程内会话、考试缓存，并删除 `apps/web/.local/session_cookies.txt`。
 
 ```http
-GET /api/logout
+POST /api/logout
+Content-Type: application/json
+```
+
+```json
+{}
 ```
 
 #### 成功响应
@@ -691,7 +738,7 @@ GET /api/logout
 
 ### 4.2 `sections`
 
-分区统计对象。键为分区标题；没有分区标题时，内部使用 `"(无分类"` 作为默认键。
+分区统计对象。键为分区标题；没有分区标题时，内部使用 `"(无分类)"` 作为默认键。
 
 ```json
 {
@@ -725,6 +772,7 @@ GET /api/logout
 | `analysis` | string | 解析 HTML |
 | `_isMulti` | boolean | 后端增强字段，是否多选 |
 | `_answers` | string[] | 后端增强字段，正确答案数组 |
+| `_previousAnswers` | string[] | 后端增强字段，从 `test_ans` 解析历史作答字母，去重并按 A-D 顺序排列；未作答时为 `[]` |
 | `_answer` | string | 后端增强字段，首个正确答案或备用答案 |
 | `_answerHtml` | string | 后端增强字段，正确选项 HTML |
 | `_analysis` | string | 后端增强字段，解析 HTML |
@@ -740,7 +788,7 @@ GET /api/logout
 
 ### 5.1 本地鉴权中间件
 
-除 `/api/login` 和 `/api/status` 外，所有 `/api/...` 路由都会先检查：
+除 `/api/login`、`/api/status` 和幂等的 `/api/logout` 外，所有 `/api/...` 路由都会先检查：
 
 ```js
 cookieJar.includes("sessionId=")
@@ -756,7 +804,7 @@ cookieJar.includes("sessionId=")
 
 ### 5.2 上游会话过期
 
-`proxyRequest` 会识别以下情况为会话过期：
+`proxyRequest` 和直接获取考试 HTML 的请求都会识别以下情况为会话过期：
 
 - 上游返回 `302`，并且 `Location` 包含 `/login/account/login`
 - 响应 HTML 中同时包含 `/login/account/login` 和 `<!DOCTYPE`
@@ -767,7 +815,7 @@ cookieJar.includes("sessionId=")
 - 清空 `cookieJar`
 - 清空 `examCache`
 - 清空 `examsCache`
-- 删除 `session_cookies.txt`
+- 删除 `apps/web/.local/session_cookies.txt`
 
 并返回：
 
@@ -779,14 +827,21 @@ cookieJar.includes("sessionId=")
 
 HTTP 状态码为 `401`。
 
+每个上游请求还会记录发起时的会话 generation。用户退出、重新登录或会话失效后，旧请求即使迟到也不能覆盖或清除新会话；这类响应返回 HTTP `409`。题目分批加载时，只要任意批次鉴权失败、HTTP 失败或返回非数组数据，整个请求就失败，不会以 HTTP `200` 返回空题或部分题目。
+
 ### 5.3 常见 HTTP 状态码
 
 | 状态码 | 场景 |
 |---|---|
-| `200` | 请求成功 |
+| `200` | 请求已正常处理；部分业务接口仍需检查响应中的 `success`，例如答题同步可能返回 `false` |
 | `400` | 请求前置条件不满足，例如未进入考试就请求题目 |
 | `401` | 未登录、登录失败或上游会话过期 |
-| `500` | 上游业务失败、解析失败或进入考试失败 |
+| `403` | 非本地 Host 或跨源浏览器请求 |
+| `409` | 请求执行期间本地会话已经切换，迟到响应被丢弃 |
+| `415` | 写请求没有使用 `application/json` |
+| `500` | 其他上游业务失败、进入考试失败或未处理的服务端错误 |
+| `502` | 上游 HTTP/数据结构失败，或交卷结果页缺少可解析的数值成绩 |
+| `504` | 单次上游请求超时，或新考试排队、组卷轮询超时 |
 
 ---
 
@@ -849,4 +904,4 @@ POST /api/exams/:id/submit
   -> 解析结果页 HTML
 ```
 
-返回的 `score`、`beatRate`、`rank` 都是从上游 HTML 中按正则解析出的字符串。若上游页面结构变化，字段可能回退为 `"0"` 或 `"?"`。
+返回的 `score`、`beatRate`、`rank` 都是从上游 HTML 解析出的字符串。`beatRate` 和 `rank` 缺失时可按上述规则回退为 `"?"`；`score` 必须是可解析的数值，否则接口返回 HTTP `502`，不会返回成功结果。

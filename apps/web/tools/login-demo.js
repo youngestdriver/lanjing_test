@@ -1,10 +1,13 @@
 const crypto = require("crypto");
 const readline = require("readline");
 const fs = require("fs");
+const path = require("path");
 
 const BASE_URL = "https://test.lanjingweike.com";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0";
 const REQUEST_TIMEOUT = 30000; // 30 seconds
+const LOCAL_DATA_DIR = path.resolve(__dirname, "..", ".local");
+const SESSION_FILE = path.join(LOCAL_DATA_DIR, "session_cookies.txt");
 
 // ---------- helpers ----------
 function sha256(s) {
@@ -391,19 +394,20 @@ function summarize(questions) {
 (async () => {
   const mode = process.argv[2];
 
+  fs.mkdirSync(LOCAL_DATA_DIR, { recursive: true });
   await getSessionId();
 
   if (mode === "cached") {
-    console.log("[*] Loading cookies from session_cookies.txt");
-    cookieJar = fs.readFileSync("session_cookies.txt", "utf-8").trim();
+    console.log(`[*] Loading cookies from ${SESSION_FILE}`);
+    cookieJar = fs.readFileSync(SESSION_FILE, "utf-8").trim();
   } else {
     console.log("-".repeat(40));
     const user = await getInput("Phone: ");
     const pwd  = await getInput("Password: ");
     const result = await login(user, pwd);
     if (!result.data.success) { console.log("[-] Abort."); return; }
-    fs.writeFileSync("session_cookies.txt", cookieJar, "utf-8");
-    console.log("[*] Cookies saved to session_cookies.txt");
+    fs.writeFileSync(SESSION_FILE, cookieJar, "utf-8");
+    console.log(`[*] Cookies saved to ${SESSION_FILE}`);
   }
 
   // ---- step 1: list exams ----
@@ -479,13 +483,14 @@ function summarize(questions) {
   };
   summary.sections = exam.sectionMap || {};
 
-  const dir = `${examInfoId}_${new Date().toISOString().slice(0, 10)}`;
+  const safeExamInfoId = String(examInfoId).replace(/[^A-Za-z0-9_-]/g, "_") || "exam";
+  const dir = path.join(LOCAL_DATA_DIR, `${safeExamInfoId}_${new Date().toISOString().slice(0, 10)}`);
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(`${dir}/questions.json`, JSON.stringify(questions, null, 2), "utf-8");
-  fs.writeFileSync(`${dir}/answers.json`, JSON.stringify(summary, null, 2), "utf-8");
-  fs.writeFileSync(`${dir}/states.json`, JSON.stringify({ states: exam.questionStates, sections: exam.sectionMap || {} }, null, 2), "utf-8");
+  fs.writeFileSync(path.join(dir, "questions.json"), JSON.stringify(questions, null, 2), "utf-8");
+  fs.writeFileSync(path.join(dir, "answers.json"), JSON.stringify(summary, null, 2), "utf-8");
+  fs.writeFileSync(path.join(dir, "states.json"), JSON.stringify({ states: exam.questionStates, sections: exam.sectionMap || {} }, null, 2), "utf-8");
 
   console.log(`\n[+] Got ${summary.total} questions`);
   console.log(`    Difficulty: ${JSON.stringify(summary.byDifficulty)}`);
-  console.log(`[+] Saved to ./${dir}/`);
+  console.log(`[+] Saved to ${dir}/`);
 })();

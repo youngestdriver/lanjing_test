@@ -10,7 +10,7 @@ struct ExamParseResult: Equatable {
     let sectionOrder: [String]
 }
 
-/// Port of server.js parseExamHtml. Works on NSString so all match ranges are
+/// Port of apps/web/server.js parseExamHtml. Works on NSString so all match ranges are
 /// UTF-16 — identical indexing semantics to the JS string operations.
 enum ExamHTMLParser {
 

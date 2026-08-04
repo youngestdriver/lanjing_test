@@ -23,9 +23,9 @@ struct KeychainCookiePersistence: CookiePersistence {
     }
 }
 
-/// Wraps HTTPCookieStorage.shared with Keychain persistence — the Swift equivalent of
-/// server.js's in-process cookieJar + session_cookies.txt. URLSession auto-sends and
-/// auto-stores cookies through the storage, mirroring the Node jar behavior.
+/// Wraps HTTPCookieStorage.shared with Keychain persistence. This is the Swift equivalent
+/// of the in-process cookie jar and apps/web/.local/session_cookies.txt used by apps/web/server.js.
+/// URLSession auto-sends and auto-stores cookies, mirroring the Node jar behavior.
 @MainActor
 final class CookieStore {
     let storage: HTTPCookieStorage
@@ -47,7 +47,7 @@ final class CookieStore {
     }
 
     /// Write cookies to Keychain (called on login success / logout / expiry,
-    /// mirroring where server.js writes session_cookies.txt).
+    /// mirroring when apps/web/server.js persists its local session file).
     func persist() {
         guard let cookies = storage.cookies, !cookies.isEmpty else { return }
         let properties = cookies.compactMap { $0.properties }
@@ -78,4 +78,3 @@ final class CookieStore {
         persistence.clear()
     }
 }
-

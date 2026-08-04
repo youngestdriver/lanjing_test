@@ -1,7 +1,7 @@
 import Foundation
 
 /// Result of entering an exam: parsed answer-card states, IDs and per-section stats
-/// (server.js /api/exams/:id/enter response).
+/// (apps/web/server.js /api/exams/:id/enter response).
 struct ExamSession: Equatable {
     let examInfoId: String
     let examResultsId: String

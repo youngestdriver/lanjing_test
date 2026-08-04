@@ -3,7 +3,7 @@ import Foundation
 enum APIError: Error, Equatable {
     /// Upstream session expired — the only error that forces the app back to login.
     case sessionExpired
-    /// No sessionId cookie present (server.js auth middleware equivalent).
+    /// No sessionId cookie present (apps/web/server.js auth middleware equivalent).
     case notLoggedIn
     /// Upstream business error, carries `data.desc` (e.g. "密码错误").
     case upstream(String)
