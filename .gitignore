@@ -25,6 +25,8 @@ Thumbs.db
 
 # iOS build artifacts
 ios/build/
+ios/dist/
+*.ipa
 ios/*.xcuserstate
 ios/**/xcuserdata/
 

@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: Node
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check server.js
+          node --check login_demo.js
+          node --check frontend/sw.js
+
+      - name: Smoke test server
+        shell: bash
+        run: |
+          env PORT=43127 node server.js > "$RUNNER_TEMP/lanjing-server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:43127/api/status; then
+              exit 0
+            fi
+            sleep 1
+          done
+
+          cat "$RUNNER_TEMP/lanjing-server.log" >&2
+          exit 1
+
+  ios:
+    name: iOS
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Select an available iPhone simulator
+        id: simulator
+        shell: bash
+        run: |
+          simulator_sdk="$(xcrun --sdk iphonesimulator --show-sdk-version)"
+          simulator_runtime="com.apple.CoreSimulator.SimRuntime.iOS-${simulator_sdk//./-}"
+          simulator_id="$(
+            xcrun simctl list devices available --json |
+              jq -r --arg runtime "$simulator_runtime" \
+                '.devices[$runtime] | map(select(.name | startswith("iPhone"))) | first | .udid'
+          )"
+
+          if [[ -z "$simulator_id" || "$simulator_id" == "null" ]]; then
+            echo "No available iPhone simulator was found." >&2
+            exit 1
+          fi
+
+          echo "id=$simulator_id" >> "$GITHUB_OUTPUT"
+
+      - name: Build and test
+        run: |
+          xcodebuild \
+            -project ios/LanjingQuiz.xcodeproj \
+            -scheme LanjingQuiz \
+            -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.id }}" \
+            -derivedDataPath "$RUNNER_TEMP/LanjingQuizDerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            test
