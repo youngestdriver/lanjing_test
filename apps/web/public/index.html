@@ -2,7 +2,7 @@
 <html lang="zh-CN" data-theme="light">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>蓝鲸助手 · Duolingo 学习模式</title>
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
@@ -13,103 +13,6 @@
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-
-<!-- ========== 展示页 (Home Page - Unauthenticated) ========== -->
-<section class="page" id="homePage" data-od-id="home">
-  <div class="header">
-    <h2>答题助手</h2>
-    <div class="header-actions">
-      <button onclick="toggleTheme()" class="btn-theme-toggle">🌓</button>
-      <button onclick="navigateTo('/login')" class="btn-style btn-header-login">登录</button>
-    </div>
-  </div>
-  <div class="home-container">
-    <div class="hero-section">
-      <div class="hero-content">
-        <h1>更智能的蓝鲸微课考试助手</h1>
-        <p>为广大考生设计的第三方刷题与模考工具。支持即时判题、深色模式与离线 PWA 支持，助您像玩游戏一样高效备考。</p>
-        <button class="cta-btn" onclick="navigateTo('/login')">开始使用</button>
-      </div>
-      <div class="hero-mascot-container">
-        <!-- Stylized Duo Owl Mascot (Blinks & Floats) -->
-        <svg class="duo-mascot" viewBox="0 0 100 100" width="220" height="220">
-          <!-- Feet -->
-          <ellipse cx="40" cy="88" rx="10" ry="5" fill="var(--mascot-feet)" />
-          <ellipse cx="60" cy="88" rx="10" ry="5" fill="var(--mascot-feet)" />
-          <!-- Body -->
-          <rect x="20" y="20" width="60" height="70" rx="30" fill="var(--mascot-body)" />
-          <!-- Belly -->
-          <path d="M 30 62 Q 50 50 70 62 Q 50 85 30 62" fill="var(--mascot-belly)" />
-          <!-- Belly Feathers -->
-          <path d="M 45 66 Q 50 62 55 66" stroke="var(--mascot-belly-stroke)" stroke-width="2" fill="none" />
-          <path d="M 40 72 Q 45 68 50 72" stroke="var(--mascot-belly-stroke)" stroke-width="2" fill="none" />
-          <path d="M 50 72 Q 55 68 60 72" stroke="var(--mascot-belly-stroke)" stroke-width="2" fill="none" />
-          <!-- Wings -->
-          <path d="M 20 40 Q 5 50 20 70 Z" fill="var(--mascot-body)" />
-          <path d="M 80 40 Q 95 50 80 70 Z" fill="var(--mascot-body)" />
-          <!-- Eyes -->
-          <circle cx="36" cy="42" r="12" fill="white" />
-          <circle cx="64" cy="42" r="12" fill="white" />
-          <!-- Pupil -->
-          <circle cx="36" cy="42" r="5" fill="var(--mascot-eye-pupil)" />
-          <circle cx="64" cy="42" r="5" fill="var(--mascot-eye-pupil)" />
-          <!-- Eye highlights -->
-          <circle cx="38" cy="40" r="2" fill="white" />
-          <circle cx="66" cy="40" r="2" fill="white" />
-          <!-- Beak -->
-          <polygon points="50,46 44,54 56,54" fill="var(--mascot-feet)" />
-          <!-- Cheeks -->
-          <circle cx="27" cy="52" r="4" fill="var(--mascot-cheeks)" opacity="0.25" />
-          <circle cx="73" cy="52" r="4" fill="var(--mascot-cheeks)" opacity="0.25" />
-        </svg>
-      </div>
-    </div>
-    <div class="features-grid">
-      <div class="feat-card">
-        <div class="icon">
-          <!-- Monoline checkmark SVG -->
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20 6L9 17l-5-5"/>
-          </svg>
-        </div>
-        <h3>即时判对错</h3>
-        <p>选择选项后即时判定正误，并展示详细解析，让学习反馈更及时。</p>
-      </div>
-      <div class="feat-card">
-        <div class="icon">
-          <!-- Monoline smartphone SVG -->
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
-            <path d="M12 18h.01"/>
-          </svg>
-        </div>
-        <h3>移动端优化</h3>
-        <p>适配横竖屏、支持滑动切题手势，答题卡收放自如，体验如原生 App。</p>
-      </div>
-      <div class="feat-card">
-        <div class="icon">
-          <!-- Monoline moon SVG -->
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-          </svg>
-        </div>
-        <h3>深色模式</h3>
-        <p>内置护眼深色主题，支持一键无缝切换，保护视力。</p>
-      </div>
-      <div class="feat-card">
-        <div class="icon">
-          <!-- Monoline desktop/package SVG -->
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-            <path d="M8 21h8M12 17v4"/>
-          </svg>
-        </div>
-        <h3>PWA 桌面版</h3>
-        <p>支持添加至主屏幕，实现应用化启动，更轻量、更快捷。</p>
-      </div>
-    </div>
-  </div>
-</section>
 
 <!-- ========== 登录页 (Login Page) ========== -->
 <section class="page active login-page" id="loginPage" data-od-id="login">
@@ -143,21 +46,105 @@
   </div>
 </section>
 
-<!-- ========== 考试列表页 (Exam List Page) ========== -->
-<section class="page" id="examListPage" data-od-id="exam-list">
-  <div class="header">
-    <h2>考试列表</h2>
-    <div class="header-actions">
-      <label class="setting-toggle" title="答对后自动进入下一道未答题">
-        <input type="checkbox" data-auto-advance onchange="setAutoAdvance(this.checked)">
-        <span>自动下一题</span>
-      </label>
-      <button onclick="loadExams()" class="icon-button" title="刷新考试列表" aria-label="刷新考试列表">↻</button>
-      <button onclick="toggleTheme()" class="btn-theme-toggle">🌓</button>
-      <button onclick="doLogout()" class="btn-style btn-header-logout">退出</button>
-    </div>
-  </div>
-  <div class="exam-list" id="examList"></div>
+<!-- ========== 登录后的三入口应用壳 ========== -->
+<section class="page app-page" id="appPage" data-od-id="app-shell">
+  <aside class="app-rail">
+    <button type="button" class="app-brand" onclick="openHomeTab('exams')" aria-label="蓝鲸助手首页">
+      <img src="/icon-192.png" width="44" height="44" alt="">
+      <span>蓝鲸助手</span>
+    </button>
+    <nav class="app-tabs" aria-label="主导航">
+      <a href="/" class="app-tab active" data-home-tab="exams" data-route="/" onclick="openHomeTab('exams', event)" aria-current="page">
+        <span class="app-tab-symbol" aria-hidden="true"></span>
+        <span>考试列表</span>
+      </a>
+      <a href="/practice" class="app-tab" data-home-tab="practice" data-route="/practice" onclick="openHomeTab('practice', event)">
+        <span class="app-tab-symbol" aria-hidden="true"></span>
+        <span>练习</span>
+      </a>
+      <a href="/profile" class="app-tab" data-home-tab="profile" data-route="/profile" onclick="openHomeTab('profile', event)">
+        <span class="app-tab-symbol" aria-hidden="true"></span>
+        <span>我的</span>
+      </a>
+    </nav>
+  </aside>
+
+  <main class="app-content">
+    <div class="sr-only" id="homeRouteStatus" role="status" aria-live="polite" aria-atomic="true"></div>
+    <section class="home-view active" data-home-view="exams" aria-labelledby="examListHeading">
+      <header class="home-view-header">
+        <div>
+          <p>学习路线</p>
+          <h1 id="examListHeading" tabindex="-1">考试列表</h1>
+        </div>
+        <button type="button" onclick="loadExams()" class="icon-button" title="刷新考试列表" aria-label="刷新考试列表">↻</button>
+      </header>
+      <div class="exam-list" id="examList"></div>
+    </section>
+
+    <section class="home-view" data-home-view="practice" aria-labelledby="practiceHeading" hidden>
+      <header class="home-view-header">
+        <div>
+          <p>专项训练</p>
+          <h1 id="practiceHeading" tabindex="-1">练习</h1>
+        </div>
+      </header>
+      <div class="empty-home-view">
+        <div class="empty-home-symbol" aria-hidden="true"></div>
+        <h2>开始练习</h2>
+        <p>从考试列表选择一份试卷开始答题</p>
+        <button type="button" class="cta-btn" onclick="openHomeTab('exams')">前往考试列表</button>
+      </div>
+    </section>
+
+    <section class="home-view" data-home-view="profile" aria-labelledby="profileHeading" hidden>
+      <header class="home-view-header">
+        <div>
+          <p>账户与偏好</p>
+          <h1 id="profileHeading" tabindex="-1">我的</h1>
+        </div>
+      </header>
+      <div class="profile-content">
+        <div class="settings-panel">
+          <div class="settings-row">
+            <div>
+              <h2>账户</h2>
+              <p>当前会话</p>
+            </div>
+            <span class="session-badge"><span aria-hidden="true">✓</span> 已登录</span>
+          </div>
+          <div class="settings-row">
+            <div>
+              <h2>外观</h2>
+              <p>选择界面主题</p>
+            </div>
+            <div class="theme-segment" role="group" aria-label="界面主题">
+              <button type="button" data-theme-choice="light" onclick="setTheme('light')">浅色</button>
+              <button type="button" data-theme-choice="dark" onclick="setTheme('dark')">深色</button>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div>
+              <h2>答题设置</h2>
+              <p>答对后自动进入下一道未答题</p>
+            </div>
+            <label class="switch-control" title="答对后自动进入下一道未答题">
+              <input type="checkbox" data-auto-advance onchange="setAutoAdvance(this.checked)">
+              <span aria-hidden="true"></span>
+              <span class="sr-only">自动下一题</span>
+            </label>
+          </div>
+          <div class="settings-row settings-row-danger">
+            <div>
+              <h2>登录状态</h2>
+              <p>清除当前设备上的会话</p>
+            </div>
+            <button type="button" onclick="doLogout()" class="btn-style btn-header-logout">退出登录</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
 </section>
 
 <!-- ========== 答题页 (Quiz Page) ========== -->
@@ -177,10 +164,6 @@
     </div>
 
     <div class="header-actions">
-      <label class="setting-toggle" title="答对后自动进入下一道未答题">
-        <input type="checkbox" data-auto-advance onchange="setAutoAdvance(this.checked)">
-        <span>自动下一题</span>
-      </label>
       <span class="timer-indicator paused" id="questionTimerWrap" title="1分钟倒计时">⏱ <span class="num" id="questionTimer">01:00</span></span>
       <span class="heart-indicator" title="生命值">❤️ <span class="num" id="heartCount">5</span></span>
       <button onclick="toggleTheme()" class="btn-theme-toggle">🌓</button>

@@ -8,16 +8,32 @@ const S = {
   autoAdvanceHandle:null, navigationGeneration:0, suppressedExamStates:{}, abandonInFlight:{},
   sessionGeneration:0, answerSyncToken:0, markSyncToken:0, abandonRequestToken:0,
   markSyncState:{}, quizStatusOwner:null, submitInFlight:false, quizCompleted:false,
+  routeToken:0, examListLoaded:false,
 };
 const $ = s=>document.querySelector(s);
 function $$(s){ return document.querySelectorAll(s); }
 
-(function(){ const t=localStorage.getItem("theme"); if(t) document.documentElement.setAttribute("data-theme",t); })();
+(function(){
+  const savedTheme=localStorage.getItem("theme");
+  if(savedTheme==="light"||savedTheme==="dark") document.documentElement.setAttribute("data-theme",savedTheme);
+})();
+function syncThemeControls(){
+  const theme=document.documentElement.getAttribute("data-theme")==="dark"?"dark":"light";
+  $$('[data-theme-choice]').forEach(button=>{
+    const active=button.dataset.themeChoice===theme;
+    button.classList.toggle("active",active);
+    button.setAttribute("aria-pressed",String(active));
+  });
+}
+function setTheme(theme){
+  if(theme!=="light"&&theme!=="dark") return;
+  document.documentElement.setAttribute("data-theme",theme);
+  localStorage.setItem("theme",theme);
+  syncThemeControls();
+}
 function toggleTheme() {
   const el=document.documentElement, cur=el.getAttribute("data-theme");
-  const next=cur==="dark"?"light":"dark";
-  el.setAttribute("data-theme",next);
-  localStorage.setItem("theme",next);
+  setTheme(cur==="dark"?"light":"dark");
 }
 function syncAutoAdvanceControls(){
   $$('[data-auto-advance]').forEach(input=>{ input.checked=S.autoAdvanceOnCorrect; });
@@ -138,29 +154,85 @@ function navigateTo(path){
   history.pushState(null,"",path);
   route();
 }
+const HOME_PATHS={exams:"/",practice:"/practice",profile:"/profile"};
+const HOME_HEADINGS={exams:"examListHeading",practice:"practiceHeading",profile:"profileHeading"};
+function focusHomeHeading(tab){
+  document.getElementById(HOME_HEADINGS[tab]||HOME_HEADINGS.exams)?.focus({preventScroll:true});
+}
+function activateHomeTab(tab,{historyMode="none",refresh=false}={}){
+  const selected=HOME_PATHS[tab]?tab:"exams";
+  if($("#quizPage").classList.contains("active")){
+    S.examLoadToken++;
+    S.listLoadToken++;
+    S.examListLoaded=false;
+    resetQuizView("题目");
+  }
+  showPage("#appPage");
+  $$('[data-home-tab]').forEach(link=>{
+    const active=link.dataset.homeTab===selected;
+    link.classList.toggle("active",active);
+    if(active) link.setAttribute("aria-current","page");
+    else link.removeAttribute("aria-current");
+  });
+  $$('[data-home-view]').forEach(view=>{
+    const active=view.dataset.homeView===selected;
+    view.classList.toggle("active",active);
+    view.hidden=!active;
+  });
+  syncThemeControls();
+  syncAutoAdvanceControls();
+
+  const heading=document.getElementById(HOME_HEADINGS[selected]);
+  document.title=`${heading?.textContent||"蓝鲸助手"} · 蓝鲸助手`;
+  const routeStatus=$("#homeRouteStatus");
+  if(routeStatus) routeStatus.textContent=`已打开${heading?.textContent||"首页"}`;
+
+  const path=HOME_PATHS[selected];
+  if(historyMode==="push"&&location.pathname!==path) history.pushState(null,"",path);
+  else if(historyMode==="replace"&&location.pathname!==path) history.replaceState(null,"",path);
+
+  if(selected==="exams"&&(refresh||!S.examListLoaded)) loadExams();
+}
+function openHomeTab(tab,event){
+  event?.preventDefault();
+  S.routeToken++;
+  activateHomeTab(tab,{historyMode:"push"});
+  focusHomeHeading(HOME_PATHS[tab]?tab:"exams");
+}
+function isExamListActive(){
+  return $("#appPage").classList.contains("active")
+    && $('[data-home-view="exams"]').classList.contains("active");
+}
 function route(){
   const p=location.pathname;
+  const routeToken=++S.routeToken;
   api("/api/status").then(r=>{
+    if(routeToken!==S.routeToken) return;
     if(r.error){
       history.replaceState(null,"","/login");
       showPage("#loginPage");
+      document.title="登录 · 蓝鲸助手";
       showLoginErr(r.error);
       return;
     }
     if(!r.loggedIn){
       if(p!=="/login") history.replaceState(null,"","/login");
       showPage("#loginPage");
+      document.title="登录 · 蓝鲸助手";
     } else {
-      // 已登录状态
-      if(p==="/login" || p==="/"){
-        if(p!=="/") history.replaceState(null,"","/");
-        showExamList();
-      } else if(p.startsWith("/quiz/")){
-        const id=parseInt(p.split("/quiz/")[1]);
+      const quizRoute=p.match(/^\/quiz\/(\d+)$/);
+      if(quizRoute){
+        const id=parseInt(quizRoute[1]);
         if(id&&S.currentExam?.examInfoId!==String(id)) enterExam(id,false);
         else if(!S.currentExam) enterExam(id,false);
+        else showPage("#quizPage");
       } else {
-        showExamList();
+        const tab=p==="/practice"?"practice":p==="/profile"?"profile":"exams";
+        const canonicalPath=HOME_PATHS[tab];
+        activateHomeTab(tab,{
+          historyMode:p===canonicalPath?"none":"replace",
+          refresh:tab==="exams"&&!S.examListLoaded,
+        });
       }
     }
   });
@@ -185,6 +257,7 @@ async function api(url,opts={}){
       if(requestSessionGeneration!==S.sessionGeneration||requestExamLoadToken!==S.examLoadToken){
         return {error:data?.error||"会话已失效",status:401,stale:true};
       }
+      S.routeToken++;
       S.sessionGeneration++;
       sessionStorage.clear();
       S.examLoadToken++;
@@ -193,6 +266,7 @@ async function api(url,opts={}){
       clearLoginCredentials();
       history.replaceState(null,"","/login");
       showPage("#loginPage");
+      document.title="登录 · 蓝鲸助手";
       showLoginErr("会话已失效，请重新登录");
       return {error:"会话已失效，请重新登录",status:401};
     }
@@ -256,6 +330,8 @@ async function doLogin(){
   if(r.error) return showLoginErr(r.error);
   S.sessionGeneration++;
   $("#pwd").value="";
+  S.exams=[];
+  S.examListLoaded=false;
   S.suppressedExamStates={};
   S.abandonInFlight={};
   abandonState={};
@@ -268,6 +344,8 @@ async function doLogout(){
   sessionStorage.clear();
   S.examLoadToken++;
   S.listLoadToken++;
+  S.exams=[];
+  S.examListLoaded=false;
   S.suppressedExamStates={};
   S.abandonInFlight={};
   abandonState={};
@@ -279,18 +357,18 @@ async function doLogout(){
 // ========== Exam List ==========
 async function loadExams(){
   const loadToken=++S.listLoadToken;
-  showPage("#examListPage");
   const el=$("#examList"); el.innerHTML='<div class="loading"><div class="spinner"></div><div>加载中...</div></div>';
   const r=await api("/api/exams");
   if(loadToken!==S.listLoadToken) return;
   if(r.error){
+    S.examListLoaded=false;
     showErrorState(el,r.error,[{label:"重新加载",run:()=>loadExams()}]);
     return;
   }
   const filtered=QuizCore.filterSuppressedExams(r.exams,S.suppressedExamStates);
   S.suppressedExamStates=filtered.suppressed;
   S.exams=filtered.exams;
-  history.replaceState(null,"","/");
+  S.examListLoaded=true;
   renderExamList(S.exams);
 }
 
@@ -314,15 +392,18 @@ function renderExamList(exams){
       const tl=e.totalTime===0?"不限时":`${e.totalTime}分钟`;
       const sl=e.wfs===1?'<span class="badge badge-new">新试卷</span>':'<span class="badge badge-cont">继续考试</span>';
       const mb=`<span class="badge ${e.practiceMode===0?'badge-exam':'badge-drill'}">${ml}</span>`;
+      const examName=escapeHTML(e.name);
       html+=`<div class="exam-card" id="card-${e.id}">
-        <div class="exam-card-inner" onclick="enterExam(${e.id},${e.wfs===1})">
-          <div class="card-info">
-            <div class="name"><div style="margin-bottom:4px;line-height:1;">${sl}</div>${escapeHTML(e.name)}</div>
-            <div class="meta">${mb} | ${tl}</div>
-          </div>
-          <div class="card-dots" onclick="event.stopPropagation();toggleAbandon(${e.id})">⋯</div>
+        <div class="exam-card-inner">
+          <button type="button" class="exam-card-main" onclick="enterExam(${e.id},${e.wfs===1})" aria-label="打开试卷：${examName}">
+            <span class="card-info">
+              <span class="name"><span style="display:block;margin-bottom:4px;line-height:1;">${sl}</span>${examName}</span>
+              <span class="meta">${mb} | ${tl}</span>
+            </span>
+          </button>
+          <button type="button" class="card-dots" onclick="toggleAbandon(${e.id})" aria-label="试卷操作：${examName}" aria-expanded="false" aria-controls="exam-action-${e.id}">⋯</button>
         </div>
-        <div class="card-abandon" onclick="event.stopPropagation();abandonExam(${e.id})">放弃<br>考试</div></div>`;
+        <button type="button" class="card-abandon" id="exam-action-${e.id}" data-exam-name="${examName}" onclick="abandonExam(${e.id})" aria-label="放弃考试：${examName}">放弃<br>考试</button></div>`;
     }
     html+=`</div>`;
   }
@@ -331,10 +412,16 @@ function renderExamList(exams){
 
 // ========== Enter Exam ==========
 async function enterExam(id,isNew){
+  S.routeToken++;
+  S.listLoadToken++;
+  S.examListLoaded=false;
   const loadToken=++S.examLoadToken;
   const exam=S.exams.find(e=>String(e.id)===String(id));
   showPage("#quizPage");
-  history.replaceState(null,"","/quiz/"+id);
+  document.title=`${exam?.name||"答题"} · 蓝鲸助手`;
+  const routeStatus=$("#homeRouteStatus");
+  if(routeStatus) routeStatus.textContent="";
+  if(location.pathname!=="/quiz/"+id) history.pushState(null,"","/quiz/"+id);
   resetQuizView(exam?.name||"Loading...");
   const sc=$("#quizScroll");
   sc.innerHTML='<div class="q-block" id="qBlock"><div class="loading"><div class="spinner"></div><div>'+(isNew?'初始化...':'加载中...')+'</div></div></div>';
@@ -774,9 +861,20 @@ let abandonState={}; // {id: "idle"|"confirm"}
 function toggleAbandon(id,force){
   const inner=document.querySelector(`#card-${id} .exam-card-inner`);
   const btn=document.querySelector(`#card-${id} .card-abandon`);
+  const trigger=document.querySelector(`#card-${id} .card-dots`);
   const open=force!==undefined?force:!inner.classList.contains("open");
-  if(open){ inner.classList.add("open"); abandonState[id]="idle"; btn.innerHTML="放弃<br>考试"; }
-  else { inner.classList.remove("open"); delete abandonState[id]; }
+  trigger?.setAttribute("aria-expanded",String(open));
+  if(open){
+    inner.classList.add("open");
+    abandonState[id]="idle";
+    btn.innerHTML="放弃<br>考试";
+    btn.setAttribute("aria-label",`放弃考试：${btn.dataset.examName}`);
+    btn.removeAttribute("title");
+  } else {
+    if(document.activeElement===btn) trigger?.focus();
+    inner.classList.remove("open");
+    delete abandonState[id];
+  }
 }
 async function abandonExam(id){
   if(S.abandonInFlight[id]) return;
@@ -784,6 +882,7 @@ async function abandonExam(id){
     abandonState[id]="confirm";
     const btn=document.querySelector(`#card-${id} .card-abandon`);
     btn.innerHTML="确认<br>结束";
+    btn.setAttribute("aria-label",`确认放弃考试：${btn.dataset.examName}`);
     btn.title="放弃会直接结束并交卷当前考试记录";
     btn.style.animation="none"; btn.offsetHeight; btn.style.animation="pulse .3s ease";
     return;
@@ -795,13 +894,19 @@ async function abandonExam(id){
   S.abandonInFlight[id]=requestToken;
   const btn=document.querySelector(`#card-${id} .card-abandon`);
   btn.innerHTML="正在<br>结束";
+  btn.setAttribute("aria-label",`正在放弃考试：${btn.dataset.examName}`);
   btn.style.pointerEvents="none";
   const r=await api("/api/exams/"+id+"/submit",{method:"POST"});
   if(S.abandonInFlight[id]!==requestToken) return;
   delete S.abandonInFlight[id];
-  if(listToken!==S.listLoadToken||!$("#examListPage").classList.contains("active")) return;
+  if(listToken!==S.listLoadToken) return;
+  if(!isExamListActive()){
+    S.examListLoaded=false;
+    return;
+  }
   if(r.error){
     btn.innerHTML="重试<br>结束";
+    btn.setAttribute("aria-label",`重试放弃考试：${btn.dataset.examName}`);
     btn.style.pointerEvents="auto";
     const card=document.getElementById("card-"+id);
     let error=card.querySelector(".exam-card-error");
@@ -815,7 +920,7 @@ async function abandonExam(id){
   renderExamList(S.exams);
   await loadExams();
   setTimeout(()=>{
-    if($("#examListPage").classList.contains("active")) loadExams();
+    if(isExamListActive()) loadExams();
   },1000);
 }
 // Click outside to close any open abandon
@@ -823,9 +928,7 @@ document.addEventListener("click",e=>{
   for(const id of Object.keys(abandonState)){
     const card=document.getElementById("card-"+id);
     if(card&&!card.contains(e.target)&&!S.abandonInFlight[id]){
-      delete abandonState[id];
-      const inner=card.querySelector(".exam-card-inner");
-      inner.classList.remove("open");
+      toggleAbandon(id,false);
     }
   }
 });
@@ -933,11 +1036,9 @@ orientMQ.addEventListener("change",e=>setSidebar(e.matches));
 if(orientMQ.matches) setSidebar(true);
 
 function showExamList(){
-  S.examLoadToken++;
-  S.submitInFlight=false;
-  showPage("#examListPage");
-  history.pushState(null,"","/");
-  loadExams();
+  S.routeToken++;
+  activateHomeTab("exams",{historyMode:"push",refresh:true});
+  focusHomeHeading("exams");
 }
 
 // ========== Submit Exam ==========
@@ -1044,6 +1145,7 @@ async function submitExam(skipConfirmation=false,expectedExamId=null,expectedLoa
 
 // ========== Init ==========
 syncAutoAdvanceControls();
+syncThemeControls();
 if("serviceWorker"in navigator){
   navigator.serviceWorker.register("/sw.js")
     .then(r=>console.log("SW registered:",r.scope))

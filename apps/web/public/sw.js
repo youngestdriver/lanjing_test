@@ -1,5 +1,5 @@
-const CACHE="quiz-v4";
-const SHELL=["/","/manifest.json","/styles.css","/js/quiz-core.js","/js/app.js"];
+const CACHE="quiz-v5";
+const SHELL=["/","/manifest.json","/styles.css","/js/quiz-core.js","/js/app.js","/icon-192.png","/icon-512.png"];
 
 self.addEventListener("install",e=>{
   e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));
@@ -15,6 +15,10 @@ self.addEventListener("fetch",e=>{
   // Exam data is never cached; all business operations require the live service.
   if(e.request.url.includes("/api/")){
     e.respondWith(fetch(e.request));
+    return;
+  }
+  if(e.request.mode==="navigate"){
+    e.respondWith(fetch(e.request).catch(()=>caches.match("/")));
     return;
   }
   // Static: cache first, network fallback

@@ -50,6 +50,73 @@ function deferred() {
   return { promise, resolve };
 }
 
+async function expectPath(page, expected) {
+  assert.equal(new URL(page.url()).pathname, expected);
+}
+
+async function expectNoHorizontalOverflow(page, label) {
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  assert.ok(overflow <= 0, `${label} overflows by ${overflow}px`);
+}
+
+async function elementContrast(locator) {
+  return locator.evaluate(async (element) => {
+    await Promise.all(element.getAnimations().map((animation) => animation.finished.catch(() => {})));
+    const context = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+    context.canvas.width = 1;
+    context.canvas.height = 1;
+    const rgb = (color) => {
+      context.clearRect(0, 0, 1, 1);
+      context.fillStyle = color;
+      context.fillRect(0, 0, 1, 1);
+      return [...context.getImageData(0, 0, 1, 1).data].slice(0, 3);
+    };
+    const luminance = (color) => color
+      .map((channel) => channel / 255)
+      .map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4)
+      .reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index], 0);
+    const style = getComputedStyle(element);
+    const foreground = luminance(rgb(style.color));
+    const background = luminance(rgb(style.backgroundColor));
+    return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+  });
+}
+
+async function verifyOfflineShell(browser) {
+  const context = await browser.newContext({ serviceWorkers: "allow" });
+  try {
+    await context.route("**/api/**", (route) => json(route, { loggedIn: false, hasSavedSession: false }));
+    const page = await context.newPage();
+    await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    if (!await page.evaluate(() => Boolean(navigator.serviceWorker.controller))) {
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+    }
+
+    const shell = ["/", "/manifest.json", "/styles.css", "/js/quiz-core.js", "/js/app.js", "/icon-192.png", "/icon-512.png"];
+    const cacheReport = await page.evaluate(async (paths) => {
+      const cacheNames = await caches.keys();
+      const cacheName = cacheNames.find((name) => name === "quiz-v5");
+      if (!cacheName) return { cacheName: null, missing: paths };
+      const cache = await caches.open(cacheName);
+      const matches = await Promise.all(paths.map((path) => cache.match(path)));
+      return { cacheName, missing: paths.filter((path, index) => !matches[index]) };
+    }, shell);
+    assert.equal(cacheReport.cacheName, "quiz-v5");
+    assert.deepEqual(cacheReport.missing, []);
+
+    await context.setOffline(true);
+    const response = await page.goto(`${BASE_URL}/practice`, { waitUntil: "domcontentloaded" });
+    assert.ok(response && response.ok(), "offline navigation did not return the cached app shell");
+    assert.equal(response.fromServiceWorker(), true);
+    assert.equal(await page.locator("#appPage").count(), 1);
+    assert.equal(await page.evaluate(() => [...document.styleSheets].some((sheet) => sheet.href?.endsWith("/styles.css"))), true);
+  } finally {
+    await context.close();
+  }
+}
+
 async function main() {
   const server = spawn(process.execPath, ["server.js"], {
     cwd: WEB_DIR,
@@ -95,7 +162,25 @@ async function main() {
     let answerAttempts = 0;
     let markAttempts = 0;
     let submitAttempts = 0;
+    let logoutAttempts = 0;
+    let examListAttempts = 0;
+    let examEnterAttempts = 0;
     let loggedIn = true;
+    let delayNextExamList = false;
+    let delayNextStatus = false;
+    let delayNextEnter = false;
+    let delayAuthStatus = false;
+    let rejectNextExamList = false;
+    const delayedExamStarted = deferred();
+    const releaseDelayedExam = deferred();
+    const delayedStatusStarted = deferred();
+    const releaseDelayedStatus = deferred();
+    const delayedStatusServed = deferred();
+    const delayedEnterStarted = deferred();
+    const releaseDelayedEnter = deferred();
+    const authStatusStarted = deferred();
+    const releaseAuthStatus = deferred();
+    const authStatusServed = deferred();
     const firstAnswerStarted = deferred();
     const releaseFirstAnswer = deferred();
     const firstMarkStarted = deferred();
@@ -107,8 +192,36 @@ async function main() {
     await page.route("**/api/**", async (route) => {
       const request = route.request();
       const url = new URL(request.url());
-      if (url.pathname === "/api/status") return json(route, { loggedIn, hasSavedSession: loggedIn });
+      if (url.pathname === "/api/status") {
+        if (delayAuthStatus) {
+          delayAuthStatus = false;
+          authStatusStarted.resolve();
+          await releaseAuthStatus.promise;
+          await json(route, { loggedIn, hasSavedSession: loggedIn });
+          authStatusServed.resolve();
+          return;
+        }
+        if (delayNextStatus) {
+          delayNextStatus = false;
+          delayedStatusStarted.resolve();
+          await releaseDelayedStatus.promise;
+          await json(route, { loggedIn, hasSavedSession: loggedIn });
+          delayedStatusServed.resolve();
+          return;
+        }
+        return json(route, { loggedIn, hasSavedSession: loggedIn });
+      }
       if (url.pathname === "/api/exams") {
+        examListAttempts += 1;
+        if (rejectNextExamList) {
+          rejectNextExamList = false;
+          return json(route, { error: "会话已失效" }, 401);
+        }
+        if (delayNextExamList) {
+          delayNextExamList = false;
+          delayedExamStarted.resolve();
+          await releaseDelayedExam.promise;
+        }
         return json(route, {
           total: 1,
           styles: { 1: "机考题库" },
@@ -116,6 +229,12 @@ async function main() {
         });
       }
       if (url.pathname === "/api/exams/101/enter") {
+        examEnterAttempts += 1;
+        if (delayNextEnter) {
+          delayNextEnter = false;
+          delayedEnterStarted.resolve();
+          await releaseDelayedEnter.promise;
+        }
         return json(route, {
           examInfoId: "101", examResultsId: "501", uuid: "u1", testIds: ["q1", "q2", "q3"],
           questionStates: states, sections: { "综合": { total: 3, right: 0, error: 1, unanswered: 2 } },
@@ -154,12 +273,178 @@ async function main() {
           ? json(route, { error: "考试未能结束，请刷新后重试" }, 502)
           : json(route, { success: true, score: "88", beatRate: "76", rank: "24" });
       }
-      if (url.pathname === "/api/logout") return json(route, { success: true });
+      if (url.pathname === "/api/logout") {
+        assert.equal(request.method(), "POST");
+        logoutAttempts += 1;
+        loggedIn = false;
+        return json(route, { success: true });
+      }
       return json(route, { error: `Unhandled fixture route: ${url.pathname}` }, 500);
     });
 
     await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
-    await page.locator(".exam-card-inner").click();
+    await page.locator("#card-101 .exam-card-main").waitFor();
+    await expectPath(page, "/");
+    assert.equal(await page.title(), "考试列表 · 蓝鲸助手");
+    assert.equal(await page.locator('.app-tabs[aria-label="主导航"] .app-tab:visible').count(), 3);
+    assert.equal(await page.locator('[data-home-tab="exams"][aria-current="page"]:visible').count(), 1);
+    assert.ok(await elementContrast(page.locator('[data-home-tab="exams"]')) >= 4.5, "light active navigation contrast is too low");
+
+    const examMenu = page.getByRole("button", { name: "试卷操作：Web parity fixture" });
+    const abandonButton = page.getByRole("button", { name: "放弃考试：Web parity fixture" });
+    await examMenu.focus();
+    await page.keyboard.press("Enter");
+    assert.equal(await examMenu.getAttribute("aria-expanded"), "true");
+    await abandonButton.waitFor({ state: "visible" });
+    assert.equal(await abandonButton.isVisible(), true);
+    await examMenu.focus();
+    await page.keyboard.press("Enter");
+    assert.equal(await examMenu.getAttribute("aria-expanded"), "false");
+    await abandonButton.waitFor({ state: "hidden" });
+    assert.equal(await abandonButton.isVisible(), false);
+    await page.evaluate(() => document.activeElement?.blur());
+
+    const desktopRail = await page.locator(".app-rail").boundingBox();
+    const desktopContent = await page.locator(".app-content").boundingBox();
+    assert.ok(desktopRail && desktopContent && desktopRail.x + desktopRail.width <= desktopContent.x + 1, "desktop navigation is not left of content");
+    const desktopTabBoxes = await page.locator(".app-tab:visible").evaluateAll((links) => links.map((link) => {
+      const box = link.getBoundingClientRect();
+      return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    }));
+    assert.ok(desktopTabBoxes[0].y < desktopTabBoxes[1].y && desktopTabBoxes[1].y < desktopTabBoxes[2].y, "desktop navigation is not vertical");
+    assert.ok(Math.max(...desktopTabBoxes.map((box) => box.x)) - Math.min(...desktopTabBoxes.map((box) => box.x)) <= 1, "desktop navigation is not aligned");
+    await page.screenshot({ path: "/tmp/lanjing-web-home-desktop.png", fullPage: true });
+
+    delayNextExamList = true;
+    await page.getByRole("button", { name: "刷新考试列表" }).click();
+    await delayedExamStarted.promise;
+    await page.locator('[data-home-tab="practice"]').click();
+    await page.locator('[data-home-view="practice"].active').waitFor();
+    await expectPath(page, "/practice");
+    releaseDelayedExam.resolve();
+    await page.evaluate(() => new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    }));
+    await expectPath(page, "/practice");
+    assert.equal(await page.locator('[data-home-view="practice"].active').count(), 1);
+    assert.equal(await page.locator('[data-home-tab="practice"][aria-current="page"]:visible').count(), 1);
+
+    await page.locator('[data-home-tab="profile"]').click();
+    await page.locator('[data-home-view="profile"].active').waitFor();
+    await expectPath(page, "/profile");
+    await page.goBack();
+    await page.locator('[data-home-view="practice"].active').waitFor();
+    await expectPath(page, "/practice");
+
+    await page.locator('[data-home-tab="profile"]').click();
+    await page.locator('[data-theme-choice="dark"]').click();
+    const profileAutoAdvance = page.locator('[data-home-view="profile"] [data-auto-advance]');
+    assert.equal(await profileAutoAdvance.isChecked(), false);
+    await profileAutoAdvance.check();
+    assert.equal(await page.evaluate(() => localStorage.getItem("theme")), "dark");
+    assert.equal(await page.evaluate(() => localStorage.getItem("quiz.autoAdvanceOnCorrect")), "true");
+    assert.equal(await page.title(), "我的 · 蓝鲸助手");
+    assert.ok(await elementContrast(page.locator('[data-home-tab="profile"]')) >= 4.5, "dark active navigation contrast is too low");
+    await page.screenshot({ path: "/tmp/lanjing-web-profile-desktop.png", fullPage: true });
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.locator('[data-home-view="profile"].active').waitFor();
+    await expectPath(page, "/profile");
+    assert.equal(await page.locator('html[data-theme="dark"]').count(), 1);
+    assert.equal(await page.locator('[data-theme-choice="dark"][aria-pressed="true"]').count(), 1);
+    assert.equal(await profileAutoAdvance.isChecked(), true);
+    await page.locator('[data-theme-choice="light"]').click();
+    assert.equal(examListAttempts, 2);
+
+    await page.locator('[data-home-tab="practice"]').click();
+    const practiceCta = page.getByRole("button", { name: "前往考试列表" });
+    await page.keyboard.press("Tab");
+    assert.equal(await practiceCta.evaluate((element) => element === document.activeElement), true);
+    const ctaFocusStyle = await practiceCta.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { style: style.outlineStyle, width: parseFloat(style.outlineWidth) };
+    });
+    assert.equal(ctaFocusStyle.style, "solid");
+    assert.ok(ctaFocusStyle.width >= 3, "practice CTA focus indicator is too thin");
+    assert.ok(await elementContrast(practiceCta) >= 4.5, "practice CTA contrast is too low");
+    await practiceCta.click();
+    await page.locator('[data-home-view="exams"].active').waitFor();
+    await expectPath(page, "/");
+    assert.equal(await page.evaluate(() => document.activeElement?.id), "examListHeading");
+    assert.equal(await page.locator("#homeRouteStatus").textContent(), "已打开考试列表");
+    assert.equal(examListAttempts, 3);
+    await page.evaluate(() => document.activeElement?.blur());
+    assert.deepEqual(
+      await page.locator(".app-tab.active").evaluateAll((links) => links.map((link) => link.dataset.homeTab)),
+      ["exams"],
+    );
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mobileRail = await page.locator(".app-rail").boundingBox();
+    const mobileTabBoxes = await page.locator(".app-tab:visible").evaluateAll((links) => links.map((link) => {
+      const box = link.getBoundingClientRect();
+      return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    }));
+    assert.ok(mobileRail && Math.abs(mobileRail.y + mobileRail.height - 844) <= 1, "mobile navigation is not anchored to the bottom grid row");
+    assert.ok(mobileTabBoxes[0].x < mobileTabBoxes[1].x && mobileTabBoxes[1].x < mobileTabBoxes[2].x, "mobile navigation is not horizontal");
+    assert.ok(Math.max(...mobileTabBoxes.map((box) => box.y)) - Math.min(...mobileTabBoxes.map((box) => box.y)) <= 1, "mobile navigation is not aligned");
+    await expectNoHorizontalOverflow(page, "390px home layout");
+    await page.screenshot({ path: "/tmp/lanjing-web-home-mobile.png", fullPage: true });
+
+    await page.setViewportSize({ width: 320, height: 568 });
+    for (const tab of ["exams", "practice", "profile"]) {
+      await page.locator(`[data-home-tab="${tab}"]`).click();
+      await page.locator(`[data-home-view="${tab}"].active`).waitFor();
+      await expectNoHorizontalOverflow(page, `320px ${tab} layout`);
+    }
+    const logoutButton = page.getByRole("button", { name: "退出登录" });
+    await logoutButton.scrollIntoViewIfNeeded();
+    const compactLogoutBox = await logoutButton.boundingBox();
+    const compactRailBox = await page.locator(".app-rail").boundingBox();
+    assert.ok(compactLogoutBox && compactRailBox && compactLogoutBox.y + compactLogoutBox.height <= compactRailBox.y, "profile action is hidden behind mobile navigation");
+    await page.screenshot({ path: "/tmp/lanjing-web-profile-mobile.png", fullPage: true });
+
+    await page.locator('[data-home-tab="exams"]').click();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const examButton = page.getByRole("button", { name: "打开试卷：Web parity fixture" });
+    await examButton.focus();
+    await page.keyboard.press("Enter");
+    await page.locator('.opt-row[data-opt="A"]').waitFor();
+    assert.equal(examEnterAttempts, 1);
+    await page.goBack();
+    await page.locator('[data-home-view="exams"].active').waitFor();
+    await page.locator("#card-101 .exam-card-main").waitFor();
+    await expectPath(page, "/");
+    assert.equal(examListAttempts, 4);
+
+    delayNextStatus = true;
+    delayNextEnter = true;
+    await page.goForward();
+    await delayedStatusStarted.promise;
+    await expectPath(page, "/quiz/101");
+    assert.equal(await page.locator("#appPage.active").count(), 1);
+    await page.locator("#card-101 .exam-card-main").click();
+    await delayedEnterStarted.promise;
+    releaseDelayedStatus.resolve();
+    await delayedStatusServed.promise;
+    await page.evaluate(() => new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    }));
+    assert.equal(examEnterAttempts, 2, "a stale route response entered the exam again");
+    releaseDelayedEnter.resolve();
+    await page.locator('.opt-row[data-opt="A"]').waitFor();
+    await expectPath(page, "/quiz/101");
+    await page.locator("#questionTimerWrap:not(.paused)").waitFor();
+
+    await page.goBack();
+    await page.locator('[data-home-view="exams"].active').waitFor();
+    await page.locator("#card-101 .exam-card-main").waitFor();
+    assert.equal(examListAttempts, 5);
+    await page.goForward();
+    await page.locator('.opt-row[data-opt="A"]').waitFor();
+    await expectPath(page, "/quiz/101");
+    await page.locator("#questionTimerWrap:not(.paused)").waitFor();
+    assert.equal(examEnterAttempts, 3);
     await page.locator('.opt-row[data-opt="A"]').click();
     await page.locator('.opt-row[data-opt="C"]').click();
     await page.locator("#confirmSelectionBtn").click();
@@ -186,14 +471,13 @@ async function main() {
     releaseFirstMark.resolve();
     await page.locator(".btn-mark:not(:disabled)").waitFor();
     assert.equal(markAttempts, 1);
-    const autoAdvanceControl = page.locator('[data-auto-advance]:visible');
-    assert.equal(await autoAdvanceControl.isChecked(), false);
-    await autoAdvanceControl.check();
+    assert.equal(await page.locator('[data-auto-advance]:visible').count(), 0);
     assert.equal(await page.evaluate(() => localStorage.getItem("quiz.autoAdvanceOnCorrect")), "true");
 
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.locator('.opt-row[data-opt="A"]').waitFor();
-    assert.equal(await page.locator('[data-auto-advance]:visible').isChecked(), true);
+    assert.equal(await page.locator('[data-home-view="profile"] [data-auto-advance]').isChecked(), true);
+    assert.equal(await page.evaluate(() => localStorage.getItem("quiz.autoAdvanceOnCorrect")), "true");
     await page.locator(".answer-dot").nth(1).click();
     await page.locator('.opt-row[data-opt="B"].wrong').waitFor();
     await page.locator("#explainBox").evaluate((element) => Promise.all(
@@ -227,10 +511,13 @@ async function main() {
     await page.locator("#submitExamBtn").click();
     await firstSubmitStarted.promise;
     await page.locator(".btn-close").click();
-    await page.locator("#examListPage.active").waitFor();
+    await page.locator("#appPage.active").waitFor();
+    await page.locator('[data-home-view="exams"].active').waitFor();
+    await expectPath(page, "/");
+    assert.equal(await page.locator('[data-home-tab="exams"][aria-current="page"]:visible').count(), 1);
     const hiddenProgress = await page.locator("#qProgress").textContent();
     await page.evaluate(() => {
-      const target = document.querySelector("#examListPage");
+      const target = document.querySelector('[data-home-view="exams"]');
       const start = new Event("touchstart", { bubbles: true });
       Object.defineProperty(start, "touches", { value: [{ clientX: 40, clientY: 100 }] });
       target.dispatchEvent(start);
@@ -239,7 +526,7 @@ async function main() {
       target.dispatchEvent(end);
     });
     assert.equal(await page.locator("#qProgress").textContent(), hiddenProgress);
-    await page.locator(".exam-card-inner").click();
+    await page.locator("#card-101 .exam-card-main").click();
     await page.locator('.opt-row[data-opt="A"]').waitFor();
     releaseFirstSubmit.resolve();
     await firstSubmitServed.promise;
@@ -249,6 +536,7 @@ async function main() {
     assert.equal(await page.getByRole("button", { name: "重新提交" }).count(), 0);
     assert.equal(await page.locator("#quizPage.active").count(), 1);
     assert.equal(await page.locator("#loginPage.active").count(), 0);
+    assert.equal(await page.locator(".app-tabs:visible").count(), 0);
     assert.match(await page.locator("#qBlock").textContent(), /以下哪些选项属于正确集合/);
 
     page.once("dialog", (dialog) => dialog.accept());
@@ -268,13 +556,42 @@ async function main() {
     await score.waitFor();
 
     await page.setViewportSize({ width: 390, height: 844 });
-    overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    assert.ok(overflow <= 0, `mobile result layout overflows by ${overflow}px`);
+    await expectNoHorizontalOverflow(page, "mobile result layout");
     await page.screenshot({ path: "/tmp/lanjing-web-result-mobile.png", fullPage: true });
 
-    loggedIn = false;
+    await page.getByRole("button", { name: "返回路线图" }).click();
+    await page.locator('[data-home-view="exams"].active').waitFor();
+    await page.locator("#card-101 .exam-card-main").waitFor();
+
+    delayAuthStatus = true;
+    rejectNextExamList = true;
+    await page.evaluate(() => {
+      history.pushState(null, "", "/practice");
+      dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await authStatusStarted.promise;
+    await page.getByRole("button", { name: "刷新考试列表" }).click();
+    await page.locator("#loginPage.active").waitFor();
+    await expectPath(page, "/login");
+    releaseAuthStatus.resolve();
+    await authStatusServed.promise;
+    await page.evaluate(() => new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    }));
+    assert.equal(await page.locator("#loginPage.active").count(), 1);
+    assert.equal(await page.locator("#appPage.active").count(), 0);
+    await expectPath(page, "/login");
+
+    await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
+    await page.locator("#card-101 .exam-card-main").waitFor();
+    await page.locator('[data-home-tab="profile"]').click();
     await page.setViewportSize({ width: 568, height: 320 });
-    await page.goto(`${BASE_URL}/login`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "退出登录" }).scrollIntoViewIfNeeded();
+    await page.getByRole("button", { name: "退出登录" }).click();
+    await page.locator("#loginPage.active").waitFor();
+    await expectPath(page, "/login");
+    assert.equal(logoutAttempts, 1);
+    assert.equal(await page.locator(".app-tabs:visible").count(), 0);
     const loginButton = page.locator("#loginPage .btn");
     await loginButton.scrollIntoViewIfNeeded();
     const loginButtonBox = await loginButton.boundingBox();
@@ -283,15 +600,21 @@ async function main() {
 
     assert.equal(submitAttempts, 3);
     assert.deepEqual(pageErrors, []);
+    await verifyOfflineShell(browser);
 
     console.log(JSON.stringify({
       browser: chromeExecutable(),
       answerAttempts,
       submitAttempts,
+      offlineShell: true,
       screenshots: [
         "/tmp/lanjing-web-desktop.png",
         "/tmp/lanjing-web-mobile.png",
         "/tmp/lanjing-web-compact-320.png",
+        "/tmp/lanjing-web-home-desktop.png",
+        "/tmp/lanjing-web-home-mobile.png",
+        "/tmp/lanjing-web-profile-desktop.png",
+        "/tmp/lanjing-web-profile-mobile.png",
         "/tmp/lanjing-web-result.png",
         "/tmp/lanjing-web-result-mobile.png",
         "/tmp/lanjing-web-login-landscape.png",
