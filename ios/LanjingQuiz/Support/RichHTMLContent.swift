@@ -29,7 +29,7 @@ struct RichHTMLContent: View {
     }
 
     /// Split HTML into alternating text / image segments.
-    static func segments(from html: String) -> [Segment] {
+    nonisolated static func segments(from html: String) -> [Segment] {
         let ns = html as NSString
         guard let imgRegex = try? NSRegularExpression(
             pattern: "<img\\b[^>]*>",
@@ -65,7 +65,7 @@ struct RichHTMLContent: View {
 
     /// Extract the src (falling back to data-src for lazy-loaded images),
     /// resolve relative URLs against the upstream base, decode common entities.
-    static func imageURL(from imgTag: String) -> URL? {
+    nonisolated static func imageURL(from imgTag: String) -> URL? {
         let tag = imgTag as NSString
         let patterns = ["src", "data-src"]
         for pattern in patterns {
@@ -80,7 +80,7 @@ struct RichHTMLContent: View {
         return nil
     }
 
-    private static func resolvedURL(_ src: String) -> URL? {
+    nonisolated private static func resolvedURL(_ src: String) -> URL? {
         let decoded = src
             .replacingOccurrences(of: "&amp;", with: "&")
             .replacingOccurrences(of: "&lt;", with: "<")

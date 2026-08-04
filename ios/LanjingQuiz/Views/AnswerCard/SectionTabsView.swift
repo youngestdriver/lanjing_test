@@ -38,7 +38,7 @@ struct SectionTabsView: View {
 
     /// Port of the SPA's tab label: title truncated before the first "(".
     /// omittingEmptySubsequences: false keeps JS split semantics (leading "(" → "").
-    static func shortLabel(_ title: String) -> String {
+    nonisolated static func shortLabel(_ title: String) -> String {
         title.split(separator: "(", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? title
     }
 }
