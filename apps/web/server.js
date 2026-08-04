@@ -72,10 +72,18 @@ async function fetchSessionText(url, init = {}, options = {}) {
   }
 
   cookieJar = setCookies(cookieJar, response.headers);
+  const redirectTargets = [];
+  const location = response.headers.get("location");
+  if (response.status >= 300 && response.status < 400 && location) {
+    redirectTargets.push(location);
+  }
+  if (response.redirected && response.url) {
+    redirectTargets.push(response.url);
+  }
   if (detectExpiry && detectSessionExpiry(
     response.status,
     text,
-    [response.headers.get("location"), response.url],
+    redirectTargets,
   )) {
     console.log("[auth] Session expired, clearing cookies");
     clearSession(generation);
@@ -253,6 +261,10 @@ app.post("/api/login", async (req, res) => {
   if (!data?.success) {
     clearSession();
     return res.status(401).json({ error: data?.desc || "Login failed" });
+  }
+  if (!cookieJar.includes("sessionId=")) {
+    clearSession();
+    throw httpError(502, "Login succeeded without a session cookie");
   }
 
   // save session

@@ -59,6 +59,12 @@ function request(route, options = {}) {
   });
 }
 
+function upstreamResponse(url, body, init = {}) {
+  const response = new Response(body, init);
+  Object.defineProperty(response, "url", { value: String(url) });
+  return response;
+}
+
 test("local status requests remain available without a session", async () => {
   assert.equal(server.address().address, "127.0.0.1");
   const response = await request("/api/status");
@@ -113,6 +119,59 @@ test("logout is an idempotent JSON POST and unknown API routes stay JSON", async
   const missing = await request("/api");
   assert.equal(missing.status, 404);
   assert.match(missing.contentType, /^application\/json/);
+});
+
+test("a successful login request URL is not mistaken for an auth redirect", async () => {
+  const originalFetch = global.fetch;
+
+  global.fetch = async (url) => {
+    const pathname = new URL(url).pathname;
+    if (pathname === "/login/account/login/1") {
+      return upstreamResponse(url, "", {
+        status: 200,
+        headers: { "Set-Cookie": "JSESSIONID=fixture; Path=/" },
+      });
+    }
+    if (pathname === "/login/account/login") {
+      return upstreamResponse(url, JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "Set-Cookie": "sessionId=session; Path=/" },
+      });
+    }
+    if (pathname === "/exam/current_exam_list") {
+      return upstreamResponse(url, JSON.stringify({
+        success: true,
+        bizContent: { total: 0, styles: [], examInfoModelList: [] },
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    throw new Error(`Unexpected upstream fixture URL: ${url}`);
+  };
+
+  try {
+    const login = await request("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: origin },
+      body: JSON.stringify({ phone: "fixture", password: "fixture" }),
+    });
+    assert.equal(login.status, 200);
+
+    const status = await request("/api/status");
+    assert.deepEqual(status.body, { loggedIn: true, hasSavedSession: true });
+
+    const exams = await request("/api/exams");
+    assert.equal(exams.status, 200);
+    assert.deepEqual(exams.body, { total: 0, styles: {}, exams: [] });
+  } finally {
+    await request("/api/logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: origin },
+      body: "{}",
+    });
+    global.fetch = originalFetch;
+  }
 });
 
 test("a stale upstream response cannot overwrite a newly logged-in session", async () => {
