@@ -13,12 +13,18 @@ final class AppState {
 
     var route: Route = .login
     var theme: Theme
+    var autoAdvanceOnCorrect: Bool {
+        didSet {
+            QuizSettings.saveAutoAdvanceOnCorrect(autoAdvanceOnCorrect)
+        }
+    }
     var notice: String?
     let api: APIClient
 
     init(api: APIClient = APIClient()) {
         self.api = api
         self.theme = Theme.load()
+        self.autoAdvanceOnCorrect = QuizSettings.loadAutoAdvanceOnCorrect()
     }
 
     func start() async {

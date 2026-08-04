@@ -132,6 +132,13 @@ private struct ProfileView: View {
         )
     }
 
+    private var autoAdvanceBinding: Binding<Bool> {
+        Binding(
+            get: { appState.autoAdvanceOnCorrect },
+            set: { appState.autoAdvanceOnCorrect = $0 }
+        )
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -148,6 +155,12 @@ private struct ProfileView: View {
                         Text("深色").tag(Theme.dark)
                     }
                     .pickerStyle(.segmented)
+                }
+
+                Section("答题设置") {
+                    Toggle(isOn: autoAdvanceBinding) {
+                        Label("答对后自动下一题", systemImage: "arrow.right.square")
+                    }
                 }
 
                 Section {

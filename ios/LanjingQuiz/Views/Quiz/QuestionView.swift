@@ -18,7 +18,7 @@ struct QuestionView: View {
 
     var body: some View {
         if let question, let state {
-            if question.isLogicLayout {
+            if question.isLogicReasoning(section: state.section) {
                 logicLayout(question, state)
             } else {
                 regularLayout(question, state)
@@ -31,8 +31,7 @@ struct QuestionView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 headerRow(question, state)
-                RichHTMLContent(html: question.text)
-                    .font(.system(size: 17))
+                RichHTMLContent(html: question.text, fontSize: 17)
                 options(for: question)
                 if isAnswered {
                     explainBanner(for: question, state: state)
@@ -49,8 +48,7 @@ struct QuestionView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     headerRow(question, state)
-                    RichHTMLContent(html: question.text)
-                        .font(.system(size: 17))
+                    RichHTMLContent(html: question.text, fontSize: 17)
                     if isAnswered {
                         explainBanner(for: question, state: state)
                     }
@@ -142,8 +140,7 @@ struct QuestionView: View {
                     .foregroundStyle(DS.accent)
             }
             if let analysis = question.analysis, !analysis.isEmpty {
-                RichHTMLContent(html: analysis)
-                    .font(.system(size: 14))
+                RichHTMLContent(html: analysis, fontSize: 14)
             }
         }
         .padding()

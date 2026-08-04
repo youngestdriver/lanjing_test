@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 
 @MainActor
 @Observable
@@ -103,6 +104,15 @@ final class QuizViewModel {
             loadPhase = "加载题目…"
             let questions = try await appState.api.fetchQuestions(session)
             self.questions = questions
+            // /exam/get_question_info/ returns the user's prior selection in
+            // `test_ans` (e.g. "key3,"). Restore it before the first render so
+            // answered questions can mark the selected wrong option as ❌.
+            selectionByQuestion = Dictionary(
+                uniqueKeysWithValues: questions.compactMap { question in
+                    let selected = question.previousAnswers
+                    return selected.isEmpty ? nil : (question.id, selected)
+                }
+            )
             answeredIDs = Set(states.filter { $0.state != .unanswered }.map(\.questionsId))
             if let firstUnanswered = states.firstIndex(where: { $0.state == .unanswered }) {
                 currentIndex = firstUnanswered
@@ -311,7 +321,7 @@ final class QuizViewModel {
                 }
             }
         }
-        if correct {
+        if correct && appState.autoAdvanceOnCorrect {
             scheduleAutoAdvance()
         }
     }
@@ -325,7 +335,9 @@ final class QuizViewModel {
             guard token == self.generation else { return }
             let target = QuizLogic.nextIndex(after: self.currentIndex, states: self.states)
             if target != self.currentIndex {
-                self.goTo(target)
+                withAnimation(.easeInOut(duration: 0.35)) {
+                    self.goTo(target)
+                }
             }
         }
     }

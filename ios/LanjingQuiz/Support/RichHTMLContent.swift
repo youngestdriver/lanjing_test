@@ -1,22 +1,26 @@
 import SwiftUI
+import WebKit
 
 /// Renders upstream HTML with remote images. NSAttributedString's HTML importer
 /// silently drops <img> tags (no image loading), so the HTML is split into
 /// text runs (rendered by HTMLText) and image blocks (AsyncImage).
 struct RichHTMLContent: View {
     let html: String
+    var fontSize: CGFloat = 17
+    var allowsTextSelection = true
+
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var contentHeight: CGFloat = 1
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(Self.segments(from: html).enumerated()), id: \.offset) { _, segment in
-                switch segment {
-                case .text(let html):
-                    HTMLText(html: html)
-                case .image(let url):
-                    RemoteImageView(url: url)
-                }
-            }
-        }
+        InlineHTMLWebView(
+            html: html,
+            fontSize: fontSize,
+            dark: colorScheme == .dark,
+            allowsTextSelection: allowsTextSelection,
+            contentHeight: $contentHeight
+        )
+        .frame(height: contentHeight)
     }
 
     enum Segment {
@@ -87,37 +91,118 @@ struct RichHTMLContent: View {
     }
 }
 
-struct RemoteImageView: View {
-    let url: URL
+private struct InlineHTMLWebView: UIViewRepresentable {
+    let html: String
+    let fontSize: CGFloat
+    let dark: Bool
+    let allowsTextSelection: Bool
+    @Binding var contentHeight: CGFloat
 
-    var body: some View {
-        AsyncImage(url: url) { phase in
-            switch phase {
-            case .success(let image):
-                image
-                    .resizable()
-                    .scaledToFit()
-            case .failure:
-                HStack(spacing: 6) {
-                    Image(systemName: "photo")
-                    Text("图片加载失败")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 80)
-                .background(Color(.systemGray6))
-                .clipShape(RoundedRectangle(cornerRadius: DS.radiusSM))
-            case .empty:
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 80)
-            @unknown default:
-                EmptyView()
+    func makeCoordinator() -> Coordinator {
+        Coordinator(contentHeight: $contentHeight)
+    }
+
+    func makeUIView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.userContentController.add(context.coordinator, name: "contentHeight")
+
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.isOpaque = false
+        webView.backgroundColor = .clear
+        webView.scrollView.backgroundColor = .clear
+        webView.scrollView.isScrollEnabled = false
+        webView.scrollView.bounces = false
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
+        webView.isUserInteractionEnabled = allowsTextSelection
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        webView.isUserInteractionEnabled = allowsTextSelection
+        let document = Self.document(
+            html: html,
+            fontSize: fontSize,
+            dark: dark,
+            allowsTextSelection: allowsTextSelection
+        )
+        guard context.coordinator.lastDocument != document else { return }
+        context.coordinator.lastDocument = document
+        webView.loadHTMLString(document, baseURL: APIClient.baseURL)
+    }
+
+    static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: "contentHeight")
+    }
+
+    private static func document(
+        html: String,
+        fontSize: CGFloat,
+        dark: Bool,
+        allowsTextSelection: Bool
+    ) -> String {
+        let foreground = dark ? "#ffffff" : "#3c3c3c"
+        let userSelect = allowsTextSelection ? "text" : "none"
+        let touchCallout = allowsTextSelection ? "default" : "none"
+        return """
+        <!doctype html>
+        <html><head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+        <style>
+        html, body {
+            margin: 0; padding: 0; width: 100%; overflow: hidden;
+            background: transparent; color: \(foreground);
+            font: \(fontSize)px/1.55 -apple-system, BlinkMacSystemFont, sans-serif;
+            overflow-wrap: break-word;
+            -webkit-user-select: \(userSelect);
+            user-select: \(userSelect);
+            -webkit-touch-callout: \(touchCallout);
+        }
+        p { margin: 0 0 0.55em; }
+        img {
+            display: inline;
+            max-width: 100% !important;
+            height: auto !important;
+            vertical-align: middle;
+        }
+        * { background-color: transparent !important; }
+        </style></head>
+        <body>\(html)</body>
+        <script>
+        (() => {
+            const report = () => {
+                const height = Math.ceil(document.documentElement.scrollHeight);
+                window.webkit.messageHandlers.contentHeight.postMessage(height);
+            };
+            new ResizeObserver(report).observe(document.body);
+            document.querySelectorAll('img').forEach(image => {
+                image.addEventListener('load', report);
+                image.addEventListener('error', report);
+            });
+            window.addEventListener('load', report);
+            report();
+        })();
+        </script></html>
+        """
+    }
+
+    final class Coordinator: NSObject, WKScriptMessageHandler {
+        @Binding var contentHeight: CGFloat
+        var lastDocument: String?
+
+        init(contentHeight: Binding<CGFloat>) {
+            _contentHeight = contentHeight
+        }
+
+        func userContentController(
+            _ userContentController: WKUserContentController,
+            didReceive message: WKScriptMessage
+        ) {
+            guard message.name == "contentHeight",
+                  let height = message.body as? NSNumber else { return }
+            let measuredHeight = max(1, CGFloat(truncating: height))
+            if abs(contentHeight - measuredHeight) > 0.5 {
+                contentHeight = measuredHeight
             }
         }
-        .frame(maxWidth: .infinity)
-        .frame(maxHeight: 280)
-        .clipped()
     }
 }

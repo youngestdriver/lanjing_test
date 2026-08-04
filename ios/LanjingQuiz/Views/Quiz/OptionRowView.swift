@@ -68,15 +68,18 @@ struct OptionRowView: View {
             vm.tapOption(letter)
         } label: {
             if imageOnly {
-                letterTile
+                imageTile
             } else if compact {
                 compactTile
             } else {
                 HStack(alignment: .top, spacing: 12) {
                     keycap
                     if let optionText {
-                        RichHTMLContent(html: optionText)
-                            .font(.system(size: 16))
+                        RichHTMLContent(
+                            html: optionText,
+                            fontSize: 16,
+                            allowsTextSelection: false
+                        )
                     }
                     Spacer(minLength: 0)
                 }
@@ -105,6 +108,31 @@ struct OptionRowView: View {
                 .font(.system(size: 18, weight: .heavy))
                 .foregroundStyle(tileTextColor)
         }
+    }
+
+    /// Image-based logic options keep their actual image content in the
+    /// bottom-pinned answer tile. Hiding it and showing only A/B/C/D leaves the
+    /// mobile layout blank even though the web version displays four pictures.
+    private var imageTile: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: DS.radiusSM)
+                .fill(background)
+                .overlay(RoundedRectangle(cornerRadius: DS.radiusSM).stroke(borderColor, lineWidth: 2))
+            if let optionText {
+                RichHTMLContent(
+                    html: optionText,
+                    fontSize: 13,
+                    allowsTextSelection: false
+                )
+                    .padding(5)
+                    .frame(width: 82, height: 72)
+            } else {
+                Text(letter)
+                    .font(.system(size: 16, weight: .heavy))
+                    .foregroundStyle(tileTextColor)
+            }
+        }
+        .frame(width: 82, height: 72)
     }
 
     /// 4 options with ≤2-char texts render as horizontal keycap tiles pinned at the

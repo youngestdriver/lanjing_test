@@ -2,6 +2,28 @@ import XCTest
 @testable import LanjingQuiz
 
 final class QuizLogicTests: XCTestCase {
+    func testAutoAdvanceSettingDefaultsToDisabled() {
+        let suiteName = "QuizLogicTests.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            return XCTFail("Could not create isolated user defaults")
+        }
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertFalse(QuizSettings.loadAutoAdvanceOnCorrect(from: defaults))
+    }
+
+    func testAutoAdvanceSettingPersistsEnabledValue() {
+        let suiteName = "QuizLogicTests.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            return XCTFail("Could not create isolated user defaults")
+        }
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        QuizSettings.saveAutoAdvanceOnCorrect(true, to: defaults)
+
+        XCTAssertTrue(QuizSettings.loadAutoAdvanceOnCorrect(from: defaults))
+    }
+
 
     private func states(_ values: [QuestionState.State]) -> [QuestionState] {
         values.enumerated().map { index, state in

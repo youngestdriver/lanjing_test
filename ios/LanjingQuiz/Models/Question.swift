@@ -7,6 +7,7 @@ struct Question: Identifiable, Equatable {
     let text: String
     let answers: [String]
     let keys: [Bool]
+    let testAns: String
     let testAnsRight: String
     let analysis: String?
 
@@ -23,6 +24,7 @@ struct Question: Identifiable, Equatable {
         }
         self.answers = options
         self.keys = flags
+        self.testAns = dto.test_ans ?? ""
         self.testAnsRight = dto.test_ans_right ?? ""
         self.analysis = dto.analysis
     }
@@ -41,6 +43,22 @@ struct Question: Identifiable, Equatable {
     var firstAnswer: String {
         if let first = correctAnswers.first { return first }
         return testAnsRight.isEmpty ? "?" : testAnsRight
+    }
+
+    /// Previously submitted option letters restored from the upstream
+    /// `test_ans` value (for example `key1,key3,`).
+    var previousAnswers: Set<String> {
+        Set(testAns
+            .split(separator: ",")
+            .compactMap { key in
+                switch key {
+                case "key1": "A"
+                case "key2": "B"
+                case "key3": "C"
+                case "key4": "D"
+                default: nil
+                }
+            })
     }
 
     /// Port of _answerHtml: correct option HTML joined with <br>.
@@ -72,9 +90,18 @@ struct Question: Identifiable, Equatable {
         !answers.isEmpty && answers.allSatisfy { $0.range(of: "<img", options: .caseInsensitive) != nil }
     }
 
-    /// 逻辑推理-style layout: four compact tiles pinned side by side at the bottom.
+    /// 逻辑推理-style layout: image-based questions show only A/B/C/D tiles
+    /// pinned side by side at the bottom. Short textual answers (for example
+    /// 1/2/3/4 or 对/错) remain ordinary vertically stacked options.
     var isLogicLayout: Bool {
-        isCompactLayout || isImageOptions
+        isImageOptions
+    }
+
+    /// Section-aware layout decision. Image answers are also used by ordinary
+    /// numeric/verbal questions, so only the explicit 逻辑推理 section gets
+    /// the pinned A/B/C/D presentation.
+    func isLogicReasoning(section: String) -> Bool {
+        section.localizedCaseInsensitiveContains("逻辑推理") && isImageOptions
     }
 
     /// Port of the SPA letter→key mapping (A→1 … D→4). Trailing comma is mandatory

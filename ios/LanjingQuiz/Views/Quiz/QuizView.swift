@@ -37,7 +37,6 @@ struct QuizView: View {
 
     private func content(_ vm: QuizViewModel) -> some View {
         VStack(spacing: 0) {
-            QuizHeaderView(vm: vm)
             if vm.isLoading {
                 Spacer()
                 VStack(spacing: 12) {
@@ -52,6 +51,7 @@ struct QuizView: View {
             } else if let errorMessage = vm.errorMessage, vm.questions.isEmpty {
                 errorState(errorMessage)
             } else if !vm.questions.isEmpty {
+                QuizHeaderView(vm: vm)
                 quizTopBar(vm)
                 TabView(selection: currentIndexBinding) {
                     ForEach(Array(vm.states.enumerated()), id: \.offset) { index, _ in

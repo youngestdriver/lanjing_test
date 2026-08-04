@@ -68,6 +68,9 @@ struct QuestionDTO: Decodable {
     let key2: String?
     let key3: String?
     let key4: String?
+    /// Previously submitted answer keys, e.g. "key3," (the trailing comma is
+    /// part of the upstream format and must be tolerated when decoding).
+    let test_ans: String?
     let test_ans_right: String?
     let analysis: String?
 }

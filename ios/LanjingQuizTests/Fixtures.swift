@@ -75,6 +75,7 @@ enum Fixtures {
         question: String = "<p>1+1=?</p>",
         answers: [String?] = ["<p>2</p>", "<p>3</p>", "<p>4</p>", "<p>5</p>"],
         keys: [String?] = ["1", "0", "0", "0"],
+        testAns: String? = nil,
         testAnsRight: String? = nil,
         analysis: String? = nil
     ) -> QuestionDTO {
@@ -89,6 +90,7 @@ enum Fixtures {
             key2: keys.count > 1 ? keys[1] : nil,
             key3: keys.count > 2 ? keys[2] : nil,
             key4: keys.count > 3 ? keys[3] : nil,
+            test_ans: testAns,
             test_ans_right: testAnsRight,
             analysis: analysis
         )

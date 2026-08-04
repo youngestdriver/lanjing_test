@@ -30,6 +30,20 @@ final class AnswerMappingTests: XCTestCase {
         XCTAssertEqual(withoutFallback.firstAnswer, "?")
     }
 
+    func testPreviousAnswersDecodeUpstreamKeyList() {
+        let question = Question(dto: Fixtures.questionDTO(
+            keys: ["0", "0", "1", "0"],
+            testAns: "key3,"
+        ))
+        XCTAssertEqual(question.previousAnswers, ["C"])
+
+        let multi = Question(dto: Fixtures.questionDTO(
+            keys: ["1", "0", "1", "0"],
+            testAns: "key1,key3,"
+        ))
+        XCTAssertEqual(multi.previousAnswers, ["A", "C"])
+    }
+
     func testAnswerHtmlJoinsWithBreak() {
         let question = Question(dto: Fixtures.questionDTO(keys: ["1", "0", "1", "0"]))
         XCTAssertEqual(question.answerHtml, "<p>2</p><br><p>4</p>")
@@ -74,7 +88,8 @@ final class AnswerMappingTests: XCTestCase {
 
         // Logic layout: compact short-text tiles and image options both pin at bottom
         let compact = Question(dto: Fixtures.questionDTO(answers: ["对", "错", "对", "错"]))
-        XCTAssertTrue(compact.isLogicLayout)
+        // Short textual choices are still regular vertically stacked options.
+        XCTAssertFalse(compact.isLogicLayout)
         XCTAssertTrue(imageOptions.isLogicLayout)
         XCTAssertFalse(textOptions.isLogicLayout)
         XCTAssertFalse(mixed.isLogicLayout)

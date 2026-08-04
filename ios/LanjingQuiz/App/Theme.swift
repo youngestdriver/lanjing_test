@@ -24,3 +24,18 @@ enum Theme: String, CaseIterable {
 
     var toggleLabel: String { self == .light ? "🌙" : "☀️" }
 }
+
+enum QuizSettings {
+    static let autoAdvanceOnCorrectKey = "quiz.autoAdvanceOnCorrect"
+
+    static func loadAutoAdvanceOnCorrect(from defaults: UserDefaults = .standard) -> Bool {
+        defaults.object(forKey: autoAdvanceOnCorrectKey) as? Bool ?? false
+    }
+
+    static func saveAutoAdvanceOnCorrect(
+        _ isEnabled: Bool,
+        to defaults: UserDefaults = .standard
+    ) {
+        defaults.set(isEnabled, forKey: autoAdvanceOnCorrectKey)
+    }
+}
