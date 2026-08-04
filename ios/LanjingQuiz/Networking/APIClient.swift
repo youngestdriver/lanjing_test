@@ -130,9 +130,10 @@ final class APIClient: NSObject, URLSessionDelegate {
 
     /// Port of the login form in server.js:139-144.
     nonisolated static func loginForm(phone: String, password: String) -> [String: String] {
-        [
-            "userName": phone + "@1",
-            "userNameInput": phone,
+        let normalizedPhone = normalizePhone(phone)
+        return [
+            "userName": normalizedPhone + "@1",
+            "userNameInput": normalizedPhone,
             "password": Hashing.sha256Hex(password),
             "passwordMD5": Hashing.md5Hex(password),
             "companyId": "1",
@@ -143,6 +144,13 @@ final class APIClient: NSObject, URLSessionDelegate {
             "captchaText": "",
             "nextUrl": "",
         ]
+    }
+
+    /// Phone numbers copied from Contacts or formatted by the keyboard can
+    /// contain grouping spaces (including non-breaking spaces). The upstream
+    /// login endpoint expects only the actual phone-number characters.
+    nonisolated static func normalizePhone(_ phone: String) -> String {
+        String(phone.filter { !$0.isWhitespace })
     }
 
     // MARK: - Endpoints

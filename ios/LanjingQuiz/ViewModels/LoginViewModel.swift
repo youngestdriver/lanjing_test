@@ -16,14 +16,15 @@ final class LoginViewModel {
     }
 
     func login() async {
-        guard !phone.isEmpty, !password.isEmpty else {
+        let normalizedPhone = APIClient.normalizePhone(phone)
+        guard !normalizedPhone.isEmpty, !password.isEmpty else {
             errorMessage = "请输入手机号和密码"
             return
         }
         isLoading = true
         defer { isLoading = false }
         do {
-            try await appState.api.login(phone: phone, password: password)
+            try await appState.api.login(phone: normalizedPhone, password: password)
             errorMessage = nil
             await appState.start()
         } catch {

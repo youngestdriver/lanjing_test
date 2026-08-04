@@ -21,6 +21,13 @@ final class LoginFormTests: XCTestCase {
         XCTAssertEqual(form["nextUrl"], "")
     }
 
+    func testLoginFormIgnoresPhoneWhitespace() {
+        let form = APIClient.loginForm(phone: " 138 0013\u{00A0}8000\n", password: "secret")
+
+        XCTAssertEqual(form["userName"], "13800138000@1")
+        XCTAssertEqual(form["userNameInput"], "13800138000")
+    }
+
     func testFormEncode() {
         let encoded = APIClient.formEncode(["a": "1", "b": "hello world"])
         let parts = encoded.split(separator: "&").sorted()
