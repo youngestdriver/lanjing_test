@@ -57,10 +57,17 @@ node server.js
 ├── frontend/
 │   └── index.html         # SPA 前端 / Single-page frontend
 ├── API.md                 # 接口文档 / API documentation
+├── ios/                   # 原生 iOS 客户端（SwiftUI 全重写）/ Native iOS app
+│   ├── project.yml        # XcodeGen 工程定义
+│   └── README.md          # iOS 版说明（构建/架构/验证）
 ├── package.json
 ├── .gitignore
 └── README.md
 ```
+
+## 原生 iOS 客户端 / Native iOS App
+
+`ios/` 目录下是 SwiftUI 全重写的原生 iOS 应用（登录、考试列表、答题、答题卡、交卷出分，含深色模式与 iPad 键盘导航）。构建方式见 [ios/README.md](ios/README.md)（需要 XcodeGen 与 iOS 模拟器运行时）。
 
 ---
 
