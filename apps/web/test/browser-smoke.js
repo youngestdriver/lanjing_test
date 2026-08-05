@@ -166,6 +166,8 @@ async function main() {
     let examListAttempts = 0;
     let examEnterAttempts = 0;
     let lanEnabledSetting = true;
+    let cookieCloudConfig = { enabled: false, server: "", uuid: "", hasPassword: false };
+    let cookieCloudSyncCalls = 0;
     let loggedIn = true;
     let delayNextExamList = false;
     let delayNextStatus = false;
@@ -286,6 +288,20 @@ async function main() {
         }
         return json(route, { lanEnabled: lanEnabledSetting, host: "127.0.0.1", envHost: false });
       }
+      if (url.pathname === "/api/cookiecloud") {
+        if (request.method() === "POST") {
+          const body = JSON.parse(request.postData() || "{}");
+          if (typeof body.enabled === "boolean") cookieCloudConfig.enabled = body.enabled;
+          if (typeof body.server === "string") cookieCloudConfig.server = body.server;
+          if (typeof body.uuid === "string") cookieCloudConfig.uuid = body.uuid;
+          if (body.password) cookieCloudConfig.hasPassword = true;
+        }
+        return json(route, { ...cookieCloudConfig, lastPush: null, lastPull: null, lastError: null });
+      }
+      if (url.pathname === "/api/cookiecloud/sync") {
+        cookieCloudSyncCalls++;
+        return json(route, { applied: false, pushed: false, lastPush: null, lastPull: null, lastError: null });
+      }
       return json(route, { error: `Unhandled fixture route: ${url.pathname}` }, 500);
     });
 
@@ -354,6 +370,30 @@ async function main() {
     assert.equal(lanEnabledSetting, false);
     await profileLanToggle.check();
     assert.equal(lanEnabledSetting, true);
+
+    const ccToggle = page.locator('[data-home-view="profile"] [data-cookiecloud-toggle]');
+    const ccSyncButton = page.locator('[data-home-view="profile"] [data-cookiecloud-sync]');
+    const ccServerInput = page.locator('[data-home-view="profile"] [data-cookiecloud-server]');
+    const ccUuidInput = page.locator('[data-home-view="profile"] [data-cookiecloud-uuid]');
+    const ccStatus = page.locator('[data-home-view="profile"] [data-cookiecloud-status]');
+    assert.equal(await ccToggle.isChecked(), false);
+    assert.ok(await ccSyncButton.isDisabled(), "sync button disabled while sync is off");
+    assert.ok(await ccServerInput.isEnabled(), "inputs stay editable so config can be entered before enabling");
+    assert.ok((await page.locator('[data-home-view="profile"] .cookiecloud-warn').textContent()).includes("加密"));
+    // Enter config first (debounced save on blur), then enable and sync.
+    await ccServerInput.fill("http://cc.example.com");
+    await ccServerInput.blur();
+    await ccUuidInput.fill("test-uuid");
+    await ccUuidInput.blur();
+    await ccToggle.check();
+    // check() flips the native checkbox immediately; the enable round-trip
+    // completing is what enables the sync button — wait for that signal.
+    await page.waitForFunction(() => document.querySelector('[data-cookiecloud-sync]')?.disabled === false);
+    await ccSyncButton.click();
+    // The click only dispatches the event; the sync request and its status
+    // update are async — wait for the UI result before asserting counters.
+    await page.waitForFunction(() => (document.querySelector('[data-cookiecloud-status]')?.textContent || "").includes("同步完成"));
+    assert.ok(cookieCloudSyncCalls >= 1);
     assert.equal(await page.evaluate(() => localStorage.getItem("theme")), "dark");
     assert.equal(await page.evaluate(() => localStorage.getItem("quiz.autoAdvanceOnCorrect")), "true");
     assert.equal(await page.title(), "我的 · 蓝鲸助手");

@@ -159,10 +159,11 @@ test("disabling LAN access blocks interface IPs immediately and persists", async
   });
   assert.equal(disable.status, 200);
   assert.equal(disable.body.lanEnabled, false);
-  assert.deepEqual(
-    JSON.parse(fs.readFileSync(path.join(localDir, "settings.json"), "utf8")),
-    { lanEnabled: false },
-  );
+  const persisted = JSON.parse(fs.readFileSync(path.join(localDir, "settings.json"), "utf8"));
+  assert.equal(persisted.lanEnabled, false);
+  assert.deepEqual(persisted.cookieCloud, {
+    enabled: false, server: "", uuid: "", password: "",
+  });
 
   const blocked = await request("/api/status", { headers: { Host: lanHost } });
   assert.equal(blocked.status, 403);

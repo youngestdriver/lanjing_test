@@ -9,6 +9,7 @@ const {
   parseResultHtml,
   detectSessionExpiry,
 } = require("./lib/parsers");
+const cookiecloud = require("./lib/cookiecloud");
 
 const BASE_URL = "https://test.lanjingweike.com";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0";
@@ -74,6 +75,7 @@ async function fetchSessionText(url, init = {}, options = {}) {
   }
 
   cookieJar = setCookies(cookieJar, response.headers);
+  schedulePush();
   const redirectTargets = [];
   const location = response.headers.get("location");
   if (response.status >= 300 && response.status < 400 && location) {
@@ -114,12 +116,16 @@ async function proxyRequest(path, opts = {}) {
 }
 
 // ========== session & state ==========
-let settings = { lanEnabled: true };
+const COOKIECLOUD_DEFAULTS = { enabled: false, server: "", uuid: "", password: "" };
+let settings = { lanEnabled: true, cookieCloud: { ...COOKIECLOUD_DEFAULTS } };
 
 function loadSettings() {
   try {
     const saved = JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8"));
-    if (typeof saved.lanEnabled === "boolean") settings = { lanEnabled: saved.lanEnabled };
+    settings = {
+      lanEnabled: typeof saved.lanEnabled === "boolean" ? saved.lanEnabled : true,
+      cookieCloud: { ...COOKIECLOUD_DEFAULTS, ...(saved.cookieCloud || {}) },
+    };
   } catch {}
 }
 
@@ -264,7 +270,7 @@ function requireUpstreamResponse(response, operation) {
 
 // Auth middleware — skip login and status
 app.use((req, res, next) => {
-  if (["/api/login", "/api/status", "/api/logout", "/api/settings"].includes(req.path) || !req.path.startsWith("/api/")) return next();
+  if (["/api/login", "/api/status", "/api/logout", "/api/settings", "/api/cookiecloud", "/api/cookiecloud/sync"].includes(req.path) || !req.path.startsWith("/api/")) return next();
   if (!cookieJar.includes("sessionId=")) return res.status(401).json({ error: "Not logged in" });
   next();
 });
@@ -321,6 +327,7 @@ app.post("/api/login", async (req, res) => {
   saveSession();
   examCache = {};
   examsCache = null;
+  schedulePush();
   res.json({ success: true });
 });
 
@@ -516,6 +523,159 @@ app.post("/api/settings", (req, res) => {
   res.json({ lanEnabled: settings.lanEnabled, host: bindHost(), envHost: !!process.env.HOST });
 });
 
+// ========== CookieCloud sync ==========
+let cookieCloudState = { lastPush: null, lastPull: null, lastError: null };
+let lastPushedHash = null;
+let syncInFlight = null;
+let pushTimer = null;
+
+function cookieCloudConfigured() {
+  const c = settings.cookieCloud;
+  return Boolean(c.enabled && c.server && c.uuid && c.password);
+}
+
+function setCookieCloudError(message) {
+  cookieCloudState.lastError = message || null;
+  if (message) console.warn(`[cookiecloud] ${message}`);
+}
+
+async function cookieCloudPull() {
+  const c = settings.cookieCloud;
+  const remote = await cookiecloud.pull(c.server, c.uuid);
+  if (remote === null) return null; // no blob on the server yet
+  const plaintext = cookiecloud.decrypt(remote.encrypted, c.uuid, c.password, remote.crypto_type);
+  if (plaintext === null) throw new Error("Failed to decrypt cloud data (wrong password or payload)");
+  let payload;
+  try { payload = JSON.parse(plaintext); } catch { throw new Error("Cloud data is not valid JSON"); }
+  return payload;
+}
+
+// Push the local jar, keeping non-lanjingweike domains from the remote blob
+// so an extension's other-domain cookies survive our writes.
+async function cookieCloudPush() {
+  const c = settings.cookieCloud;
+  const ourData = cookiecloud.jarToCookieData(cookieJar);
+  let merged = ourData;
+  try {
+    const remote = await cookieCloudPull();
+    merged = cookiecloud.mergeCookieData(remote?.cookie_data, ourData);
+  } catch (error) {
+    console.log(`[cookiecloud] Merge pull skipped (${error.message}); pushing without merge`);
+  }
+  const payload = JSON.stringify({ cookie_data: merged, local_storage_data: {} });
+  const encrypted = cookiecloud.encrypt(payload, c.uuid, c.password, "aes-128-cbc-fixed");
+  await cookiecloud.push(c.server, c.uuid, encrypted, "aes-128-cbc-fixed");
+  lastPushedHash = sha256(cookieJar);
+  cookieCloudState.lastPush = new Date().toISOString();
+}
+
+// One pull-then-push sync; single-flight against debounced pushes. Never
+// rejects: errors land in cookieCloudState.lastError.
+async function syncNow() {
+  if (syncInFlight) return syncInFlight;
+  syncInFlight = (async () => {
+    const result = { applied: false, pushed: false };
+    try {
+      if (!cookieCloudConfigured()) throw new Error("CookieCloud sync is not configured");
+      const payload = await cookieCloudPull();
+      const incomingJar = cookiecloud.cookieDataToJar(payload?.cookie_data);
+      if (!incomingJar.includes("sessionId=")) {
+        console.log("[cookiecloud] Cloud data has no lanjingweike session; local session kept");
+      } else if (sha256(incomingJar) === lastPushedHash) {
+        console.log("[cookiecloud] Cloud data matches our last push; nothing to apply");
+      } else {
+        sessionGeneration++;
+        cookieJar = incomingJar;
+        examCache = {};
+        examsCache = null;
+        saveSession();
+        lastPushedHash = sha256(cookieJar);
+        cookieCloudState.lastPull = new Date().toISOString();
+        result.applied = true;
+        console.log("[cookiecloud] Imported session from cloud");
+      }
+      // Push only when the jar genuinely diverged from what we last wrote.
+      if (cookieJar.includes("sessionId=") && sha256(cookieJar) !== lastPushedHash) {
+        await cookieCloudPush();
+        result.pushed = true;
+      }
+      cookieCloudState.lastError = null;
+    } catch (error) {
+      setCookieCloudError(error.message);
+    } finally {
+      syncInFlight = null;
+    }
+    return result;
+  })();
+  return syncInFlight;
+}
+
+function schedulePush() {
+  if (!cookieCloudConfigured() || !cookieJar.includes("sessionId=")) return;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => {
+    if (sha256(cookieJar) === lastPushedHash) return;
+    syncNow().catch(() => {});
+  }, 2000);
+}
+
+// GET  /api/cookiecloud — read CookieCloud sync config (password never sent)
+app.get("/api/cookiecloud", (req, res) => {
+  const c = settings.cookieCloud;
+  res.json({
+    enabled: c.enabled,
+    server: c.server,
+    uuid: c.uuid,
+    hasPassword: Boolean(c.password),
+    ...cookieCloudState,
+  });
+});
+
+// POST /api/cookiecloud — update sync config; applied immediately
+app.post("/api/cookiecloud", (req, res) => {
+  const { enabled, server, uuid, password } = req.body;
+  const next = { ...settings.cookieCloud };
+  if (enabled !== undefined) {
+    if (typeof enabled !== "boolean") return res.status(400).json({ error: "boolean enabled required" });
+    next.enabled = enabled;
+  }
+  if (server !== undefined) {
+    if (typeof server !== "string" || !server || server.length > 2048) {
+      return res.status(400).json({ error: "invalid server URL" });
+    }
+    let parsed;
+    try { parsed = new URL(server); } catch { return res.status(400).json({ error: "invalid server URL" }); }
+    if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) {
+      return res.status(400).json({ error: "server must be a plain http(s) URL" });
+    }
+    next.server = parsed.origin + parsed.pathname.replace(/\/+$/, "");
+  }
+  if (uuid !== undefined) {
+    if (typeof uuid !== "string" || !uuid.trim() || uuid.length > 128) {
+      return res.status(400).json({ error: "invalid uuid" });
+    }
+    next.uuid = uuid.trim();
+  }
+  if (password !== undefined) {
+    if (typeof password !== "string" || password.length > 256) {
+      return res.status(400).json({ error: "invalid password" });
+    }
+    if (password) next.password = password;
+  }
+  settings.cookieCloud = next;
+  saveSettings();
+  cookieCloudState.lastError = null;
+  res.json({
+    enabled: next.enabled, server: next.server, uuid: next.uuid, hasPassword: Boolean(next.password),
+  });
+});
+
+// POST /api/cookiecloud/sync — manual sync: pull, then push if diverged
+app.post("/api/cookiecloud/sync", async (req, res) => {
+  const result = await syncNow();
+  res.json({ ...result, ...cookieCloudState });
+});
+
 // GET  /api/exams/:id/states — refresh answer card states
 app.get("/api/exams/:id/states", async (req, res) => {
   const examInfoId = req.params.id;
@@ -655,6 +815,10 @@ function startServer(port = PORT) {
     }
     console.log(`LAN access: ${settings.lanEnabled ? "enabled" : "disabled"} (我的 > 设置)`);
     console.log(`Session: ${cookieJar ? "loaded" : "none (login required)"}`);
+    if (cookieCloudConfigured()) {
+      console.log(`CookieCloud sync: enabled (${settings.cookieCloud.server})`);
+      syncNow();
+    }
   });
   return server;
 }

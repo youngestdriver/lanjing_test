@@ -582,6 +582,45 @@ button:disabled {
   color: var(--text);
   box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
 }
+/* CookieCloud sync settings */
+.settings-row-wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+.cookiecloud-fields {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+.cookiecloud-warn {
+  font-size: 12px;
+  color: var(--text2);
+}
+.cookiecloud-field {
+  display: grid;
+  gap: 6px;
+}
+.cookiecloud-field > span {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text2);
+}
+.cookiecloud-field input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  background: var(--card);
+  color: var(--text);
+  transition: border-color .2s, box-shadow .2s;
+}
+.cookiecloud-field input:focus {
+  border-color: var(--blue);
+  box-shadow: var(--focus-ring);
+}
+.cookiecloud-field input:disabled {
+  opacity: .5;
+}
 .switch-control {
   position: relative;
   width: 52px;

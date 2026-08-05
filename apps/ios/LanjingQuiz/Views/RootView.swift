@@ -163,6 +163,8 @@ private struct ProfileView: View {
                     }
                 }
 
+                CookieCloudSection()
+
                 Section {
                     Button("退出登录", role: .destructive) {
                         appState.logout()
@@ -171,6 +173,90 @@ private struct ProfileView: View {
             }
             .navigationTitle("我的")
         }
+    }
+}
+
+/// 云端同步 settings rows: CookieCloud config (server / UUID / password),
+/// mirroring the web app's "Cookie 云端同步" section. Password goes to the
+/// Keychain; everything else to UserDefaults.
+private struct CookieCloudSection: View {
+    @Environment(AppState.self) private var appState
+    @State private var enabled = false
+    @State private var server = ""
+    @State private var uuid = ""
+    @State private var password = ""
+    @State private var statusText: String?
+    @State private var isSyncing = false
+
+    private var isConfigured: Bool {
+        enabled && !server.isEmpty && !uuid.isEmpty && !password.isEmpty
+    }
+
+    private func load() {
+        let config = CookieCloudSettings.loadConfig()
+        enabled = config.enabled
+        server = config.server
+        uuid = config.uuid
+        password = CookieCloudSettings.loadPassword() ?? ""
+    }
+
+    private func save() {
+        CookieCloudSettings.saveConfig(.init(enabled: enabled, server: server, uuid: uuid))
+        CookieCloudSettings.savePassword(password)
+    }
+
+    private func runSync() async {
+        isSyncing = true
+        defer { isSyncing = false }
+        let result = await appState.cookieCloudSync.syncNow()
+        if let error = result.error {
+            statusText = "同步失败：\(error)"
+        } else {
+            var parts = ["同步完成"]
+            if result.applied { parts.append("已导入云端会话") }
+            if result.pushed { parts.append("已上传本地会话") }
+            statusText = parts.joined(separator: "，")
+        }
+    }
+
+    var body: some View {
+        Section {
+            Toggle(isOn: $enabled) {
+                Label("Cookie 云端同步", systemImage: "cloud.fill")
+            }
+            TextField("服务器地址", text: $server)
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            TextField("UUID", text: $uuid)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            SecureField("密码", text: $password)
+            Button {
+                Task { await runSync() }
+            } label: {
+                if isSyncing {
+                    ProgressView()
+                } else {
+                    Text("立即同步")
+                }
+            }
+            .disabled(!isConfigured || isSyncing)
+            if let statusText {
+                Text(statusText)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("云端同步")
+        } footer: {
+            Text("登录凭证会加密后上传到你配置的服务器；UUID 与密码需与浏览器扩展一致，服务地址是你自建的 CookieCloud。")
+        }
+        .onAppear(perform: load)
+        .onChange(of: enabled) { _, _ in save() }
+        .onChange(of: server) { _, _ in save() }
+        .onChange(of: uuid) { _, _ in save() }
+        .onChange(of: password) { _, _ in save() }
     }
 }
 
