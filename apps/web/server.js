@@ -15,6 +15,7 @@ const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 const REQUEST_TIMEOUT = 30000;
 const LOCAL_DIR = path.resolve(process.env.LANJING_LOCAL_DIR || path.join(__dirname, ".local"));
 const SESSION_FILE = path.join(LOCAL_DIR, "session_cookies.txt");
+const SETTINGS_FILE = path.join(LOCAL_DIR, "settings.json");
 
 // ========== helpers ==========
 function sha256(s) { return crypto.createHash("sha256").update(s).digest("hex"); }
@@ -113,6 +114,22 @@ async function proxyRequest(path, opts = {}) {
 }
 
 // ========== session & state ==========
+let settings = { lanEnabled: true };
+
+function loadSettings() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8"));
+    if (typeof saved.lanEnabled === "boolean") settings = { lanEnabled: saved.lanEnabled };
+  } catch {}
+}
+
+function saveSettings() {
+  fs.mkdirSync(LOCAL_DIR, { recursive: true, mode: 0o700 });
+  fs.chmodSync(LOCAL_DIR, 0o700);
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings), { encoding: "utf8", mode: 0o600 });
+  fs.chmodSync(SETTINGS_FILE, 0o600);
+}
+
 let cookieJar = "";
 let examCache = {};   // { examInfoId: { questionStates, testIds, uuid, examResultsId, examInfoId } }
 let examsCache = null; // stored exam list with metadata
@@ -134,6 +151,8 @@ function saveSession() {
   fs.writeFileSync(SESSION_FILE, cookieJar, { encoding: "utf8", mode: 0o600 });
   fs.chmodSync(SESSION_FILE, 0o600);
 }
+
+loadSettings();
 
 (function loadCookies() {
   try {
@@ -168,9 +187,9 @@ function lanAddresses() {
   return addresses;
 }
 
-function refreshAllowedHosts(host) {
+function refreshAllowedHosts() {
   const hosts = new Set(LOCAL_HOSTNAMES);
-  if (!LOCAL_HOSTNAMES.has(localHostname(host))) {
+  if (settings.lanEnabled) {
     for (const address of lanAddresses()) hosts.add(address);
   }
   for (const name of String(process.env.TRUSTED_HOSTS || "").split(",")) {
@@ -245,7 +264,7 @@ function requireUpstreamResponse(response, operation) {
 
 // Auth middleware — skip login and status
 app.use((req, res, next) => {
-  if (["/api/login", "/api/status", "/api/logout"].includes(req.path) || !req.path.startsWith("/api/")) return next();
+  if (["/api/login", "/api/status", "/api/logout", "/api/settings"].includes(req.path) || !req.path.startsWith("/api/")) return next();
   if (!cookieJar.includes("sessionId=")) return res.status(401).json({ error: "Not logged in" });
   next();
 });
@@ -480,6 +499,23 @@ app.post("/api/logout", (req, res) => {
   res.json({ success: true });
 });
 
+// GET  /api/settings — read server-level settings (LAN access)
+app.get("/api/settings", (req, res) => {
+  res.json({ lanEnabled: settings.lanEnabled, host: bindHost(), envHost: !!process.env.HOST });
+});
+
+// POST /api/settings — save server-level settings; applied immediately
+app.post("/api/settings", (req, res) => {
+  const { lanEnabled } = req.body;
+  if (typeof lanEnabled !== "boolean") {
+    return res.status(400).json({ error: "boolean lanEnabled required" });
+  }
+  settings.lanEnabled = lanEnabled;
+  saveSettings();
+  refreshAllowedHosts();
+  res.json({ lanEnabled: settings.lanEnabled, host: bindHost(), envHost: !!process.env.HOST });
+});
+
 // GET  /api/exams/:id/states — refresh answer card states
 app.get("/api/exams/:id/states", async (req, res) => {
   const examInfoId = req.params.id;
@@ -597,22 +633,27 @@ app.use((error, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || "127.0.0.1";
 
-function startServer(port = PORT, host = HOST) {
-  refreshAllowedHosts(host);
+function bindHost() {
+  return process.env.HOST || "0.0.0.0";
+}
+
+function startServer(port = PORT) {
+  const host = bindHost();
+  refreshAllowedHosts();
   const server = app.listen(port, host, () => {
     console.log(`Server: http://${host}:${server.address().port}`);
-    if (!LOCAL_HOSTNAMES.has(localHostname(host))) {
+    if (settings.lanEnabled && !LOCAL_HOSTNAMES.has(localHostname(host))) {
       for (const address of lanAddresses()) {
         console.log(`LAN:    http://${address}:${server.address().port}`);
       }
       console.warn(
-        "[warning] Listening beyond loopback exposes one shared upstream session to the LAN. "
+        "[warning] Binding beyond loopback exposes one shared upstream session to the LAN. "
         + "There is no TLS, per-user session isolation, CSRF protection or rate limiting, "
         + "and upstream cookies are stored in cleartext on disk. Only run this on a trusted network.",
       );
     }
+    console.log(`LAN access: ${settings.lanEnabled ? "enabled" : "disabled"} (我的 > 设置)`);
     console.log(`Session: ${cookieJar ? "loaded" : "none (login required)"}`);
   });
   return server;

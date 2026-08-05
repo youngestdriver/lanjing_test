@@ -14,8 +14,9 @@ const { after, before, test } = require("node:test");
 
 const localDir = fs.mkdtempSync(path.join(os.tmpdir(), "lanjing-web-lan-"));
 process.env.LANJING_LOCAL_DIR = localDir;
-process.env.HOST = "0.0.0.0";
 process.env.TRUSTED_HOSTS = "quiz.local, quiz.lan";
+// The server defaults to binding 0.0.0.0 with LAN access enabled, which is
+// exactly what these tests exercise; no HOST override is set.
 const { startServer } = require("../server");
 
 let server;
@@ -128,4 +129,64 @@ test("cross-origin requests stay rejected while same-origin LAN writes pass", as
   });
   assert.equal(sameOrigin.status, 200);
   assert.deepEqual(sameOrigin.body, { success: true });
+});
+
+test("GET /api/settings reports LAN access enabled by default", async () => {
+  const response = await request("/api/settings");
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body, { lanEnabled: true, host: "0.0.0.0", envHost: false });
+});
+
+test("POST /api/settings rejects a non-boolean lanEnabled", async () => {
+  const response = await request("/api/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ lanEnabled: "yes" }),
+  });
+  assert.equal(response.status, 400);
+  assert.match(response.body.error, /boolean/i);
+});
+
+test("disabling LAN access blocks interface IPs immediately and persists", async (t) => {
+  const address = lanIpv4();
+  if (!address) return t.skip("no non-internal IPv4 interface found");
+  const lanHost = `${address}:${port}`;
+
+  const disable = await request("/api/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ lanEnabled: false }),
+  });
+  assert.equal(disable.status, 200);
+  assert.equal(disable.body.lanEnabled, false);
+  assert.deepEqual(
+    JSON.parse(fs.readFileSync(path.join(localDir, "settings.json"), "utf8")),
+    { lanEnabled: false },
+  );
+
+  const blocked = await request("/api/status", { headers: { Host: lanHost } });
+  assert.equal(blocked.status, 403);
+  const loopback = await request("/api/status", { headers: { Host: "127.0.0.1" } });
+  assert.equal(loopback.status, 200);
+  const trusted = await request("/api/status", { headers: { Host: "quiz.local" } });
+  assert.equal(trusted.status, 200, "TRUSTED_HOSTS stays independent of the LAN toggle");
+
+  // A restart applies the persisted setting: the interface IP stays blocked.
+  await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  server = startServer(0);
+  await once(server, "listening");
+  port = server.address().port;
+  const stillBlocked = await request("/api/status", { headers: { Host: `${address}:${port}` } });
+  assert.equal(stillBlocked.status, 403);
+
+  // Restore LAN access for the remaining runs.
+  const enable = await request("/api/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ lanEnabled: true }),
+  });
+  assert.equal(enable.status, 200);
+  assert.equal(enable.body.lanEnabled, true);
+  const unblocked = await request("/api/status", { headers: { Host: `${address}:${port}` } });
+  assert.equal(unblocked.status, 200);
 });

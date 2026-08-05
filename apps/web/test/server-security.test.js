@@ -10,6 +10,9 @@ const { after, before, test } = require("node:test");
 
 const localDir = fs.mkdtempSync(path.join(os.tmpdir(), "lanjing-web-security-"));
 process.env.LANJING_LOCAL_DIR = localDir;
+// This file verifies the loopback-only security boundary; pin the bind
+// address explicitly because the server now defaults to 0.0.0.0.
+process.env.HOST = "127.0.0.1";
 const { startServer } = require("../server");
 
 let server;

@@ -120,7 +120,7 @@ async function verifyOfflineShell(browser) {
 async function main() {
   const server = spawn(process.execPath, ["server.js"], {
     cwd: WEB_DIR,
-    env: { ...process.env, PORT: String(PORT) },
+    env: { ...process.env, PORT: String(PORT), HOST: "127.0.0.1" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let serverOutput = "";
@@ -165,6 +165,7 @@ async function main() {
     let logoutAttempts = 0;
     let examListAttempts = 0;
     let examEnterAttempts = 0;
+    let lanEnabledSetting = true;
     let loggedIn = true;
     let delayNextExamList = false;
     let delayNextStatus = false;
@@ -279,6 +280,12 @@ async function main() {
         loggedIn = false;
         return json(route, { success: true });
       }
+      if (url.pathname === "/api/settings") {
+        if (request.method() === "POST") {
+          lanEnabledSetting = JSON.parse(request.postData() || "{}").lanEnabled;
+        }
+        return json(route, { lanEnabled: lanEnabledSetting, host: "127.0.0.1", envHost: false });
+      }
       return json(route, { error: `Unhandled fixture route: ${url.pathname}` }, 500);
     });
 
@@ -341,6 +348,12 @@ async function main() {
     const profileAutoAdvance = page.locator('[data-home-view="profile"] [data-auto-advance]');
     assert.equal(await profileAutoAdvance.isChecked(), false);
     await profileAutoAdvance.check();
+    const profileLanToggle = page.locator('[data-home-view="profile"] [data-lan-toggle]');
+    assert.equal(await profileLanToggle.isChecked(), true);
+    await profileLanToggle.uncheck();
+    assert.equal(lanEnabledSetting, false);
+    await profileLanToggle.check();
+    assert.equal(lanEnabledSetting, true);
     assert.equal(await page.evaluate(() => localStorage.getItem("theme")), "dark");
     assert.equal(await page.evaluate(() => localStorage.getItem("quiz.autoAdvanceOnCorrect")), "true");
     assert.equal(await page.title(), "我的 · 蓝鲸助手");
@@ -353,6 +366,7 @@ async function main() {
     assert.equal(await page.locator('html[data-theme="dark"]').count(), 1);
     assert.equal(await page.locator('[data-theme-choice="dark"][aria-pressed="true"]').count(), 1);
     assert.equal(await profileAutoAdvance.isChecked(), true);
+    assert.equal(await profileLanToggle.isChecked(), true);
     await page.locator('[data-theme-choice="light"]').click();
     assert.equal(examListAttempts, 2);
 

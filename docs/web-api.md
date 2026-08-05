@@ -39,7 +39,7 @@ Content-Type: application/json
 
 GET 请求无请求体。POST 请求体为 JSON 对象；所有写请求都必须声明 `Content-Type: application/json`，否则返回 HTTP `415`。
 
-服务默认只监听 `127.0.0.1`，此时本地 API 只接受 `Host` 为 `127.0.0.1` 或 `localhost` 的请求；浏览器携带 `Origin` 时，其主机与端口还必须和当前请求完全一致。设置 `HOST` 环境变量为非 loopback 地址（例如 `HOST=0.0.0.0`）可将服务绑定到局域网端口，Host/Origin 白名单会自动加入本机所有非内部 IPv4 网卡地址，局域网设备即可通过 `http://<本机IP>:<端口>` 访问；`TRUSTED_HOSTS`（逗号分隔）可再额外允许指定主机名（如 `my-mac.local`）。未配置的主机名、非法 Host 或跨源请求仍返回 HTTP `403`。这些边界用于保护进程级共享的上游会话，服务不应通过反向代理暴露到公网。
+服务默认绑定 `0.0.0.0`（所有网卡接口）。Host/Origin 白名单始终包含 `127.0.0.1` 与 `localhost`；"局域网访问"开启（默认，见 2.11 节）时自动加入本机所有非内部 IPv4 网卡地址，局域网设备即可通过 `http://<本机IP>:<端口>` 访问，关闭后这些地址返回 HTTP `403`。设置 `HOST` 环境变量可指定绑定地址（如 `HOST=127.0.0.1` 仅本机监听）；`TRUSTED_HOSTS`（逗号分隔）可额外允许指定主机名（如 `my-mac.local`）。浏览器携带 `Origin` 时，其主机与端口还必须和当前请求完全一致。未配置的主机名、非法 Host 或跨源请求仍返回 HTTP `403`。这些边界用于保护进程级共享的上游会话，服务不应通过反向代理暴露到公网。
 
 ### 1.3 登录状态
 
@@ -58,6 +58,8 @@ apps/web/.local/session_cookies.txt
 | `GET` | `/api/status` |
 | `POST` | `/api/login` |
 | `POST` | `/api/logout` |
+| `GET` | `/api/settings` |
+| `POST` | `/api/settings` |
 
 未登录时返回：
 
@@ -685,6 +687,53 @@ Content-Type: application/json
   "success": true
 }
 ```
+
+---
+
+### 2.11 局域网访问设置
+
+读取或修改服务器级设置。设置保存于 `apps/web/.local/settings.json`（权限 `0600`），修改后立即生效，无需重启。
+
+```http
+GET /api/settings
+```
+
+#### 成功响应
+
+```json
+{
+  "lanEnabled": true,
+  "host": "0.0.0.0",
+  "envHost": false
+}
+```
+
+- `lanEnabled`：是否允许局域网设备访问（默认 `true`）
+- `host`：当前绑定地址，由 `HOST` 环境变量或默认值决定
+- `envHost`：绑定地址是否被 `HOST` 环境变量覆盖
+
+```http
+POST /api/settings
+Content-Type: application/json
+```
+
+```json
+{
+  "lanEnabled": false
+}
+```
+
+#### 成功响应
+
+```json
+{
+  "lanEnabled": false,
+  "host": "0.0.0.0",
+  "envHost": false
+}
+```
+
+`lanEnabled` 非布尔值时返回 HTTP `400`。关闭后，Host 白名单立即移除本机网卡地址，局域网请求返回 HTTP `403`；本机 loopback 与 `TRUSTED_HOSTS` 主机不受影响。
 
 ---
 

@@ -6,6 +6,7 @@ const S = {
   examLoadToken:0, listLoadToken:0, timerByQuestion:{}, activeTimerId:null, timerHandle:null,
   autoAdvanceOnCorrect:localStorage.getItem(AUTO_ADVANCE_KEY)==="true",
   autoAdvanceHandle:null, navigationGeneration:0, suppressedExamStates:{}, abandonInFlight:{},
+  lanEnabled:null,
   sessionGeneration:0, answerSyncToken:0, markSyncToken:0, abandonRequestToken:0,
   markSyncState:{}, quizStatusOwner:null, submitInFlight:false, quizCompleted:false,
   routeToken:0, examListLoaded:false,
@@ -48,6 +49,45 @@ function setAutoAdvance(enabled){
   localStorage.setItem(AUTO_ADVANCE_KEY,String(S.autoAdvanceOnCorrect));
   if(!S.autoAdvanceOnCorrect) cancelAutoAdvance();
   syncAutoAdvanceControls();
+}
+const LAN_HINT_ENABLED="开启后，同一局域网的设备可通过本机 IP 访问本服务";
+const LAN_HINT_DISABLED="已关闭，局域网设备将无法访问本服务";
+const LAN_HINT_ENV_OVERRIDE="绑定地址由 HOST 环境变量控制，本开关控制访问白名单";
+async function syncLanControl(){
+  const toggle=$('[data-lan-toggle]');
+  const hint=$('[data-lan-hint]');
+  if(!toggle||!hint) return;
+  if(S.lanEnabled===null){
+    const r=await api("/api/settings");
+    if(r.lanEnabled!==undefined){
+      S.lanEnabled=r.lanEnabled;
+      toggle.checked=r.lanEnabled;
+      toggle.disabled=false;
+      hint.textContent=r.envHost?LAN_HINT_ENV_OVERRIDE:(r.lanEnabled?LAN_HINT_ENABLED:LAN_HINT_DISABLED);
+    }else{
+      toggle.disabled=true;
+      hint.textContent="无法读取服务器设置";
+    }
+  }else{
+    toggle.checked=S.lanEnabled;
+  }
+}
+async function setLanAccess(enabled){
+  const toggle=$('[data-lan-toggle]');
+  const hint=$('[data-lan-hint]');
+  if(!toggle||!hint) return;
+  toggle.disabled=true;
+  hint.textContent="保存中…";
+  const r=await api("/api/settings",{method:"POST",body:JSON.stringify({lanEnabled:enabled})});
+  toggle.disabled=false;
+  if(r.lanEnabled!==undefined){
+    S.lanEnabled=r.lanEnabled;
+    toggle.checked=r.lanEnabled;
+    hint.textContent=r.envHost?LAN_HINT_ENV_OVERRIDE:(r.lanEnabled?LAN_HINT_ENABLED:LAN_HINT_DISABLED);
+  }else{
+    toggle.checked=S.lanEnabled===true;
+    hint.textContent=r.error||"保存失败，请重试";
+  }
 }
 function showPage(id){
   if(id!=="#quizPage"){
@@ -181,6 +221,7 @@ function activateHomeTab(tab,{historyMode="none",refresh=false}={}){
   });
   syncThemeControls();
   syncAutoAdvanceControls();
+  syncLanControl();
 
   const heading=document.getElementById(HOME_HEADINGS[selected]);
   document.title=`${heading?.textContent||"蓝鲸助手"} · 蓝鲸助手`;
