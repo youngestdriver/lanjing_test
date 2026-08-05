@@ -1,0 +1,72 @@
+name: CI Web
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/web/**"
+      - "docs/**"
+      - "README.md"
+      - ".github/workflows/ci-web.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "apps/web/**"
+      - "docs/**"
+      - "README.md"
+      - ".github/workflows/ci-web.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: Node
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm --prefix apps/web ci
+
+      - name: Check JavaScript syntax
+        run: npm --prefix apps/web run check
+
+      - name: Run Web unit tests
+        run: npm --prefix apps/web test
+
+      - name: Run browser smoke test
+        run: npm --prefix apps/web run test:browser
+
+      - name: Smoke test server
+        shell: bash
+        run: |
+          env PORT=43127 node apps/web/server.js > "$RUNNER_TEMP/lanjing-server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:43127/api/status; then
+              exit 0
+            fi
+            sleep 1
+          done
+
+          cat "$RUNNER_TEMP/lanjing-server.log" >&2
+          exit 1

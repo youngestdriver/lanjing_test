@@ -1,6 +1,7 @@
 # 蓝鲸答题助手
 
-[![CI](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci.yml)
+[![CI Web](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-web.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-web.yml)
+[![CI iOS](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-ios.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-ios.yml)
 
 面向蓝鲸微课考试流程的第三方学习客户端。本仓库按应用维护 Web/PWA 与原生 iOS 两套独立实现。两端现已覆盖同一组核心考试流程，但仍拥有各自的网络层、会话存储、界面代码和测试体系，不共享运行时或业务实现。
 
@@ -39,7 +40,7 @@ Web 版必须启动 `apps/web/server.js`。iOS 版直接访问上游，不依赖
 | 列表与失败恢复 | 主动刷新、空态、加载重试及放弃考试后的陈旧记录抑制 | 下拉刷新、空态、加载重试及放弃考试后的陈旧记录抑制 |
 | 答案上报失败 | 保留本地选择、显示未同步状态并允许重试 | 统一处理会话失效；其他上报失败暂不提供重试 UI |
 | 会话持久化 | 进程级全局 Cookie，写入权限为 `0600` 的本地文件 | Cookie 存入 Keychain，会话失效时统一清理并返回登录页 |
-| 自动化验证 | 20 项 Node 单元测试；真实 Chrome + mock API 的浏览器回归；无真实上游 E2E | 8 个 XCTest 套件、56 项单元测试；尚无 UI、真机或真实上游 E2E |
+| 自动化验证 | 29 项 Node 单元测试；真实 Chrome + mock API 的浏览器回归；无真实上游 E2E | 8 个 XCTest 套件、56 项单元测试；尚无 UI、真机或真实上游 E2E |
 
 Web 与 iOS 登录后都以“考试列表 / 练习 / 我的”组织一级导航；主题、自动下一题、局域网访问开关和退出登录集中在“我的”。Web 额外提供桌面浏览器入口、响应式布局、触控和键盘答题以及可安装的 PWA 应用壳，iOS 提供原生分页手势、iPad 键盘导航、原生富文本容器和系统级会话存储。两端的“练习”页目前都只是返回考试列表的入口，不是独立练习题库。
 
@@ -149,7 +150,8 @@ Web 前端通过同源的 `/api` 路由访问本地 Express 代理：
 
 ```text
 .
-├── .github/workflows/ci.yml        # Node 与 iOS 持续集成
+├── .github/workflows/ci-web.yml    # Web 持续集成（按路径过滤）
+├── .github/workflows/ci-ios.yml    # iOS 持续集成（按路径过滤）
 ├── apps/
 │   ├── ios/
 │   │   ├── LanjingQuiz.xcodeproj/  # 已提交的 Xcode 工程与共享 scheme
@@ -218,10 +220,12 @@ xcodebuild \
 
 ### GitHub Actions
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 在推送到 `main` 或创建目标为 `main` 的 PR 时运行：
+持续集成拆分为两个按路径过滤的 workflow，在推送到 `main` 或创建目标为 `main` 的 PR 时按改动范围运行：
 
-- `Node`：Ubuntu、Node 22、依赖安装、JavaScript 语法检查、20 项单元与安全测试、mock API 浏览器回归和 `/api/status` smoke test
-- `iOS`：macOS 15、Xcode 16.4、动态选择可用 iPhone 模拟器并运行测试
+- [`ci-web.yml`](.github/workflows/ci-web.yml)（`Node`）：仅当改动涉及 `apps/web/`、`docs/`、`README.md` 或该 workflow 自身时运行；Ubuntu、Node 22、依赖安装、JavaScript 语法检查、29 项单元与安全测试、mock API 浏览器回归和 `/api/status` smoke test
+- [`ci-ios.yml`](.github/workflows/ci-ios.yml)（`iOS`）：仅当改动涉及 `apps/ios/` 或该 workflow 自身时运行；macOS 15、Xcode 16.4、动态选择可用 iPhone 模拟器并运行测试
+
+不匹配任一路径的改动（例如仅修改 `.github/` 下其他文件）两个 workflow 都不会运行；分支保护要求的 `Node` 与 `iOS` 检查会对因路径过滤而跳过的运行自动放行。
 
 这些检查验证基础构建、单元测试和本地浏览器流程，不等同于真实账号、真实上游、真机、签名或归档验证。
 
@@ -259,7 +263,7 @@ iOS 安装包应通过受控的 Release、TestFlight 或 CI artifact 分发，�
 
 - [本地 API 与上游映射](docs/web-api.md)
 - [原生 iOS 构建、架构与验证](apps/ios/README.md)
-- [持续集成配置](.github/workflows/ci.yml)
+- [Web 持续集成](.github/workflows/ci-web.yml) 与 [iOS 持续集成](.github/workflows/ci-ios.yml)
 
 ## 许可与免责声明
 
