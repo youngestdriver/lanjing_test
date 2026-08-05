@@ -1,6 +1,7 @@
 const express = require("express");
 const crypto = require("crypto");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const {
   parsePreviousAnswers,
@@ -143,16 +144,45 @@ function saveSession() {
 
 // ========== Express app ==========
 const app = express();
+
+// Hosts accepted by the /api boundary. Loopback is always allowed. When the
+// server binds to a non-loopback address (HOST=0.0.0.0 or an interface IP),
+// local interface addresses are added so LAN clients can reach it by IP.
+// TRUSTED_HOSTS additionally allows explicit hostnames (e.g. my-mac.local)
+// in any mode.
 const LOCAL_HOSTNAMES = new Set(["127.0.0.1", "localhost"]);
+let allowedHosts = new Set(LOCAL_HOSTNAMES);
 
 function localHostname(host) {
   try { return new URL(`http://${host}`).hostname.toLowerCase(); }
   catch { return ""; }
 }
 
+function lanAddresses() {
+  const addresses = [];
+  for (const interfaces of Object.values(os.networkInterfaces())) {
+    for (const iface of interfaces) {
+      if (iface.family === "IPv4" && !iface.internal) addresses.push(iface.address);
+    }
+  }
+  return addresses;
+}
+
+function refreshAllowedHosts(host) {
+  const hosts = new Set(LOCAL_HOSTNAMES);
+  if (!LOCAL_HOSTNAMES.has(localHostname(host))) {
+    for (const address of lanAddresses()) hosts.add(address);
+  }
+  for (const name of String(process.env.TRUSTED_HOSTS || "").split(",")) {
+    const trimmed = name.trim().toLowerCase();
+    if (trimmed) hosts.add(trimmed);
+  }
+  allowedHosts = hosts;
+}
+
 app.use("/api", (req, res, next) => {
   const requestHost = req.get("host") || "";
-  if (!LOCAL_HOSTNAMES.has(localHostname(requestHost))) {
+  if (!allowedHosts.has(localHostname(requestHost))) {
     return res.status(403).json({ error: "Local API host is not allowed" });
   }
 
@@ -160,7 +190,7 @@ app.use("/api", (req, res, next) => {
   if (origin) {
     try {
       const parsedOrigin = new URL(origin);
-      if (!LOCAL_HOSTNAMES.has(parsedOrigin.hostname.toLowerCase())
+      if (!allowedHosts.has(parsedOrigin.hostname.toLowerCase())
         || parsedOrigin.host.toLowerCase() !== requestHost.toLowerCase()) {
         return res.status(403).json({ error: "Cross-origin API requests are not allowed" });
       }
@@ -567,11 +597,22 @@ app.use((error, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-const HOST = "127.0.0.1";
+const HOST = process.env.HOST || "127.0.0.1";
 
-function startServer(port = PORT) {
-  const server = app.listen(port, HOST, () => {
-    console.log(`Server: http://${HOST}:${server.address().port}`);
+function startServer(port = PORT, host = HOST) {
+  refreshAllowedHosts(host);
+  const server = app.listen(port, host, () => {
+    console.log(`Server: http://${host}:${server.address().port}`);
+    if (!LOCAL_HOSTNAMES.has(localHostname(host))) {
+      for (const address of lanAddresses()) {
+        console.log(`LAN:    http://${address}:${server.address().port}`);
+      }
+      console.warn(
+        "[warning] Listening beyond loopback exposes one shared upstream session to the LAN. "
+        + "There is no TLS, per-user session isolation, CSRF protection or rate limiting, "
+        + "and upstream cookies are stored in cleartext on disk. Only run this on a trusted network.",
+      );
+    }
     console.log(`Session: ${cookieJar ? "loaded" : "none (login required)"}`);
   });
   return server;
