@@ -1,9 +1,10 @@
 # Session & credentials
 session_cookies.txt
+/apps/web/.local/
 
 # Saved exam data
 *_2026-*/
-frontend/index.backup.html
+/apps/web/public/index.backup.html
 patch_frontend.js
 
 # Debug files
@@ -24,10 +25,10 @@ Thumbs.db
 .DS_Store
 
 # iOS build artifacts
-ios/build/
-ios/dist/
+/apps/ios/build/
+/apps/ios/dist/
 *.ipa
-ios/*.xcuserstate
-ios/**/xcuserdata/
+/apps/ios/*.xcuserstate
+/apps/ios/**/xcuserdata/
 
 .od-skills
