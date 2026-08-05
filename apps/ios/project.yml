@@ -46,6 +46,10 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.qzh.lanjingquiz
         PRODUCT_NAME: LanjingQuiz
         GENERATE_INFOPLIST_FILE: NO
+        # Signing team, injected via the DEVELOPMENT_TEAM environment variable
+        # at generation time (e.g. DEVELOPMENT_TEAM=XXXXX xcodegen generate).
+        # Never commit a concrete team ID: it is personal developer info.
+        DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   LanjingQuizTests:

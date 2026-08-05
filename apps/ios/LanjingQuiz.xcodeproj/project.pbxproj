@@ -364,6 +364,7 @@
 						ProvisioningStyle = Automatic;
 					};
 					F8EC58A49AAF88C8742B1D96 = {
+						DevelopmentTeam = "${DEVELOPMENT_TEAM}";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -494,6 +495,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				DEVELOPMENT_TEAM = "${DEVELOPMENT_TEAM}";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = LanjingQuiz/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.qzh.lanjingquiz;
@@ -536,6 +538,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				DEVELOPMENT_TEAM = "${DEVELOPMENT_TEAM}";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = LanjingQuiz/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.qzh.lanjingquiz;

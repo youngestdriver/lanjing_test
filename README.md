@@ -124,6 +124,14 @@ xcodegen generate
 
 生成后必须检查 Git diff，确认 `project.yml` 与已提交的 `.xcodeproj` 变化符合预期。当前 CI 直接使用已提交工程，不负责验证两者完全一致。
 
+签名团队通过环境变量注入，**不提交具体的 Team ID**（它是与开发者账号关联的个人信息，历史提交中出现过的 ID 不应继续出现在新提交中）：
+
+```bash
+DEVELOPMENT_TEAM=XXXXXX xcodegen generate
+```
+
+未设置时生成的工程不含团队 ID，模拟器构建和 CI（`CODE_SIGNING_ALLOWED=NO`）不受影响；真机运行前在 Xcode 的 Signing & Capabilities 中选择团队即可。另外，Xcode 打开工程时可能自动向 `.xcodeproj/project.pbxproj` 写回签名团队、格式规范化等本地改动——提交前用 `git status` 检查该文件，仅包含这类本地改动的差异应当丢弃（`git checkout -- apps/ios/LanjingQuiz.xcodeproj/project.pbxproj`），不要提交。
+
 完整的构建说明、用户流程和 iOS 架构见 [apps/ios/README.md](apps/ios/README.md)。
 
 ## 本地 API
