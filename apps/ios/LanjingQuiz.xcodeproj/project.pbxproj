@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0750D6F6977341749D0F1B17 /* Question.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34E242E150FF74041E7BA8E5 /* Question.swift */; };
 		0C66E3A25774391E8339400C /* Formatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0364F22B8201AF3CC52F19FE /* Formatters.swift */; };
+		0DB261CA89D7EACF6B41481B /* CookieCloudClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05796CE89C2C81EA0EC1B8D5 /* CookieCloudClient.swift */; };
 		0E2517FEDF893563660AD3D1 /* QuizLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = F79AF1AA06722655AAA9C969 /* QuizLogic.swift */; };
 		149C47CC26407B6918E663C5 /* QuizView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C32D95BC3642037D78B8341 /* QuizView.swift */; };
 		1E9207B9E37308356A32B207 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B6C0CB47C05234693836A37 /* RootView.swift */; };
@@ -31,6 +32,8 @@
 		83C250B31AF7514A40DBD9AC /* QuestionTimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D0EF14F9E652B9F68490FB0 /* QuestionTimerView.swift */; };
 		882F6DC46B63BC8A42815F75 /* SessionExpiryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 615EE3D6375CB52ADD9D0984 /* SessionExpiryTests.swift */; };
 		8A9AACD2DC27FA2774D2F4AF /* CookieStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C66501C84823829FBA3D384 /* CookieStore.swift */; };
+		8E994024B48D95DEC0D64390 /* CookieCloudCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6913CBFD4AD1D569021F5032 /* CookieCloudCrypto.swift */; };
+		909D285B5411413527F97611 /* CookieCloudCryptoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 076328ABD900D50196B69B82 /* CookieCloudCryptoTests.swift */; };
 		9F233F588C9ACD522BF61132 /* LoginFormTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E21335F7B31985CE3647EE6E /* LoginFormTests.swift */; };
 		A04EDE1E6E98453D9478097B /* AnswerCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7DA9741048B817074E66C41 /* AnswerCardView.swift */; };
 		A7FCF3B778CDCCAC2B55952A /* Hashing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59F40B97D0409BCE50D7C6C5 /* Hashing.swift */; };
@@ -49,6 +52,7 @@
 		DA2584EE3EB69E5E4D829AF4 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0207640E6EAE653501D0A7EF /* AppState.swift */; };
 		E20F686633E9E0DCCC03280F /* ProgressBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B68FA1533E77B4F81BDF97A3 /* ProgressBarView.swift */; };
 		E2E26FAFBEE2AEF33D2BC149 /* HTMLText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51617D25D6FE8FDA9BD31D32 /* HTMLText.swift */; };
+		E3C6091DAD81129D5F4A31F2 /* CookieCloudSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DC449D7C68B4CE73A3D1D /* CookieCloudSync.swift */; };
 		E49C5173E3C1E4D2D67659A3 /* SectionTabsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 421020AC683CCB368A88D2F6 /* SectionTabsView.swift */; };
 		E64F488A658658463E8210B8 /* SectionStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 145620DF56112CD358D32190 /* SectionStats.swift */; };
 		E96B90B4505E0005CC76EB00 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D6B481FC05585B2110A8B19 /* APIClient.swift */; };
@@ -73,6 +77,8 @@
 /* Begin PBXFileReference section */
 		0207640E6EAE653501D0A7EF /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		0364F22B8201AF3CC52F19FE /* Formatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatters.swift; sourceTree = "<group>"; };
+		05796CE89C2C81EA0EC1B8D5 /* CookieCloudClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieCloudClient.swift; sourceTree = "<group>"; };
+		076328ABD900D50196B69B82 /* CookieCloudCryptoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieCloudCryptoTests.swift; sourceTree = "<group>"; };
 		1039294FEB0B4CE1352C3CAF /* Fixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fixtures.swift; sourceTree = "<group>"; };
 		145620DF56112CD358D32190 /* SectionStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectionStats.swift; sourceTree = "<group>"; };
 		1613A3AFDED5B85859DEFE16 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
@@ -81,8 +87,8 @@
 		2B73812543A310247D407F12 /* ExamListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExamListView.swift; sourceTree = "<group>"; };
 		2D0EF14F9E652B9F68490FB0 /* QuestionTimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuestionTimerView.swift; sourceTree = "<group>"; };
 		2D6B481FC05585B2110A8B19 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
-		2F9E8407301FAC39001353A7 /* GlassHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassHelpers.swift; sourceTree = "<group>"; };
-		32BFB7AB9B136148CFC37135 /* LanjingQuizTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LanjingQuizTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		2EC6D828E6FA0AB00C311AF9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		32BFB7AB9B136148CFC37135 /* LanjingQuizTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LanjingQuizTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		34E242E150FF74041E7BA8E5 /* Question.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Question.swift; sourceTree = "<group>"; };
 		37D041F47271D626E7EE60A4 /* HashingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HashingTests.swift; sourceTree = "<group>"; };
 		39E06A0C03D389B8FD615F7D /* QuizLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuizLogicTests.swift; sourceTree = "<group>"; };
@@ -94,10 +100,12 @@
 		537D051E4644236232756CB3 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		56AA693D7FFFB20B8364E9F5 /* RichHTMLContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichHTMLContent.swift; sourceTree = "<group>"; };
 		59F40B97D0409BCE50D7C6C5 /* Hashing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hashing.swift; sourceTree = "<group>"; };
+		5B8DC449D7C68B4CE73A3D1D /* CookieCloudSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieCloudSync.swift; sourceTree = "<group>"; };
 		5F6C6C27825F5D58D42C0322 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		615EE3D6375CB52ADD9D0984 /* SessionExpiryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionExpiryTests.swift; sourceTree = "<group>"; };
 		6188CFE56F186CCECDC684FA /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
-		6665ACEC7ADB34A675333AB2 /* LanjingQuiz.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LanjingQuiz.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6665ACEC7ADB34A675333AB2 /* LanjingQuiz.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LanjingQuiz.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6913CBFD4AD1D569021F5032 /* CookieCloudCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieCloudCrypto.swift; sourceTree = "<group>"; };
 		6C66501C84823829FBA3D384 /* CookieStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieStore.swift; sourceTree = "<group>"; };
 		6C8434715CFBE58909B53F42 /* QuizHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuizHeaderView.swift; sourceTree = "<group>"; };
 		75E59E75B870A6D27D64E24E /* LanjingQuizApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanjingQuizApp.swift; sourceTree = "<group>"; };
@@ -143,6 +151,7 @@
 			isa = PBXGroup;
 			children = (
 				FDC3BC38EADFBB4AB460D5A4 /* AnswerMappingTests.swift */,
+				076328ABD900D50196B69B82 /* CookieCloudCryptoTests.swift */,
 				4DB3BE1419753CE217EF72BC /* ExamHTMLParserTests.swift */,
 				1039294FEB0B4CE1352C3CAF /* Fixtures.swift */,
 				37D041F47271D626E7EE60A4 /* HashingTests.swift */,
@@ -192,6 +201,7 @@
 		7CC3999B7F25663DA2A274D0 /* Support */ = {
 			isa = PBXGroup;
 			children = (
+				6913CBFD4AD1D569021F5032 /* CookieCloudCrypto.swift */,
 				A102BB0CE3FB1B8F9CC75D34 /* DesignSystem.swift */,
 				537D051E4644236232756CB3 /* Extensions.swift */,
 				0364F22B8201AF3CC52F19FE /* Formatters.swift */,
@@ -220,7 +230,6 @@
 			children = (
 				ED0B896545ED55D2769CA402 /* LanjingQuiz */,
 				3526706A038F6173DFF2E9F6 /* LanjingQuizTests */,
-				2F9E8407301FAC39001353A7 /* GlassHelpers.swift */,
 				38AB61676CB2F85505F3E0A8 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -278,6 +287,8 @@
 			children = (
 				2D6B481FC05585B2110A8B19 /* APIClient.swift */,
 				EDFE012A3AB01CDD9BC0235F /* APIError.swift */,
+				05796CE89C2C81EA0EC1B8D5 /* CookieCloudClient.swift */,
+				5B8DC449D7C68B4CE73A3D1D /* CookieCloudSync.swift */,
 				6C66501C84823829FBA3D384 /* CookieStore.swift */,
 				B72877EE1B6AC80597824B95 /* ExamHTMLParser.swift */,
 				6188CFE56F186CCECDC684FA /* KeychainHelper.swift */,
@@ -290,6 +301,7 @@
 			isa = PBXGroup;
 			children = (
 				D7CE52869C6F1ED7D822CB4A /* Assets.xcassets */,
+				2EC6D828E6FA0AB00C311AF9 /* Info.plist */,
 				D9E3C04E6182BAF0C21F0862 /* App */,
 				8E28D63A273543847C746D03 /* Models */,
 				EB6A462367B4C29FBD23D0F1 /* Networking */,
@@ -346,7 +358,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 2700;
+				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					B6BE649ABCCB08E66D46E020 = {
 						ProvisioningStyle = Automatic;
@@ -397,6 +409,9 @@
 				A04EDE1E6E98453D9478097B /* AnswerCardView.swift in Sources */,
 				20EE6B46B6AEE5FB6B7AFD66 /* AnswerDotGrid.swift in Sources */,
 				DA2584EE3EB69E5E4D829AF4 /* AppState.swift in Sources */,
+				0DB261CA89D7EACF6B41481B /* CookieCloudClient.swift in Sources */,
+				8E994024B48D95DEC0D64390 /* CookieCloudCrypto.swift in Sources */,
+				E3C6091DAD81129D5F4A31F2 /* CookieCloudSync.swift in Sources */,
 				8A9AACD2DC27FA2774D2F4AF /* CookieStore.swift in Sources */,
 				FF6C06120895D66E811BEA37 /* DesignSystem.swift in Sources */,
 				C9EF3541101112BD8F1872DF /* Exam.swift in Sources */,
@@ -441,6 +456,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				64E1595BB48AD97D7A59CB47 /* AnswerMappingTests.swift in Sources */,
+				909D285B5411413527F97611 /* CookieCloudCryptoTests.swift in Sources */,
 				FF2796CA668A7D9771341E8A /* ExamHTMLParserTests.swift in Sources */,
 				EFDF1B195F2C7100DFFEA962 /* Fixtures.swift in Sources */,
 				D696887E947DA6154A1033EC /* HashingTests.swift in Sources */,
@@ -467,7 +483,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
-				CLANG_ENABLE_OBJC_WEAK = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.qzh.lanjingquiz.tests;
 				PRODUCT_NAME = LanjingQuizTests;
@@ -479,14 +494,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "蓝鲸助手";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LanjingQuiz/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.qzh.lanjingquiz;
 				PRODUCT_NAME = LanjingQuiz;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -496,44 +505,13 @@
 		8224AEA241A45E98E0FDF978 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = T228646HH5;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
 				SDKROOT = iphoneos;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 			};
@@ -542,44 +520,13 @@
 		8C621AF54B2FF07E60951241 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = T228646HH5;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
-				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 			};
@@ -589,14 +536,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "蓝鲸助手";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LanjingQuiz/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.qzh.lanjingquiz;
 				PRODUCT_NAME = LanjingQuiz;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -607,7 +548,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
-				CLANG_ENABLE_OBJC_WEAK = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.qzh.lanjingquiz.tests;
 				PRODUCT_NAME = LanjingQuizTests;

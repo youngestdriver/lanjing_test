@@ -145,6 +145,35 @@
               <span class="sr-only">局域网访问</span>
             </label>
           </div>
+          <div class="settings-row">
+            <div>
+              <h2>Cookie 云端同步</h2>
+              <p data-cookiecloud-status>通过 CookieCloud 在设备间共享登录会话</p>
+            </div>
+            <label class="switch-control" title="通过 CookieCloud 在设备间共享登录会话">
+              <input type="checkbox" data-cookiecloud-toggle onchange="setCookieCloudEnabled(this.checked)">
+              <span aria-hidden="true"></span>
+              <span class="sr-only">Cookie 云端同步</span>
+            </label>
+          </div>
+          <div class="settings-row settings-row-wide">
+            <div class="cookiecloud-fields">
+              <p class="cookiecloud-warn">登录凭证会加密后上传到你配置的服务器；UUID 与密码需与浏览器扩展一致，服务地址是你自建的 CookieCloud。</p>
+              <label class="cookiecloud-field">
+                <span>服务器地址</span>
+                <input type="url" data-cookiecloud-server placeholder="https://cc.example.com" autocomplete="off" onchange="ccFieldChanged()">
+              </label>
+              <label class="cookiecloud-field">
+                <span>UUID</span>
+                <input type="text" data-cookiecloud-uuid placeholder="扩展设置中的 UUID" autocomplete="off" onchange="ccFieldChanged()">
+              </label>
+              <label class="cookiecloud-field">
+                <span>密码</span>
+                <input type="password" data-cookiecloud-password placeholder="扩展设置中的密码" autocomplete="new-password" onchange="ccFieldChanged()">
+              </label>
+              <button type="button" class="btn-style" data-cookiecloud-sync onclick="syncCookieCloudNow()">立即同步</button>
+            </div>
+          </div>
           <div class="settings-row settings-row-danger">
             <div>
               <h2>登录状态</h2>

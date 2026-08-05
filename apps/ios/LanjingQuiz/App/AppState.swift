@@ -20,14 +20,27 @@ final class AppState {
     }
     var notice: String?
     let api: APIClient
+    let cookieCloudSync: CookieCloudSync
 
     init(api: APIClient = APIClient()) {
         self.api = api
+        self.cookieCloudSync = CookieCloudSync(cookieStore: api.cookieStore)
         self.theme = Theme.load()
         self.autoAdvanceOnCorrect = QuizSettings.loadAutoAdvanceOnCorrect()
     }
 
+    /// Launch path: import a cloud session (when CookieCloud sync is enabled)
+    /// before deciding the route, so a fresh device with a cloud session
+    /// lands on the exam list without logging in again.
     func start() async {
+        let hasSession = await cookieCloudSync.pullAndApplyIfNeeded()
+        route = hasSession ? .examList : .login
+    }
+
+    /// After a successful login: publish the new session to the cloud and
+    /// route — never pull here, the fresh local session must win.
+    func finishLogin() async {
+        await cookieCloudSync.pushIfNeeded()
         route = api.hasSession ? .examList : .login
     }
 

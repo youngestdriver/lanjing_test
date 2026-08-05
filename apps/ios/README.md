@@ -91,11 +91,13 @@ apps/ios/
 
 `APIClient` connects to `https://test.lanjingweike.com` and maintains its session cookie jar through `CookieStore`. Login credentials are used only to authenticate with that service. The app persists session cookies in the Keychain; sign-out and session-expiry handling clear those cookies.
 
+Optional CookieCloud sync (`CookieCloudSync`, same protocol as the web client and the official browser extension) shares the session across devices: the app pushes the session after login, pulls once at launch (bounded by a 4 s timeout), and exposes a manual sync button in "我的". The server URL, UUID, and enabled flag live in `UserDefaults`; the password lives in the Keychain. The Info.plist enables `NSAllowsLocalNetworking` (plus the local-network usage description) so plain-HTTP self-hosted CookieCloud servers on the LAN work; arbitrary HTTP is not enabled.
+
 Network calls mirror the upstream login, exam-list, enter, answer, mark, submit, and result flows. Do not commit account credentials, cookies, derived data, or Xcode `xcuserdata` files.
 
 ## Verification
 
-The `LanjingQuizTests` target currently contains 56 unit tests covering answer mapping, exam and result parsing, session expiry detection, login form encoding, rich HTML content, hashing, and quiz logic.
+The `LanjingQuizTests` target currently contains 65 unit tests covering answer mapping, exam and result parsing, session expiry detection, login form encoding, rich HTML content, hashing, quiz logic, and CookieCloud crypto/conversion (same interop vectors as the web client).
 
 Before delivering a change, build `LanjingQuiz`, run the test target, and validate affected user flows on a simulator or a signed physical device. Confirming **Abandon** has a real upstream effect, so do not use it as an unattended smoke test.
 

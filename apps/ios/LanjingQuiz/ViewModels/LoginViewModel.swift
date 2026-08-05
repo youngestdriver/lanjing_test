@@ -26,7 +26,7 @@ final class LoginViewModel {
         do {
             try await appState.api.login(phone: normalizedPhone, password: password)
             errorMessage = nil
-            await appState.start()
+            await appState.finishLogin()
         } catch {
             appState.handle(error)
             if let apiError = error as? APIError,

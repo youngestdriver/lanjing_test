@@ -6,7 +6,7 @@ const S = {
   examLoadToken:0, listLoadToken:0, timerByQuestion:{}, activeTimerId:null, timerHandle:null,
   autoAdvanceOnCorrect:localStorage.getItem(AUTO_ADVANCE_KEY)==="true",
   autoAdvanceHandle:null, navigationGeneration:0, suppressedExamStates:{}, abandonInFlight:{},
-  lanEnabled:null,
+  lanEnabled:null, cookieCloud:null,
   sessionGeneration:0, answerSyncToken:0, markSyncToken:0, abandonRequestToken:0,
   markSyncState:{}, quizStatusOwner:null, submitInFlight:false, quizCompleted:false,
   routeToken:0, examListLoaded:false,
@@ -87,6 +87,118 @@ async function setLanAccess(enabled){
   }else{
     toggle.checked=S.lanEnabled===true;
     hint.textContent=r.error||"保存失败，请重试";
+  }
+}
+// ========== CookieCloud sync ==========
+const CC_STATUS_DEFAULT="通过 CookieCloud 在设备间共享登录会话";
+const CC_STATUS_DISABLED="已关闭，各设备不再同步登录会话";
+const CC_STATUS_UNAVAILABLE="无法读取服务器设置";
+const CC_STATUS_SAVING="保存中…";
+const CC_STATUS_SYNCING="同步中…";
+const CC_SAVED_PASSWORD="（已保存）";
+
+function ccEls(){
+  return {
+    toggle:$('[data-cookiecloud-toggle]'),
+    status:$('[data-cookiecloud-status]'),
+    server:$('[data-cookiecloud-server]'),
+    uuid:$('[data-cookiecloud-uuid]'),
+    password:$('[data-cookiecloud-password]'),
+    sync:$('[data-cookiecloud-sync]'),
+  };
+}
+
+function ccStatusText(r){
+  if(r.lastError) return `上次同步失败：${r.lastError}`;
+  if(r.lastPull||r.lastPush){
+    const parts=[];
+    if(r.lastPull) parts.push(`拉取 ${r.lastPull.slice(11,16)}`);
+    if(r.lastPush) parts.push(`上传 ${r.lastPush.slice(11,16)}`);
+    return parts.join(" · ");
+  }
+  return r.enabled?CC_STATUS_DEFAULT:CC_STATUS_DISABLED;
+}
+
+function ccApplyConfig(r){
+  const els=ccEls();
+  if(!els.toggle) return;
+  if(r.enabled===undefined){
+    els.toggle.disabled=true;
+    els.status.textContent=CC_STATUS_UNAVAILABLE;
+    return;
+  }
+  S.cookieCloud={enabled:r.enabled,server:r.server||"",uuid:r.uuid||"",hasPassword:!!r.hasPassword};
+  els.toggle.checked=r.enabled;
+  els.toggle.disabled=false;
+  els.server.value=r.server||"";
+  els.uuid.value=r.uuid||"";
+  els.password.value="";
+  els.password.placeholder=r.hasPassword?CC_SAVED_PASSWORD:"扩展设置中的密码";
+  els.sync.disabled=!r.enabled; // inputs stay editable so config can be entered first
+  els.status.textContent=ccStatusText(r);
+}
+
+async function syncCookieCloudControl(){
+  const els=ccEls();
+  if(!els.toggle) return;
+  if(S.cookieCloud===null){
+    const r=await api("/api/cookiecloud");
+    ccApplyConfig(r);
+  }else{
+    ccApplyConfig(S.cookieCloud);
+  }
+}
+
+async function setCookieCloudEnabled(enabled){
+  const els=ccEls();
+  if(!els.toggle) return;
+  els.toggle.disabled=true;
+  els.status.textContent=CC_STATUS_SAVING;
+  const r=await api("/api/cookiecloud",{method:"POST",body:JSON.stringify({enabled})});
+  if(r.enabled===undefined){
+    els.toggle.checked=S.cookieCloud?.enabled===true;
+    els.status.textContent=r.error||"保存失败，请重试";
+  }else{
+    ccApplyConfig(r);
+  }
+}
+
+let ccFieldTimer=null;
+async function ccFieldChanged(){
+  clearTimeout(ccFieldTimer);
+  ccFieldTimer=setTimeout(async ()=>{
+    const els=ccEls();
+    if(!els.toggle||els.server.disabled) return;
+    const r=await api("/api/cookiecloud",{
+      method:"POST",
+      body:JSON.stringify({
+        server:els.server.value.trim(),
+        uuid:els.uuid.value.trim(),
+        password:els.password.value,
+      }),
+    });
+    if(r.enabled===undefined){
+      els.status.textContent=r.error||"保存失败，请重试";
+    }else{
+      ccApplyConfig(r);
+    }
+  },600);
+}
+
+async function syncCookieCloudNow(){
+  const els=ccEls();
+  if(!els.toggle||els.sync.disabled) return;
+  els.sync.disabled=true;
+  els.status.textContent=CC_STATUS_SYNCING;
+  const r=await api("/api/cookiecloud/sync",{method:"POST",body:"{}"});
+  els.sync.disabled=!(S.cookieCloud?.enabled===true);
+  if(r.lastError){
+    els.status.textContent=`同步失败：${r.lastError}`;
+  }else{
+    const parts=["同步完成"];
+    if(r.applied) parts.push("已导入云端会话");
+    if(r.pushed) parts.push("已上传本地会话");
+    els.status.textContent=parts.join("，");
   }
 }
 function showPage(id){
@@ -222,6 +334,7 @@ function activateHomeTab(tab,{historyMode="none",refresh=false}={}){
   syncThemeControls();
   syncAutoAdvanceControls();
   syncLanControl();
+  syncCookieCloudControl();
 
   const heading=document.getElementById(HOME_HEADINGS[selected]);
   document.title=`${heading?.textContent||"蓝鲸助手"} · 蓝鲸助手`;

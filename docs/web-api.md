@@ -60,6 +60,9 @@ apps/web/.local/session_cookies.txt
 | `POST` | `/api/logout` |
 | `GET` | `/api/settings` |
 | `POST` | `/api/settings` |
+| `GET` | `/api/cookiecloud` |
+| `POST` | `/api/cookiecloud` |
+| `POST` | `/api/cookiecloud/sync` |
 
 未登录时返回：
 
@@ -734,6 +737,85 @@ Content-Type: application/json
 ```
 
 `lanEnabled` 非布尔值时返回 HTTP `400`。关闭后，Host 白名单立即移除本机网卡地址，局域网请求返回 HTTP `403`；本机 loopback 与 `TRUSTED_HOSTS` 主机不受影响。
+
+### 2.12 Cookie 云端同步
+
+通过自建 [CookieCloud](https://github.com/easychen/CookieCloud) 服务在设备间共享登录会话。协议与官方浏览器扩展兼容：CookieCloud 服务端只保存密文（`{uuid → {encrypted, crypto_type}}`），加密与解密全部在本服务内完成，与扩展互通的双向算法（`legacy` 与 `aes-128-cbc-fixed`）实现于 `apps/web/lib/cookiecloud.js`。推送统一使用 `aes-128-cbc-fixed`；解密同时支持两种类型，未知类型或解密失败一律报错不应用（fail-closed）。
+
+配置保存在 `apps/web/.local/settings.json`（权限 `0600`），`password` 不会被任何读取接口返回。
+
+```http
+GET /api/cookiecloud
+```
+
+#### 成功响应
+
+```json
+{
+  "enabled": false,
+  "server": "",
+  "uuid": "",
+  "hasPassword": false,
+  "lastPush": null,
+  "lastPull": null,
+  "lastError": null
+}
+```
+
+- `enabled`：是否启用同步
+- `server`：自建 CookieCloud 服务地址（http/https）
+- `uuid`：与浏览器扩展一致的 UUID（共用时可直接导入扩展捕获的 cookie）
+- `hasPassword`：是否已保存密码（密码本身永不下发）
+- `lastPush` / `lastPull`：最近一次成功上传/拉取时间（ISO 8601）
+- `lastError`：最近一次同步失败原因
+
+```http
+POST /api/cookiecloud
+Content-Type: application/json
+```
+
+支持任意子集字段：
+
+```json
+{
+  "enabled": true,
+  "server": "http://192.168.1.5:8088",
+  "uuid": "xxx-xxx-xxx",
+  "password": "与扩展一致的密码"
+}
+```
+
+- `server` 必须为 http/https URL（拒绝带凭据），自动去除尾部斜杠；`uuid` 非空且 ≤128 字符；`password` 仅在非空字符串时更新，≤256 字符
+- 非法值返回 HTTP `400`；保存后立即生效，无需重启
+
+```http
+POST /api/cookiecloud/sync
+Content-Type: application/json
+```
+
+手动同步：先拉取云端数据（解密 → 过滤 `lanjingweike.com` 域 → 含 `sessionId` 才应用并保存），再在本地会话与上次推送不一致时推送（推送前先拉取远端 blob 解密，合并保留其中所有非 lanjingweike 域名条目）。同步单飞执行，与登录后的防抖自动推送互斥。
+
+#### 成功响应
+
+```json
+{
+  "applied": false,
+  "pushed": false,
+  "lastPush": null,
+  "lastPull": "2026-08-06T10:00:00.000Z",
+  "lastError": null
+}
+```
+
+- `applied`：本次同步是否导入了云端会话
+- `pushed`：本次同步是否上传了本地会话
+
+其他行为：
+
+- 登录成功与上游响应更新 Cookie 后，若启用了同步，会以 2 秒防抖自动推送（内容未变则不重复上传）
+- 服务启动时若启用了同步且配置完整，会异步拉取一次云端会话（不阻塞启动；测试环境未配置时不产生任何网络请求）
+- 退出登录不会清除云端 blob（其他设备保持登录）
+- 同步失败只记录 `lastError` 并写入日志，不影响本地会话
 
 ---
 
