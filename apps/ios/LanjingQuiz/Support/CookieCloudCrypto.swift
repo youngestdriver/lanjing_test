@@ -134,4 +134,22 @@ enum CookieCloudCrypto {
         default: throw Error.unsupportedCryptoType(cryptoType)
         }
     }
+
+    /// Decrypt trying the declared crypto_type first, then the other
+    /// algorithm. The server stores whatever crypto_type the last uploader
+    /// sent (defaulting to "legacy" when missing), which is not always the
+    /// algorithm actually used — observed in the wild with a fixed-IV payload
+    /// marked "legacy". Unknown declared types fail closed after the fallback.
+    static func decryptAny(_ encrypted: String, uuid: String, password: String, cryptoType: String = "legacy") throws -> String {
+        let attempts = cryptoType == "aes-128-cbc-fixed" ? ["aes-128-cbc-fixed", "legacy"] : ["legacy", "aes-128-cbc-fixed"]
+        var lastError: Swift.Error = Error.invalidCiphertext
+        for type in attempts {
+            do {
+                return try decrypt(encrypted, uuid: uuid, password: password, cryptoType: type)
+            } catch {
+                lastError = error
+            }
+        }
+        throw lastError
+    }
 }

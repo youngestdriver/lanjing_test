@@ -64,6 +64,26 @@ final class CookieCloudCryptoTests: XCTestCase {
         }
     }
 
+    func testDecryptAnyFallsBackWhenDeclaredTypeIsWrong() throws {
+        // Fixed-IV payload marked "legacy" (observed in the wild), and the
+        // reverse; unknown declared types try both algorithms.
+        let fixed = "VJYTd1/GVaq27p6vmgE9FJdIPLMEnM7Bc9uRsLjAIjbtPU3Q6fFJAJZ1FSHe3FiV"
+        let legacy = "U2FsdGVkX18BAgMEBQYHCH6Zia7WX/lPiAk9Dhed3vx8TFLyPzqhwlaByt4349lTUfMD9vFVxkq9uyczthmIHA=="
+        let plain = "{\"cookie_data\":{},\"local_storage_data\":{}}"
+        XCTAssertEqual(try CookieCloudCrypto.decryptAny(
+            fixed, uuid: "test-uuid-1234", password: "test-password-5678", cryptoType: "legacy"
+        ), plain)
+        XCTAssertEqual(try CookieCloudCrypto.decryptAny(
+            legacy, uuid: "test-uuid-1234", password: "test-password-5678", cryptoType: "aes-128-cbc-fixed"
+        ), plain)
+        XCTAssertEqual(try CookieCloudCrypto.decryptAny(
+            fixed, uuid: "test-uuid-1234", password: "test-password-5678", cryptoType: "future-type"
+        ), plain)
+        XCTAssertThrowsError(try CookieCloudCrypto.decryptAny(
+            fixed, uuid: "test-uuid-1234", password: "wrong-password", cryptoType: "legacy"
+        ))
+    }
+
     func testDecryptFailsClosedInsteadOfReturningGarbage() {
         let legacy = "U2FsdGVkX18BAgMEBQYHCH6Zia7WX/lPiAk9Dhed3vx8TFLyPzqhwlaByt4349lTUfMD9vFVxkq9uyczthmIHA=="
         // Wrong password -> PKCS7 padding failure.

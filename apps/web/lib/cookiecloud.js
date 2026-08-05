@@ -152,6 +152,22 @@ function decrypt(encrypted, uuid, password, cryptoType = "legacy") {
   }
 }
 
+// Decrypt trying the declared crypto_type first, then the other algorithm.
+// The CookieCloud server stores whatever crypto_type the last uploader sent
+// (defaulting to "legacy" when the field is missing), which is not always the
+// algorithm actually used — observed in the wild with a fixed-IV payload
+// marked "legacy". Unknown declared types fail closed after the fallback.
+function decryptAny(encrypted, uuid, password, cryptoType = "legacy") {
+  const attempts = cryptoType === "aes-128-cbc-fixed"
+    ? ["aes-128-cbc-fixed", "legacy"]
+    : ["legacy", "aes-128-cbc-fixed"];
+  for (const type of attempts) {
+    const plaintext = decrypt(encrypted, uuid, password, type);
+    if (plaintext !== null) return plaintext;
+  }
+  return null;
+}
+
 // Jar string ("a=1; b=2;") -> CookieCloud cookie_data for one domain.
 function jarToCookieData(jar, domain = PUSH_DOMAIN) {
   const cookies = [];
@@ -203,6 +219,7 @@ module.exports = {
   deriveKey,
   encrypt,
   decrypt,
+  decryptAny,
   jarToCookieData,
   cookieDataToJar,
   mergeCookieData,
