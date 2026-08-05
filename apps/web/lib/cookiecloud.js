@@ -24,7 +24,14 @@
 const crypto = require("crypto");
 
 const SALTED_PREFIX = Buffer.from("Salted__", "ascii");
-const PUSH_DOMAIN = "test.lanjingweike.com";
+// Domain synthesized for pushed cookies. The leading dot matches how the
+// upstream actually sets its cookies (Domain=.lanjingweike.com): the browser
+// extension's restore uses browser.cookies.set, which only overwrites a
+// cookie with the same name+domain+path — a host-only "test.lanjingweike.com"
+// cookie would leave an older ".lanjingweike.com" cookie in place, and the
+// request Cookie header would carry two JSESSIONID values, breaking the
+// upstream session.
+const PUSH_DOMAIN = ".lanjingweike.com";
 const LANJING_DOMAIN_MARKER = "lanjingweike.com";
 const REQUEST_TIMEOUT = 10000;
 
