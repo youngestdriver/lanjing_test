@@ -84,6 +84,21 @@ test("round-trips both algorithms", () => {
   }
 });
 
+test("decryptAny falls back when the declared crypto_type is wrong", () => {
+  // Fixed-IV payload marked "legacy" (observed in the wild: the server stores
+  // whatever crypto_type the uploader sent, defaulting to legacy when the
+  // field was missing).
+  assert.equal(cookiecloud.decryptAny(V1_FIXED, V1_UUID, V1_PASSWORD, "legacy"), V1_PLAIN);
+  // Legacy payload marked "aes-128-cbc-fixed".
+  assert.equal(cookiecloud.decryptAny(V1_LEGACY, V1_UUID, V1_PASSWORD, "aes-128-cbc-fixed"), V1_PLAIN);
+  // Correct declaration still works.
+  assert.equal(cookiecloud.decryptAny(V1_FIXED, V1_UUID, V1_PASSWORD, "aes-128-cbc-fixed"), V1_PLAIN);
+  // Unknown declared type tries both algorithms, then fails closed.
+  assert.equal(cookiecloud.decryptAny(V1_FIXED, V1_UUID, V1_PASSWORD, "future-type"), V1_PLAIN);
+  // Wrong password fails both.
+  assert.equal(cookiecloud.decryptAny(V1_FIXED, V1_UUID, "wrong-password", "legacy"), null);
+});
+
 test("decrypt fails closed instead of returning garbage", () => {
   // Wrong password -> PKCS7 padding failure -> null, not garbage.
   assert.equal(cookiecloud.decrypt(V1_LEGACY, V1_UUID, "wrong-password", "legacy"), null);

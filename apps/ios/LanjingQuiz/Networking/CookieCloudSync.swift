@@ -186,7 +186,7 @@ final class CookieCloudSync {
     private func fetchAndDecrypt() async throws -> [String: Any]? {
         let config = self.config
         guard let blob = try await client.pull(server: config.server, uuid: config.uuid) else { return nil }
-        let plaintext = try CookieCloudCrypto.decrypt(
+        let plaintext = try CookieCloudCrypto.decryptAny(
             blob.encrypted, uuid: config.uuid, password: password, cryptoType: blob.cryptoType
         )
         guard let data = plaintext.data(using: .utf8),

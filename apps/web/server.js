@@ -543,7 +543,9 @@ async function cookieCloudPull() {
   const c = settings.cookieCloud;
   const remote = await cookiecloud.pull(c.server, c.uuid);
   if (remote === null) return null; // no blob on the server yet
-  const plaintext = cookiecloud.decrypt(remote.encrypted, c.uuid, c.password, remote.crypto_type);
+  // The server's stored crypto_type is not always the algorithm actually used
+  // (defaults to "legacy" when the uploader omitted the field); try both.
+  const plaintext = cookiecloud.decryptAny(remote.encrypted, c.uuid, c.password, remote.crypto_type);
   if (plaintext === null) throw new Error("Failed to decrypt cloud data (wrong password or payload)");
   let payload;
   try { payload = JSON.parse(plaintext); } catch { throw new Error("Cloud data is not valid JSON"); }
