@@ -1606,6 +1606,31 @@ button:disabled {
   box-shadow: none;
 }
 
+/* ========== Question transition ========== */
+@keyframes slide-in-next {
+  from { transform: translateX(56px); opacity: 0.3; }
+  to   { transform: none; opacity: 1; }
+}
+@keyframes slide-in-prev {
+  from { transform: translateX(-56px); opacity: 0.3; }
+  to   { transform: none; opacity: 1; }
+}
+.q-block.slide-next { animation: slide-in-next 0.3s ease-in-out; }
+.q-block.slide-prev { animation: slide-in-prev 0.3s ease-in-out; }
+
+/* ========== Quiz loading: only the spinner ========== */
+#quizPage.loading-quiz .quiz-header,
+#quizPage.loading-quiz .quiz-top,
+#quizPage.loading-quiz .quiz-status,
+#quizPage.loading-quiz .quiz-sidebar {
+  display: none;
+}
+#quizPage.loading-quiz .quiz-scroll {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* ========== Loading indicators ========== */
 .loading {
   text-align: center;

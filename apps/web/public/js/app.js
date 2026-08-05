@@ -459,6 +459,7 @@ async function enterExam(id,isNew){
   const loadToken=++S.examLoadToken;
   const exam=S.exams.find(e=>String(e.id)===String(id));
   showPage("#quizPage");
+  $("#quizPage").classList.add("loading-quiz");
   document.title=`${exam?.name||"答题"} · 蓝鲸助手`;
   const routeStatus=$("#homeRouteStatus");
   if(routeStatus) routeStatus.textContent="";
@@ -516,6 +517,7 @@ function renderQuiz(){
   renderSectionTabs();
   renderStatsBar();
   renderQuestion();
+  $("#quizPage").classList.remove("loading-quiz");
 }
 
 function getOptionLetters(question){
@@ -564,9 +566,10 @@ function clearSelectedOption(){
 function goToQuestion(index){
   if(S.quizCompleted||index<0||index>=S.questions.length||index===S.qIdx) return;
   cancelAutoAdvance();
+  const direction=index>S.qIdx?1:-1;
   S.qIdx=index;
   renderSectionTabs();
-  renderQuestion();
+  renderQuestion(direction);
 }
 
 function scheduleAutoAdvance(questionId){
@@ -595,7 +598,7 @@ function confirmMultiSelection(){
   if(selected.length) submitSelection(selected);
 }
 
-function renderQuestion(){
+function renderQuestion(direction=0){
   if(S.quizCompleted) return;
   const q=S.questions[S.qIdx];
   if(!q) return;
@@ -679,7 +682,14 @@ function renderQuestion(){
   }
   html+=`</div>`;
 
-  $("#qBlock").innerHTML=html;
+  const qBlockEl=$("#qBlock");
+  qBlockEl.innerHTML=html;
+  if(direction){
+    // Ease in the new question from the right (next) or left (previous).
+    qBlockEl.classList.remove("slide-next","slide-prev");
+    void qBlockEl.offsetWidth;
+    qBlockEl.classList.add(direction>0?"slide-next":"slide-prev");
+  }
   if(isAnswered){
     const box=$("#explainBox");
     box.classList.add("show");
@@ -872,7 +882,7 @@ function renderStatsBar(){
   const submitLabel=S.quizCompleted?"已交卷":S.submitInFlight?"提交中…":hasPendingWrite?"同步中…":hasSyncError?"先同步答案":"交卷";
   const submitTitle=hasPendingWrite?"请等待答案和标记同步完成":hasSyncError?"请先重新同步失败的答案":"";
   $("#statsBar").innerHTML=`<span>✅<span class="s-green">${r}</span> ❌<span class="s-red">${e}</span> ⬜${u}</span>
-    <button onclick="toggleSidebarCollapse()" class="sidebar-collapse-btn">${isCollapsed?'▼ 展开':'▲ 收起'}</button>
+    <button onclick="toggleSidebarCollapse()" class="sidebar-collapse-btn">${isCollapsed?'▲ 展开':'▼ 收起'}</button>
     <button id="submitExamBtn" onclick="submitExam()" ${submitDisabled?'disabled':''} title="${escapeHTML(submitTitle)}" style="margin-left:auto;padding:4px 14px;background:var(--red);color:white;border:none;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;">${submitLabel}</button>`;
 }
 
