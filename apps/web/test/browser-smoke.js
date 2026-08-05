@@ -506,6 +506,7 @@ async function main() {
 
     await page.setViewportSize({ width: 320, height: 568 });
     await page.locator(".answer-dot").nth(2).click();
+    await page.waitForTimeout(350); // let the question ease-in transition finish before measuring layout
     const compactOptions = page.locator(".opt-row.compact");
     assert.equal(await compactOptions.count(), 4);
     for (const option of await compactOptions.all()) {
