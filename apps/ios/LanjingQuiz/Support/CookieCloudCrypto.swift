@@ -142,7 +142,7 @@ enum CookieCloudCrypto {
     /// marked "legacy". Unknown declared types fail closed after the fallback.
     static func decryptAny(_ encrypted: String, uuid: String, password: String, cryptoType: String = "legacy") throws -> String {
         let attempts = cryptoType == "aes-128-cbc-fixed" ? ["aes-128-cbc-fixed", "legacy"] : ["legacy", "aes-128-cbc-fixed"]
-        var lastError: Error = Error.invalidCiphertext
+        var lastError: Swift.Error = Error.invalidCiphertext
         for type in attempts {
             do {
                 return try decrypt(encrypted, uuid: uuid, password: password, cryptoType: type)
