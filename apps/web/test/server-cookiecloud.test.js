@@ -311,7 +311,7 @@ test("first-time sync pushes the local session when the cloud is empty", async (
   assert.ok(blob, "a blob should exist after the push");
   const plain = cookiecloud.decrypt(blob.encrypted, UUID, PASSWORD, blob.crypto_type);
   const payload = JSON.parse(plain);
-  assert.ok(payload.cookie_data["test.lanjingweike.com"].some((c) => c.name === "sessionId"));
+  assert.ok(payload.cookie_data[".lanjingweike.com"].some((c) => c.name === "sessionId"));
   assert.ok(mockRequestCount > before);
 });
 
@@ -332,7 +332,7 @@ test("push merges non-lanjingweike domains and keeps the local session intact", 
   const blob = mockBlobs.get(UUID);
   const payload = JSON.parse(cookiecloud.decrypt(blob.encrypted, UUID, PASSWORD, blob.crypto_type));
   assert.deepEqual(payload.cookie_data["www.baidu.com"], [{ name: "BAIDUID", value: "B1" }]);
-  assert.ok(payload.cookie_data["test.lanjingweike.com"].some((c) => c.name === "sessionId"));
+  assert.ok(payload.cookie_data[".lanjingweike.com"].some((c) => c.name === "sessionId"));
 });
 
 test("sync with wrong password fails closed and reports the error", async () => {

@@ -159,8 +159,8 @@ Web 前端通过同源的 `/api` 路由访问本地 Express 代理：
 
 ```text
 .
-├── .github/workflows/ci-web.yml    # Web 持续集成（按路径过滤）
-├── .github/workflows/ci-ios.yml    # iOS 持续集成（按路径过滤）
+├── .github/workflows/ci-web.yml    # Web 持续集成（路径检测 + 条件跳过）
+├── .github/workflows/ci-ios.yml    # iOS 持续集成（路径检测 + 条件跳过）
 ├── apps/
 │   ├── ios/
 │   │   ├── LanjingQuiz.xcodeproj/  # 已提交的 Xcode 工程与共享 scheme
@@ -230,12 +230,12 @@ xcodebuild \
 
 ### GitHub Actions
 
-持续集成拆分为两个按路径过滤的 workflow，在推送到 `main` 或创建目标为 `main` 的 PR 时按改动范围运行：
+持续集成拆分为两个 workflow，在推送到 `main` 或创建目标为 `main` 的 PR 时运行；每个 workflow 都会执行一个轻量的改动检测 job（`dorny/paths-filter`），与检测范围不匹配时实际构建 job 会被跳过：
 
-- [`ci-web.yml`](.github/workflows/ci-web.yml)（`Node`）：仅当改动涉及 `apps/web/`、`docs/`、`README.md` 或该 workflow 自身时运行；Ubuntu、Node 22、依赖安装、JavaScript 语法检查、29 项单元与安全测试、mock API 浏览器回归和 `/api/status` smoke test
-- [`ci-ios.yml`](.github/workflows/ci-ios.yml)（`iOS`）：仅当改动涉及 `apps/ios/` 或该 workflow 自身时运行；macOS 15、Xcode 16.4、动态选择可用 iPhone 模拟器并运行测试
+- [`ci-web.yml`](.github/workflows/ci-web.yml)（`Node`）：当改动涉及 `apps/web/`、`docs/`、`README.md` 或该 workflow 自身时运行 Node job；Ubuntu、Node 22、依赖安装、JavaScript 语法检查、51 项单元与安全测试、mock API 浏览器回归和 `/api/status` smoke test
+- [`ci-ios.yml`](.github/workflows/ci-ios.yml)（`iOS`）：当改动涉及 `apps/ios/` 或该 workflow 自身时运行 iOS job；macOS 15、Xcode 16.4、动态选择可用 iPhone 模拟器并运行测试
 
-不匹配任一路径的改动（例如仅修改 `.github/` 下其他文件）两个 workflow 都不会运行；分支保护要求的 `Node` 与 `iOS` 检查会对因路径过滤而跳过的运行自动放行。
+workflow 本身始终运行（而不是在事件级用 `paths` 过滤）：GitHub 只对**被跳过的 job** 自动放行 required check，对因路径过滤而从未运行的 workflow 不会放行——那样纯 Web 或纯 iOS 的 PR 会永远卡在分支保护上。不匹配任何检测范围时（例如仅修改 `.github/` 下其他文件）两个构建 job 都会被跳过，`Node` 与 `iOS` 检查自动通过。
 
 这些检查验证基础构建、单元测试和本地浏览器流程，不等同于真实账号、真实上游、真机、签名或归档验证。
 

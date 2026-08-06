@@ -118,13 +118,13 @@ test("decrypt fails closed instead of returning garbage", () => {
 test("jarToCookieData converts the jar to one domain's cookies", () => {
   const data = cookiecloud.jarToCookieData("sessionId=abc123; JSESSIONID=xyz;");
   assert.deepEqual(data, {
-    "test.lanjingweike.com": [
-      { name: "sessionId", value: "abc123", domain: "test.lanjingweike.com", path: "/", secure: true, httpOnly: true, sameSite: "lax" },
-      { name: "JSESSIONID", value: "xyz", domain: "test.lanjingweike.com", path: "/", secure: true, httpOnly: true, sameSite: "lax" },
+    ".lanjingweike.com": [
+      { name: "sessionId", value: "abc123", domain: ".lanjingweike.com", path: "/", secure: true, httpOnly: true, sameSite: "lax" },
+      { name: "JSESSIONID", value: "xyz", domain: ".lanjingweike.com", path: "/", secure: true, httpOnly: true, sameSite: "lax" },
     ],
   });
-  assert.deepEqual(cookiecloud.jarToCookieData(""), { "test.lanjingweike.com": [] });
-  assert.deepEqual(cookiecloud.jarToCookieData("no-separator"), { "test.lanjingweike.com": [] });
+  assert.deepEqual(cookiecloud.jarToCookieData(""), { ".lanjingweike.com": [] });
+  assert.deepEqual(cookiecloud.jarToCookieData("no-separator"), { ".lanjingweike.com": [] });
 });
 
 test("cookieDataToJar imports only lanjingweike domains", () => {
