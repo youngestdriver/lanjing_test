@@ -42,6 +42,7 @@ struct LoginView: View {
             if vm == nil {
                 vm = LoginViewModel(appState: appState)
             }
+            await vm?.retryCloudSyncIfNeeded()
         }
         .task(id: screen) {
             guard screen == .password else { return }

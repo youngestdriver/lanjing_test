@@ -15,6 +15,16 @@ final class LoginViewModel {
         self.appState = appState
     }
 
+    /// Called when the login screen appears: the launch-time pull is bounded
+    /// by a timeout, so a cloud session that syncs in shortly after launch
+    /// would otherwise leave the user stuck on the login screen. Retry once;
+    /// don't interrupt the user if they already started typing.
+    func retryCloudSyncIfNeeded() async {
+        guard phone.isEmpty, password.isEmpty else { return }
+        let hasSession = await appState.cookieCloudSync.pullAndApplyIfNeeded()
+        if hasSession { appState.route = .examList }
+    }
+
     func login() async {
         let normalizedPhone = APIClient.normalizePhone(phone)
         guard !normalizedPhone.isEmpty, !password.isEmpty else {

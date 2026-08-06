@@ -357,9 +357,28 @@ function isExamListActive(){
   return $("#appPage").classList.contains("active")
     && $('[data-home-view="exams"]').classList.contains("active");
 }
+// The server imports a CookieCloud session asynchronously at startup; the
+// first /api/status can arrive before the import finishes. While the login
+// page is shown, poll status so a session that syncs in shortly after launch
+// (or on another device) routes the app in automatically.
+let loginPollTimer=null;
+function stopLoginPoll(){
+  if(loginPollTimer){ clearInterval(loginPollTimer); loginPollTimer=null; }
+}
+function startLoginPoll(){
+  stopLoginPoll();
+  loginPollTimer=setInterval(async ()=>{
+    const r=await api("/api/status");
+    // Don't yank the app away while the user is typing credentials.
+    const phoneEl=$("#phone"), pwdEl=$("#pwd");
+    const userIsTyping=phoneEl?.value.trim()||pwdEl?.value;
+    if(r.loggedIn&&!userIsTyping) route();
+  },3000);
+}
 function route(){
   const p=location.pathname;
   const routeToken=++S.routeToken;
+  stopLoginPoll();
   api("/api/status").then(r=>{
     if(routeToken!==S.routeToken) return;
     if(r.error){
@@ -373,6 +392,7 @@ function route(){
       if(p!=="/login") history.replaceState(null,"","/login");
       showPage("#loginPage");
       document.title="登录 · 蓝鲸助手";
+      startLoginPoll();
     } else {
       const quizRoute=p.match(/^\/quiz\/(\d+)$/);
       if(quizRoute){
