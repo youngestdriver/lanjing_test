@@ -8,9 +8,9 @@
 //         [--idle-limit N] [--round-delay ms] [--bank-dir <path>]
 //         [--targets a,b,c]
 //
-// Data lands in <LANJING_LOCAL_DIR|apps/web/.local>/bank/ (gitignored):
-// one JSONL file per category plus meta.json for resume. Any interrupted run
-// continues where it left off when rerun on the same bank dir.
+// Data lands in apps/bank/ (gitignored): one JSONL file per category plus
+// meta.json for resume. Any interrupted run continues where it left off when
+// rerun on the same bank dir.
 //
 // The password is prompted at runtime and never persisted; enter/submit write
 // real (abandoned) attempt records on the upstream account.
@@ -28,7 +28,7 @@ const USAGE = `用法: node scripts/collect-bank.js [选项]
   --max-rounds N    最大轮数上限 (默认 200)
   --idle-limit N    连续 N 轮无新题即停止 (默认 3)
   --round-delay ms  每轮之间的等待 (默认 1500)
-  --bank-dir <path> 题库输出目录 (默认 <本地目录>/bank)
+  --bank-dir <path> 题库输出目录 (默认 apps/bank)
   --targets a,b,c   目标分类 (默认 言语理解,数字运算,逻辑推理,资料分析,特有题型)
   --skip-in-progress 跳过进行中的作答 (默认会只读收集用户进行中的卷，不提交)
   -h, --help        显示本帮助`;
@@ -131,8 +131,9 @@ async function ensureLoggedIn(api) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  const defaultLocal = process.env.LANJING_LOCAL_DIR || path.join(__dirname, "..", ".local");
-  const bankDir = path.resolve(opts.bankDir || path.join(defaultLocal, "bank"));
+  // The bank lives in its own top-level directory (apps/bank), independent of
+  // the web app's private .local state (session etc.).
+  const bankDir = path.resolve(opts.bankDir || path.join(__dirname, "..", "..", "bank"));
   const targets = opts.targets || TARGET_CATEGORIES;
 
   const server = startServer(0);

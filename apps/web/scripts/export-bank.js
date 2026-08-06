@@ -16,7 +16,7 @@ const { TARGET_CATEGORIES, exportBank } = require("../lib/bank-export");
 const USAGE = `用法: node scripts/export-bank.js [选项]
 
 选项:
-  --bank-dir <path>  题库目录 (默认 <本地目录>/bank)
+  --bank-dir <path>  题库目录 (默认 apps/bank)
   --out <path>       导出目录 (默认 <bank-dir>/export)
   --targets a,b,c    目标分类 (默认 5 个机考分类)
   -h, --help         显示本帮助`;
@@ -44,8 +44,9 @@ function parseArgs(argv) {
 
 function main() {
   const opts = parseArgs(process.argv.slice(2));
-  const defaultLocal = process.env.LANJING_LOCAL_DIR || path.join(__dirname, "..", ".local");
-  const bankDir = path.resolve(opts.bankDir || path.join(defaultLocal, "bank"));
+  // The bank lives in its own top-level directory (apps/bank), independent of
+  // the web app's private .local state (session etc.).
+  const bankDir = path.resolve(opts.bankDir || path.join(__dirname, "..", "..", "bank"));
   const outDir = path.resolve(opts.out || path.join(bankDir, "export"));
   const targets = opts.targets || TARGET_CATEGORIES;
 

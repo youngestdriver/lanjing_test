@@ -173,18 +173,18 @@ node apps/web/scripts/collect-bank.js [--exam <id>] [--max-rounds N]
 | `--max-rounds N` | 200 | 最大轮数安全上限 |
 | `--idle-limit N` | 3 | 连续 N 轮无新题即停止 |
 | `--round-delay ms` | 1500 | 每轮间隔 |
-| `--bank-dir <path>` | `.local/bank/` | 题库输出目录 |
+| `--bank-dir <path>` | `apps/bank/` | 题库输出目录 |
 | `--targets a,b,c` | 5 个机考分类 | 目标分类（按卷名子串匹配；可自行加"常识判断"等） |
 | `--skip-in-progress` | 收集 | 跳过进行中的作答（默认只读收集用户进行中的卷，**不提交**） |
 
-- 数据落盘在 `apps/web/.local/bank/`（已 gitignore）：每个目标分类一个 JSONL（`言语理解.jsonl` 等），外加 `meta.json` 记录轮次、各卷状态与统计；任意中断后重跑同一目录即可续接（去重按题目 `_id`，损坏尾行自动丢弃）。每条记录含 `_id`、`category`（分类）、`section`（子题型，已去掉"(共N题…)"后缀）、`question`、`options`（4 槽）、`answer`（单选字母/多选数组/兜底/`null`）、`analysis`（解析）、来源卷与轮次
+- 数据落盘在 `apps/bank/`（独立于 web 应用，已 gitignore）：每个目标分类一个 JSONL（`言语理解.jsonl` 等），外加 `meta.json` 记录轮次、各卷状态与统计；任意中断后重跑同一目录即可续接（去重按题目 `_id`，损坏尾行自动丢弃）。每条记录含 `_id`、`category`（分类）、`section`（子题型，已去掉"(共N题…)"后缀）、`question`、`options`（4 槽）、`answer`（单选字母/多选数组/兜底/`null`）、`analysis`（解析）、来源卷与轮次
 - 会话复用本地保存的登录态；没有可用会话时在交互式终端提示输入手机号和密码，密码仅在运行时存在于内存，**绝不落盘**。后台无人值守运行可改用 `LANJING_PHONE` / `LANJING_PASSWORD` 环境变量提供凭据（同样只存在于进程内，不写入任何文件）
 - ⚠️ 与 `enter`/`submit` 相关：收集器对 `wfs=1` 的卷每轮会创建一份空答案作答并立即放弃（消耗考试次数）；对 `wfs=0` 的卷（你自己的进行中作答）只读取题、绝不提交。机考卷的交卷接口返回 JSON 成功而非成绩页，收集器通过重拉考试列表验证 wfs 翻回判定放弃成功
 - 停止条件：所有目标卷耗尽、连续 `--idle-limit` 轮无新题、轮数上限，或 Ctrl+C（完成当前轮后停止，数据已落盘）
 
 ## 题库子分类
 
-`apps/web/scripts/classify-bank.js` 是题库的离线子分类 CLI：为 `apps/web/.local/bank/` 下每条记录追加 `subCategory`（更细的题型类别，如 言语理解|阅读理解 → 主旨概括/意图推断/细节理解/标题选择…，数字运算|数量关系 → 行程/工程/利润/浓度…，资料分析 → 增长率/增长量/比重/平均数/倍数与比值/综合分析…，特有题型 → 直接用 section 名）。规则在 `apps/web/lib/question-classifier.js`：按 (category, section) 分组的有序正则，对「题干+解析」去 HTML 后的纯文本首条命中即定类，section 内规则优先，未命中落入各 section 兜底类（如 数量关系→和差倍比与方程、逻辑填空→实词辨析）；当前 3065 题「其他」占比约 1%。
+`apps/web/scripts/classify-bank.js` 是题库的离线子分类 CLI：为 `apps/bank/` 下每条记录追加 `subCategory`（更细的题型类别，如 言语理解|阅读理解 → 主旨概括/意图推断/细节理解/标题选择…，数字运算|数量关系 → 行程/工程/利润/浓度…，资料分析 → 增长率/增长量/比重/平均数/倍数与比值/综合分析…，特有题型 → 直接用 section 名）。规则在 `apps/web/lib/question-classifier.js`：按 (category, section) 分组的有序正则，对「题干+解析」去 HTML 后的纯文本首条命中即定类，section 内规则优先，未命中落入各 section 兜底类（如 数量关系→和差倍比与方程、逻辑填空→实词辨析）；当前 3065 题「其他」占比约 1%。
 
 ```text
 node apps/web/scripts/classify-bank.js [--bank-dir <path>] [--dry-run]
@@ -211,6 +211,7 @@ npm --prefix apps/web run export
 ├── .github/workflows/ci-web.yml    # Web 持续集成（路径检测 + 条件跳过）
 ├── .github/workflows/ci-ios.yml    # iOS 持续集成（路径检测 + 条件跳过）
 ├── apps/
+│   ├── bank/                       # 本地题库（收集/分类/导出的数据，gitignore）
 │   ├── ios/
 │   │   ├── LanjingQuiz.xcodeproj/  # 已提交的 Xcode 工程与共享 scheme
 │   │   ├── LanjingQuiz/            # SwiftUI 应用源码
