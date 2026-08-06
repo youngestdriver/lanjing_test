@@ -139,24 +139,22 @@ test("cookieDataToJar imports only lanjingweike domains", () => {
   assert.equal(cookiecloud.cookieDataToJar({}), "");
 });
 
-test("KSX_CID is excluded from both push and pull", () => {
-  // Push: the jar may contain KSX_CID (the upstream sets it on every
-  // response); it must never reach the cloud.
+test("KSX_CID syncs like any other cookie, matching the upstream format", () => {
+  // The upstream cookie set is `JSESSIONID=...; KSX_CID=1; sessionId=...`;
+  // synced data must keep that full shape.
   const pushed = cookiecloud.jarToCookieData("sessionId=S1; JSESSIONID=J1; KSX_CID=1;");
-  assert.deepEqual(pushed, {
-    ".lanjingweike.com": [
-      { name: "sessionId", value: "S1", domain: ".lanjingweike.com", path: "/", secure: true, httpOnly: true, sameSite: "lax" },
-      { name: "JSESSIONID", value: "J1", domain: ".lanjingweike.com", path: "/", secure: true, httpOnly: true, sameSite: "lax" },
-    ],
-  });
-  // Pull: a cloud blob containing KSX_CID imports without it.
+  assert.deepEqual(
+    pushed[".lanjingweike.com"].map((c) => c.name),
+    ["sessionId", "JSESSIONID", "KSX_CID"],
+  );
   const pulled = cookiecloud.cookieDataToJar({
     "test.lanjingweike.com": [
       { name: "sessionId", value: "S1" },
+      { name: "JSESSIONID", value: "J1" },
       { name: "KSX_CID", value: "1" },
     ],
   });
-  assert.equal(pulled, "sessionId=S1;");
+  assert.equal(pulled, "sessionId=S1; JSESSIONID=J1; KSX_CID=1;");
 });
 
 test("cookie values containing '=' survive the jar round-trip", () => {

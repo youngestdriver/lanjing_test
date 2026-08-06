@@ -66,6 +66,34 @@ after(async () => {
   fs.rmSync(localDir, { recursive: true, force: true });
 });
 
+// ---------- upstream probe stub ----------
+// syncNow validates candidate jars against the upstream (probeSession);
+// stub global.fetch so tests never contact the real upstream. Requests to
+// the in-test CookieCloud replica (127.0.0.1) pass through unchanged.
+let probeSessionIdValid = () => true;
+const originalGlobalFetch = global.fetch;
+
+before(async () => {
+  global.fetch = async (url, init = {}) => {
+    if (String(url).includes("127.0.0.1")) return originalGlobalFetch(url, init);
+    const cookie = String(init.headers?.Cookie || "");
+    const sessionId = (cookie.match(/sessionId=([^;]+)/) || [])[1];
+    const valid = sessionId ? probeSessionIdValid(sessionId) : false;
+    // An invalid session responds like the real upstream login page, which
+    // detectSessionExpiry recognizes via the /login/account/login marker.
+    const body = valid
+      ? JSON.stringify({ code: 10000, success: true })
+      : "<!doctype html><html><body><script>location.href=\"/login/account/login\"</script></body></html>";
+    const response = new Response(body, { status: 200 });
+    Object.defineProperty(response, "url", { value: String(url) });
+    return response;
+  };
+});
+
+after(async () => {
+  global.fetch = originalGlobalFetch;
+});
+
 // Encrypt a cookie_data payload with the shared derived key, like a real
 // writer (the extension or our own client) would.
 function makeBlob(cookieData, uuid = UUID, password = PASSWORD, cryptoType = "aes-128-cbc-fixed") {
@@ -333,6 +361,50 @@ test("push merges non-lanjingweike domains and keeps the local session intact", 
   const payload = JSON.parse(cookiecloud.decrypt(blob.encrypted, UUID, PASSWORD, blob.crypto_type));
   assert.deepEqual(payload.cookie_data["www.baidu.com"], [{ name: "BAIDUID", value: "B1" }]);
   assert.ok(payload.cookie_data[".lanjingweike.com"].some((c) => c.name === "sessionId"));
+});
+
+test("sync keeps the local session and publishes it when the cloud session is invalid", async () => {
+  seedBlob({ "test.lanjingweike.com": [{ name: "sessionId", value: "CLOUD_SESSION" }] });
+  await restartApp({
+    sessionFile: "sessionId=LOCAL_SESSION; JSESSIONID=js1;",
+    settings: { ...SYNC_CONFIG, server: `http://127.0.0.1:${mockPort}` },
+  });
+  // "哪个 cookie 有效，就更新为谁的": the cloud session is expired, the
+  // local one is valid — the local session must win and be published.
+  probeSessionIdValid = (id) => id === "LOCAL_SESSION";
+  try {
+    const r = await jsonRequest("/api/cookiecloud/sync", "POST");
+    assert.equal(r.body.applied, false);
+    assert.equal(r.body.pushed, true);
+    assert.equal(r.body.lastError, null);
+    assert.ok(readSessionFile().includes("sessionId=LOCAL_SESSION"));
+    const blob = mockBlobs.get(UUID);
+    const payload = JSON.parse(cookiecloud.decrypt(blob.encrypted, UUID, PASSWORD, blob.crypto_type));
+    assert.ok(payload.cookie_data[".lanjingweike.com"].some((c) => c.name === "sessionId"));
+  } finally {
+    probeSessionIdValid = () => true;
+  }
+});
+
+test("sync does not push an invalid local session", async () => {
+  // Cloud has no lanjingweike session and the local session is invalid
+  // upstream: sync must not publish it and must not create a blob.
+  mockBlobs.delete(UUID);
+  await restartApp({
+    sessionFile: "sessionId=LOCAL_SESSION; JSESSIONID=js1;",
+    settings: { ...SYNC_CONFIG, server: `http://127.0.0.1:${mockPort}` },
+  });
+  probeSessionIdValid = () => false;
+  try {
+    const r = await jsonRequest("/api/cookiecloud/sync", "POST");
+    assert.equal(r.body.applied, false);
+    assert.equal(r.body.pushed, false);
+    assert.equal(r.body.lastError, null);
+    assert.ok(!mockBlobs.get(UUID), "an invalid local session must not create a blob");
+    assert.ok(readSessionFile().includes("sessionId=LOCAL_SESSION"));
+  } finally {
+    probeSessionIdValid = () => true;
+  }
 });
 
 test("sync with wrong password fails closed and reports the error", async () => {

@@ -32,12 +32,6 @@ const SALTED_PREFIX = Buffer.from("Salted__", "ascii");
 // request Cookie header would carry two JSESSIONID values, breaking the
 // upstream session.
 const PUSH_DOMAIN = ".lanjingweike.com";
-
-// Cookies excluded from sync entirely. KSX_CID is set to "1" by the upstream
-// on every response, and restoring it into a browser breaks the original web
-// client; the upstream re-issues it anyway, so dropping it from synced data
-// is safe.
-const EXCLUDED_COOKIES = new Set(["KSX_CID"]);
 const LANJING_DOMAIN_MARKER = "lanjingweike.com";
 const REQUEST_TIMEOUT = 10000;
 
@@ -188,10 +182,8 @@ function jarToCookieData(jar, domain = PUSH_DOMAIN) {
     const pair = part.trim();
     const separator = pair.indexOf("=");
     if (separator <= 0) continue;
-    const name = pair.slice(0, separator);
-    if (EXCLUDED_COOKIES.has(name)) continue;
     cookies.push({
-      name,
+      name: pair.slice(0, separator),
       value: pair.slice(separator + 1),
       domain,
       path: "/",
@@ -212,7 +204,6 @@ function cookieDataToJar(cookieData) {
     if (!String(domain).includes(LANJING_DOMAIN_MARKER) || !Array.isArray(cookies)) continue;
     for (const cookie of cookies) {
       if (!cookie || typeof cookie.name !== "string" || typeof cookie.value !== "string") continue;
-      if (EXCLUDED_COOKIES.has(cookie.name)) continue;
       jar.push(`${cookie.name}=${cookie.value}`);
     }
   }

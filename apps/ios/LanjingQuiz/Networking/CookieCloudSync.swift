@@ -53,18 +53,12 @@ enum CookieCloudSettings {
 enum CookieCloudConversion {
     static let lanjingDomainMarker = "lanjingweike.com"
 
-    /// Cookies excluded from sync entirely. KSX_CID is set to "1" by the
-    /// upstream on every response, and restoring it into a browser breaks
-    /// the original web client; the upstream re-issues it anyway, so
-    /// dropping it from synced data is safe.
-    static let excludedCookieNames = Set(["KSX_CID"])
-
     /// [HTTPCookie] -> { domain: [cookie dictionaries] } for upload. Cookies
     /// are grouped by their real domain so the extension's per-domain format
     /// is preserved.
     static func cookieData(from cookies: [HTTPCookie]) -> [String: [[String: Any]]] {
         var grouped: [String: [[String: Any]]] = [:]
-        for cookie in cookies where !excludedCookieNames.contains(cookie.name) {
+        for cookie in cookies {
             var properties: [String: Any] = [
                 "name": cookie.name,
                 "value": cookie.value,
@@ -100,7 +94,6 @@ enum CookieCloudConversion {
             guard domain.contains(lanjingDomainMarker), let cookies = cookies as? [[String: Any]] else { continue }
             for cookie in cookies {
                 guard let name = cookie["name"] as? String, !name.isEmpty,
-                      !excludedCookieNames.contains(name),
                       let value = cookie["value"] as? String
                 else { continue }
                 // httpOnly and session have no HTTPCookiePropertyKey on this
@@ -156,12 +149,18 @@ final class CookieCloudSync {
     private let cookieStore: CookieStore
     private let defaults: UserDefaults
     private var lastPushedHash: String?
+    /// Separate ephemeral session for upstream probes: it must never share
+    /// the app's cookie storage (the probed jar is sent explicitly).
+    private let probeURLSession: URLSession
 
     init(client: CookieCloudClient = CookieCloudClient(), cookieStore: CookieStore, defaults: UserDefaults = .standard) {
         self.client = client
         self.cookieStore = cookieStore
         self.defaults = defaults
         self.lastPushedHash = CookieCloudSettings.loadLastPushedHash(from: defaults)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 10
+        self.probeURLSession = URLSession(configuration: configuration)
     }
 
     private var config: CookieCloudSettings.Config {
@@ -181,12 +180,49 @@ final class CookieCloudSync {
         cookieStore.storage.cookies?.filter { $0.domain.contains(CookieCloudConversion.lanjingDomainMarker) } ?? []
     }
 
-    /// Deterministic hash of the current lanjingweike jar, used to skip
-    /// uploads when nothing changed (mirrors the extension's 24h dedup).
-    private var currentJarHash: String {
-        let data = CookieCloudConversion.cookieData(from: lanjingCookies)
+    /// Deterministic hash of a cookie set, used to skip uploads when nothing
+    /// changed (mirrors the extension's 24h dedup).
+    private func hash(of cookies: [HTTPCookie]) -> String {
+        let data = CookieCloudConversion.cookieData(from: cookies)
         let json = (try? JSONSerialization.data(withJSONObject: data, options: [.sortedKeys])) ?? Data()
         return Hashing.sha256Hex(String(data: json, encoding: .utf8) ?? "")
+    }
+
+    private var currentJarHash: String { hash(of: lanjingCookies) }
+
+    /// "name=value; ..." header form of a cookie set, sent to the upstream
+    /// when probing validity.
+    private func jarString(from cookies: [HTTPCookie]) -> String {
+        cookies.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
+    }
+
+    /// Probe the upstream with a candidate jar without touching the app's
+    /// cookie storage. Used by sync to decide which side's session is
+    /// actually valid ("哪个 cookie 有效，就更新为谁的"). Network failures
+    /// count as invalid (conservative: never apply or propagate an
+    /// unverified session).
+    private func probeSession(jar: String) async -> Bool {
+        guard jar.contains("sessionId=") else { return false }
+        var request = URLRequest(url: APIClient.baseURL.appendingPathComponent("exam/current_exam_list"))
+        request.httpMethod = "POST"
+        request.setValue(APIClient.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("XMLHttpRequest", forHTTPHeaderField: "X-Requested-With")
+        request.setValue(APIClient.baseURL.absoluteString, forHTTPHeaderField: "Origin")
+        request.setValue(APIClient.baseURL.absoluteString + "/exam", forHTTPHeaderField: "Referer")
+        request.setValue("application/x-www-form-urlencoded; charset=UTF-8", forHTTPHeaderField: "Content-Type")
+        request.setValue(jar, forHTTPHeaderField: "Cookie")
+        request.httpBody = Data("page=1&pageSize=1".utf8)
+        request.timeoutInterval = 10
+        do {
+            let (data, response) = try await probeURLSession.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let text = String(data: data, encoding: .utf8) ?? ""
+            // URLSession follows redirects; a redirected login page is caught
+            // by the login-page HTML rule in detectSessionExpiry.
+            return !APIClient.detectSessionExpiry(status: status, text: text, redirectTargets: [])
+        } catch {
+            return false
+        }
     }
 
     /// Fetch and decrypt the remote blob; nil when the server has no blob yet.
@@ -240,14 +276,18 @@ final class CookieCloudSync {
 
     /// App-launch import: pull and apply a cloud session, bounded by a hard
     /// timeout so an unreachable server never delays the route decision.
-    /// Returns whether a session is available after the attempt.
+    /// The cloud session is applied only after it passes the upstream probe;
+    /// an expired cloud session never overwrites the local one. Returns
+    /// whether a session is available after the attempt.
     func pullAndApplyIfNeeded() async -> Bool {
         guard isConfigured else { return cookieStore.hasSession }
         let work = Task { () -> Bool in
             do {
                 if let remote = try await fetchAndDecrypt() {
                     let cookies = CookieCloudConversion.cookies(from: remote)
-                    if cookies.contains(where: { $0.name == "sessionId" }) {
+                    if cookies.contains(where: { $0.name == "sessionId" }),
+                       hash(of: cookies) != lastPushedHash,
+                       await probeSession(jar: jarString(from: cookies)) {
                         apply(cookies)
                         return true
                     }
@@ -269,8 +309,10 @@ final class CookieCloudSync {
         try? await pushUnconditionally()
     }
 
-    /// Manual sync from the settings screen: import the cloud session, then
-    /// push if the local jar diverged from what we last wrote.
+    /// Manual sync from the settings screen. Both candidates are validated
+    /// against the upstream ("哪个 cookie 有效，就更新为谁的"): the cloud
+    /// session is applied only when valid; the local session is pushed only
+    /// when valid.
     func syncNow() async -> CookieCloudSyncResult {
         var result = CookieCloudSyncResult()
         guard isConfigured else {
@@ -280,12 +322,17 @@ final class CookieCloudSync {
         do {
             if let remote = try await fetchAndDecrypt() {
                 let cookies = CookieCloudConversion.cookies(from: remote)
-                if cookies.contains(where: { $0.name == "sessionId" }) {
+                if cookies.contains(where: { $0.name == "sessionId" }),
+                   hash(of: cookies) != lastPushedHash,
+                   await probeSession(jar: jarString(from: cookies)) {
                     apply(cookies)
                     result.applied = true
                 }
             }
-            if cookieStore.hasSession, currentJarHash != lastPushedHash {
+            // Push only when the (possibly just applied) jar diverged from
+            // what we last wrote and is still valid upstream.
+            if cookieStore.hasSession, currentJarHash != lastPushedHash,
+               await probeSession(jar: jarString(from: lanjingCookies)) {
                 try await pushUnconditionally()
                 result.pushed = true
             }
