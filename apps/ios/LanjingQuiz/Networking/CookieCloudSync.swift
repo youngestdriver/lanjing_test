@@ -53,12 +53,18 @@ enum CookieCloudSettings {
 enum CookieCloudConversion {
     static let lanjingDomainMarker = "lanjingweike.com"
 
+    /// Cookies excluded from sync entirely. KSX_CID is set to "1" by the
+    /// upstream on every response, and restoring it into a browser breaks
+    /// the original web client; the upstream re-issues it anyway, so
+    /// dropping it from synced data is safe.
+    static let excludedCookieNames = Set(["KSX_CID"])
+
     /// [HTTPCookie] -> { domain: [cookie dictionaries] } for upload. Cookies
     /// are grouped by their real domain so the extension's per-domain format
     /// is preserved.
     static func cookieData(from cookies: [HTTPCookie]) -> [String: [[String: Any]]] {
         var grouped: [String: [[String: Any]]] = [:]
-        for cookie in cookies {
+        for cookie in cookies where !excludedCookieNames.contains(cookie.name) {
             var properties: [String: Any] = [
                 "name": cookie.name,
                 "value": cookie.value,
@@ -94,6 +100,7 @@ enum CookieCloudConversion {
             guard domain.contains(lanjingDomainMarker), let cookies = cookies as? [[String: Any]] else { continue }
             for cookie in cookies {
                 guard let name = cookie["name"] as? String, !name.isEmpty,
+                      !excludedCookieNames.contains(name),
                       let value = cookie["value"] as? String
                 else { continue }
                 // httpOnly and session have no HTTPCookiePropertyKey on this
