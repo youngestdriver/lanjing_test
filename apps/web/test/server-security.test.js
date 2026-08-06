@@ -177,6 +177,62 @@ test("a successful login request URL is not mistaken for an auth redirect", asyn
   }
 });
 
+test("logout calls the upstream logout endpoint and clears the session", async () => {
+  const originalFetch = global.fetch;
+  let logoutCalls = 0;
+  let logoutMethod = "";
+  let logoutReferer = "";
+  global.fetch = async (url, init = {}) => {
+    const pathname = new URL(url).pathname;
+    if (pathname === "/login/account/login/1") {
+      return new Response("", { status: 200, headers: { "Set-Cookie": "JSESSIONID=fixture; Path=/" } });
+    }
+    if (pathname === "/login/account/login") {
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "Set-Cookie": "sessionId=real-session; Path=/" },
+      });
+    }
+    if (pathname === "/login/public/logout") {
+      logoutCalls += 1;
+      logoutMethod = String(init.method || "GET");
+      logoutReferer = String(init.headers?.Referer || "");
+      return new Response("", {
+        status: 200,
+        headers: { "Set-Cookie": "sessionId=; Path=/; Expires=Thu, 01 Dec 1994 16:00:00 GMT" },
+      });
+    }
+    throw new Error(`Unexpected upstream fixture URL: ${url}`);
+  };
+  try {
+    const login = await request("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: "13800000000", password: "pass" }),
+    });
+    assert.equal(login.status, 200);
+    const before = await request("/api/status");
+    assert.equal(before.body.loggedIn, true);
+
+    const logout = await request("/api/logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    assert.equal(logout.status, 200);
+    assert.deepEqual(logout.body, { success: true });
+    assert.equal(logoutCalls, 1);
+    assert.equal(logoutMethod, "POST");
+    assert.match(logoutReferer, /exam\/pc\/home/);
+
+    const after = await request("/api/status");
+    assert.equal(after.body.loggedIn, false);
+    assert.equal(after.body.hasSavedSession, false);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test("a stale upstream response cannot overwrite a newly logged-in session", async () => {
   const originalFetch = global.fetch;
   let sessionNumber = 0;

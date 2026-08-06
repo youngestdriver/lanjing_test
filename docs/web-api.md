@@ -672,7 +672,7 @@ HTTP 状态码为 `500`。
 
 ### 2.10 退出登录
 
-清空后端进程内会话、考试缓存，并删除 `apps/web/.local/session_cookies.txt`。
+先调用上游 `POST /login/public/logout` 使会话失效（尽力而为：上游调用失败或本地无会话时跳过，本地登出始终成功），再清空后端进程内会话、考试缓存，并删除 `apps/web/.local/session_cookies.txt`。上游登出会作废该会话，其他持有同一会话的设备（包括原版 Web 浏览器）会随之失效。
 
 ```http
 POST /api/logout
@@ -838,6 +838,7 @@ Content-Type: application/json
 | `POST /api/exams/:id/submit` | `POST /exam/get_remian_time` | 交卷前获取剩余时间 |
 | `POST /api/exams/:id/submit` | `GET /exam/exam_ending` | 结束考试并进入结果页 |
 | `GET /api/exams/:id/states` | `GET /exam/exam_start/:id` | 刷新题卡状态 |
+| `POST /api/logout` | `POST /login/public/logout` | 使会话失效（`Referer` 为 `/exam/pc/home/`）；响应仅清除 `sessionId`，`JSESSIONID` 由本地登出一并清理 |
 
 ---
 

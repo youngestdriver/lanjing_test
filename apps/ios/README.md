@@ -97,7 +97,7 @@ Network calls mirror the upstream login, exam-list, enter, answer, mark, submit,
 
 ## Verification
 
-The `LanjingQuizTests` target currently contains 65 unit tests covering answer mapping, exam and result parsing, session expiry detection, login form encoding, rich HTML content, hashing, quiz logic, and CookieCloud crypto/conversion (same interop vectors as the web client).
+The `LanjingQuizTests` target currently contains 67 unit tests covering answer mapping, exam and result parsing, session expiry detection, login form encoding, rich HTML content, hashing, quiz logic, and CookieCloud crypto/conversion (same interop vectors as the web client).
 
 Before delivering a change, build `LanjingQuiz`, run the test target, and validate affected user flows on a simulator or a signed physical device. Confirming **Abandon** has a real upstream effect, so do not use it as an unattended smoke test.
 

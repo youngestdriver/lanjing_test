@@ -317,6 +317,25 @@ final class APIClient: NSObject, URLSessionDelegate {
         cookieStore.clear()
     }
 
+    /// Invalidate the session upstream (best-effort), then clear the local
+    /// jar. Session-expiry cleanup calls `clearSession()` directly and skips
+    /// the upstream logout — a dead session has nothing to invalidate.
+    func logout() {
+        if hasSession {
+            Task { try? await requestLogout() }
+        }
+        clearSession()
+    }
+
+    private func requestLogout() async throws {
+        _ = try await request(
+            "/login/public/logout",
+            method: "POST",
+            referer: Self.baseURL.absoluteString + "/exam/pc/home/",
+            detectExpiry: false
+        )
+    }
+
     private func examReferer(_ examInfoId: String) -> String {
         Self.baseURL.absoluteString + "/exam/exam_start/" + examInfoId
     }
