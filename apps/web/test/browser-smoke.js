@@ -120,7 +120,14 @@ async function verifyOfflineShell(browser) {
 async function main() {
   const server = spawn(process.execPath, ["server.js"], {
     cwd: WEB_DIR,
-    env: { ...process.env, PORT: String(PORT), HOST: "127.0.0.1" },
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+      HOST: "127.0.0.1",
+      // The real logout flow now calls the upstream; point it at an
+      // unreachable address so the regression never touches the real service.
+      LANJING_BASE_URL: "http://127.0.0.1:1",
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let serverOutput = "";

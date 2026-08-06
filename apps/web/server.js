@@ -11,7 +11,9 @@ const {
 } = require("./lib/parsers");
 const cookiecloud = require("./lib/cookiecloud");
 
-const BASE_URL = "https://test.lanjingweike.com";
+// LANJING_BASE_URL exists so tests can point the upstream at an unreachable
+// address instead of the real service.
+const BASE_URL = process.env.LANJING_BASE_URL || "https://test.lanjingweike.com";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0";
 const REQUEST_TIMEOUT = 30000;
 const LOCAL_DIR = path.resolve(process.env.LANJING_LOCAL_DIR || path.join(__dirname, ".local"));
@@ -500,8 +502,21 @@ app.post("/api/exams/:id/mark", async (req, res) => {
   res.json({ success: !!result.data?.success });
 });
 
-// POST /api/logout — clear session
-app.post("/api/logout", (req, res) => {
+// POST /api/logout — invalidate the session upstream, then clear locally.
+// The upstream logout is best-effort: local logout succeeds even when it
+// fails (e.g. network down), and a missing local session skips it entirely.
+app.post("/api/logout", async (req, res) => {
+  if (cookieJar.includes("sessionId=")) {
+    try {
+      const result = await proxyRequest("/login/public/logout", {
+        method: "POST",
+        referer: BASE_URL + "/exam/pc/home/",
+      });
+      console.log(`[logout] upstream status: ${result.status}`);
+    } catch (error) {
+      console.warn(`[logout] upstream logout failed: ${error.message}`);
+    }
+  }
   clearSession();
   res.json({ success: true });
 });

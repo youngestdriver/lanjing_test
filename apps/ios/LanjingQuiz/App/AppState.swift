@@ -68,7 +68,7 @@ final class AppState {
     }
 
     func logout() {
-        api.clearSession()
+        api.logout()
         notice = nil
         route = .login
     }
