@@ -21,10 +21,18 @@ final class AppState {
     var notice: String?
     let api: APIClient
     let cookieCloudSync: CookieCloudSync
+    let bankClient: QuestionBankClient
+    let bankStorage: BankStorage
 
-    init(api: APIClient = APIClient()) {
+    init(
+        api: APIClient = APIClient(),
+        bankClient: QuestionBankClient = QuestionBankClient(),
+        bankStorage: BankStorage = FileManagerBankStorage()
+    ) {
         self.api = api
         self.cookieCloudSync = CookieCloudSync(cookieStore: api.cookieStore)
+        self.bankClient = bankClient
+        self.bankStorage = bankStorage
         self.theme = Theme.load()
         self.autoAdvanceOnCorrect = QuizSettings.loadAutoAdvanceOnCorrect()
     }
