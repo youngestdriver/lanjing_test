@@ -195,6 +195,15 @@ node apps/web/scripts/classify-bank.js [--bank-dir <path>] [--dry-run]
 - 幂等：重跑输出与上次字节一致，不产生重复；新收集的题目补跑一次即可
 - 停止后（或任何时刻）可用 `npm --prefix apps/web run classify` 或直接运行脚本重跑
 
+### Markdown 导出
+
+`apps/web/scripts/export-bank.js` 把题库导出为**人类可读的 Markdown**：每个 (分类-子类) 一个文件（`<bank-dir>/export/言语理解-成语辨析.md`），题干/选项/答案/解析清洗成纯文本（HTML 与实体解码、段落保留、公式图标注"（图片题）"）。共 83 个文件、约 2.8 MB。
+
+```text
+node apps/web/scripts/export-bank.js [--bank-dir <path>] [--out <path>] [--targets a,b,c]
+npm --prefix apps/web run export
+```
+
 ## 项目结构
 
 ```text
@@ -213,6 +222,7 @@ node apps/web/scripts/classify-bank.js [--bank-dir <path>] [--dry-run]
 │       ├── lib/cookiecloud.js      # CookieCloud 加密协议与 cookie 转换（与官方扩展互操作）
 │       ├── lib/question-bank.js    # 题库收集器核心（进入/抓取/去重/JSONL 存储）
 │       ├── lib/question-classifier.js  # 题库子分类规则引擎（subCategory）
+│       ├── lib/bank-export.js      # Markdown 导出（HTML→纯文本转换）
 │       ├── public/
 │       │   ├── js/                 # 浏览器应用与可测试答题逻辑
 │       │   ├── index.html          # 单页应用结构
