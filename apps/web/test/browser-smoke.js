@@ -653,6 +653,18 @@ async function main() {
     assert.ok(loginButtonBox && loginButtonBox.y >= 0 && loginButtonBox.y + loginButtonBox.height <= 320, "login button is unreachable in landscape");
     await page.screenshot({ path: "/tmp/lanjing-web-login-landscape.png", fullPage: true });
 
+    // Cloud-sync auto-login: the server imports a CookieCloud session
+    // asynchronously at startup; a session that becomes available while the
+    // login page is shown must route the app in without a manual refresh.
+    loggedIn = true;
+    await page.locator("#card-101 .exam-card-main").waitFor({ timeout: 15000 });
+    await expectPath(page, "/");
+    assert.equal(await page.locator('[data-home-tab="exams"][aria-current="page"]').count(), 1);
+    // back to login for the remaining assertions
+    await page.locator('[data-home-tab="profile"]').click();
+    await page.getByRole("button", { name: "退出登录" }).click();
+    await page.locator("#loginPage.active").waitFor();
+
     assert.equal(submitAttempts, 3);
     assert.deepEqual(pageErrors, []);
     await verifyOfflineShell(browser);
