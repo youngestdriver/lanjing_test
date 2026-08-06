@@ -1,22 +1,18 @@
 name: CI Web
 
+# The workflow always runs and the Node job itself is conditionally skipped:
+# GitHub auto-passes required checks whose job was skipped, but it does NOT
+# auto-pass checks whose workflow never ran (path-filtered runs). Without
+# this, an iOS-only PR would stay BLOCKED waiting for the "Node" check
+# forever.
+
 on:
   push:
     branches:
       - main
-    paths:
-      - "apps/web/**"
-      - "docs/**"
-      - "README.md"
-      - ".github/workflows/ci-web.yml"
   pull_request:
     branches:
       - main
-    paths:
-      - "apps/web/**"
-      - "docs/**"
-      - "README.md"
-      - ".github/workflows/ci-web.yml"
 
 permissions:
   contents: read
@@ -26,8 +22,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Detect web changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            web:
+              - "apps/web/**"
+              - "docs/**"
+              - "README.md"
+              - ".github/workflows/ci-web.yml"
+
   node:
     name: Node
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 

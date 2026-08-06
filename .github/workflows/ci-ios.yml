@@ -1,18 +1,17 @@
 name: CI iOS
 
+# The workflow always runs and the iOS job itself is conditionally skipped:
+# GitHub auto-passes required checks whose job was skipped, but it does NOT
+# auto-pass checks whose workflow never ran (path-filtered runs). Without
+# this, a web-only PR would stay BLOCKED waiting for the "iOS" check forever.
+
 on:
   push:
     branches:
       - main
-    paths:
-      - "apps/ios/**"
-      - ".github/workflows/ci-ios.yml"
   pull_request:
     branches:
       - main
-    paths:
-      - "apps/ios/**"
-      - ".github/workflows/ci-ios.yml"
 
 permissions:
   contents: read
@@ -22,8 +21,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      ios: ${{ steps.filter.outputs.ios }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Detect iOS changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            ios:
+              - "apps/ios/**"
+              - ".github/workflows/ci-ios.yml"
+
   ios:
     name: iOS
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
     runs-on: macos-15
     timeout-minutes: 30
     env:
