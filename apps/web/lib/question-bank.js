@@ -1,18 +1,32 @@
 "use strict";
 
-// Question-bank collector: repeatedly enter exams (abandoning each one with a
-// zero-answer submit), fetch every question with its answer key and 解析, and
-// append deduplicated records to per-category JSONL files under <dir>/bank/.
+// Question-bank collector: enter 机考题库 papers, fetch every question with
+// its answer key and 解析, and append deduplicated records to per-category
+// JSONL files under <dir>/bank/.
+//
+// Reality of the upstream platform (verified against the live service):
+//   - each paper (【言语理解（二）】机考题库 …) has a FIXED question pool;
+//     re-entering a paper yields the exact same questions, and papers of the
+//     same category are disjoint — one pass per paper collects everything;
+//   - the category lives in the PAPER NAME (言语理解/数字运算/逻辑推理/
+//     资料分析/特有题型); the answer-card section is a sub-type label like
+//     "逻辑填空(共200题,每题1分,合计200.0分)";
+//   - exam_ending for practice papers answers JSON {"code":10000,"success":true}
+//     (not a result HTML page), and the exam list's wfs flips back to 1
+//     immediately, so a "502 考试未能结束" from the proxy means the attempt
+//     actually ended — verify via a fresh exam-list refetch;
+//   - wfs=0 papers are the user's own in-progress attempts: their questions
+//     can be read without submitting, so the collector collects them
+//     read-only (enter-continue → fetch → never submit).
 //
 // Pure Node module (node:crypto/fs/path only): unit tests drive it with a fake
 // `api` object, the CLI drives it over real HTTP against the local server.
-// Nothing here touches the upstream service directly.
 
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const TARGET_CATEGORIES = ["语言理解", "数字运算", "逻辑推理", "资料分析", "特有题型"];
+const TARGET_CATEGORIES = ["言语理解", "数字运算", "逻辑推理", "资料分析", "特有题型"];
 const DEFAULT_SECTION = "(无分类)";
 const META_VERSION = 1;
 
@@ -32,18 +46,31 @@ function normalizeSection(title) {
 }
 
 /**
- * Map a section title onto one of the canonical target categories: first
- * target whose name is a substring of the (normalized) title wins, so
- * "一、语言理解（单选）" → "语言理解". Returns null for non-target sections.
+ * Section labels from the answer card carry a point-count suffix, e.g.
+ * "逻辑填空(共200题,每题1分,合计200.0分)" → "逻辑填空". Only the "(共…)" tail
+ * is stripped; informative notes like "（仅中国石油和国家管网考）" survive.
  */
-function matchCategory(sectionTitle, targets = TARGET_CATEGORIES) {
-  const section = normalizeSection(sectionTitle);
-  if (section === DEFAULT_SECTION) return null;
+function cleanSection(title) {
+  return normalizeSection(title).replace(/\(共[^)]*\)\s*$/, "").trim() || DEFAULT_SECTION;
+}
+
+/**
+ * Map a PAPER NAME onto one of the canonical target categories: first target
+ * whose name is a substring of the paper name wins (【言语理解（二）】机考题库
+ * → 言语理解). Returns null for non-target papers.
+ */
+function matchCategory(paperName, targets = TARGET_CATEGORIES) {
+  const name = String(paperName ?? "");
   for (const target of targets) {
-    const name = String(target).trim();
-    if (name && section.includes(name)) return target;
+    const t = String(target).trim();
+    if (t && name.includes(t)) return t;
   }
   return null;
+}
+
+/** True for 机考题库-style papers whose name carries one of the targets. */
+function isTargetExam(exam, targets = TARGET_CATEGORIES) {
+  return String(exam.style ?? "").includes("机考题库") && matchCategory(exam.name, targets) !== null;
 }
 
 /**
@@ -89,7 +116,7 @@ function contentHash(input) {
   return crypto.createHash("sha256").update(parts.join("\n")).digest("hex");
 }
 
-/** Build a bank record from a question DTO and its section/category. */
+/** Build a bank record from a question DTO, its section and category. */
 function buildRecord(question, section, category, ctx) {
   const answers = Array.isArray(question._answers) ? question._answers : [];
   let answer;
@@ -100,6 +127,7 @@ function buildRecord(question, section, category, ctx) {
   return {
     _id: String(question._id),
     category,
+    section: cleanSection(section),
     question: question.question || "",
     options: [question.answer1 || "", question.answer2 || "", question.answer3 || "", question.answer4 || ""],
     answer,
@@ -284,28 +312,16 @@ function isDrained(state, exam) {
   return state[String(exam.id)]?.status === "drained";
 }
 
-// Conservative attempt-quota guard: when the exam is restricted and we have
-// already entered it examTimes times, never enter again. (Semantics of the
-// upstream fields are not documented; the per-exam drain rule is the real
-// safety valve either way.)
-function quotaExhausted(state, exam) {
-  const restrict = exam.examTimesRestrict;
-  if (restrict === "" || restrict === 0 || restrict === "0" || restrict === false || restrict == null) {
-    return false;
-  }
-  const allowed = Number(exam.examTimes);
-  const rounds = state[String(exam.id)]?.roundsCollected || 0;
-  return Number.isFinite(allowed) && allowed > 0 && rounds >= allowed;
-}
-
 /**
  * Pick the exam for this round, in priority order:
  *   1. any exam we entered but never submitted (crash/failed submit) — resume
- *      via the continue flow regardless of wfs;
- *   2. wfs===1 with style 机考题库 (list order);
- *   3. wfs===1 with any other style (list order);
- *   4. wfs===0 pre-existing attempts are skipped — never submit an attempt we
- *      did not create (use --exam to force).
+ *      via whatever flow applies, regardless of style/wfs;
+ *   2. wfs===1 target papers (机考题库 style whose name carries a category),
+ *      in list order — enter creates a fresh attempt, then we abandon it;
+ *   3. wfs===0 target papers (the user's in-progress attempts), in list order
+ *      — collected READ-ONLY (enter-continue → fetch → never submit);
+ *      disabled via ctx.collectInProgress=false;
+ *   --exam <id> overrides all filters and drains the named exam.
  * A stale pendingSubmit whose exam no longer appears in the list is marked
  * drained so it never blocks the loop.
  */
@@ -324,12 +340,16 @@ function pickExam(exams, ctx) {
     st.drainedAt = new Date().toISOString();
   }
   for (const exam of exams || []) {
-    if (exam.wfs !== 1 || isDrained(state, exam) || quotaExhausted(state, exam)) continue;
-    if (exam.style === "机考题库") return { exam, reason: "style" };
+    if (exam.wfs !== 1 || isDrained(state, exam)) continue;
+    if (!isTargetExam(exam, ctx.targets)) continue;
+    return { exam, reason: "collect" };
   }
-  for (const exam of exams || []) {
-    if (exam.wfs !== 1 || isDrained(state, exam) || quotaExhausted(state, exam)) continue;
-    return { exam, reason: "style" };
+  if (ctx.collectInProgress) {
+    for (const exam of exams || []) {
+      if (exam.wfs !== 0 || isDrained(state, exam)) continue;
+      if (!isTargetExam(exam, ctx.targets)) continue;
+      return { exam, reason: "inProgress" };
+    }
   }
   return { exam: null, reason: "exhausted" };
 }
@@ -337,10 +357,28 @@ function pickExam(exams, ctx) {
 // ---------- Round ----------
 
 /**
+ * After the proxy reports "考试未能结束" (502), the attempt may still have
+ * ended upstream: practice papers answer exam_ending with a JSON success
+ * instead of a result page. Verify via a fresh exam-list refetch: wfs===1 (or
+ * the exam gone) means the attempt ended. Two checks ~2s apart cover list lag.
+ */
+async function verifyEnded(api, examId, delayMs = 2000) {
+  const check = async () => {
+    const list = await api.getExams();
+    const exam = list.find((e) => String(e.id) === String(examId));
+    return exam ? exam.wfs === 1 : true;
+  };
+  if (await check()) return { success: true, score: null };
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+  if (await check()) return { success: true, score: null };
+  return null;
+}
+
+/**
  * One collection round: list → pick → enter → questions → join → filter new
- * target questions → submit (abandon). On submit failure the exam stays
- * pendingSubmit so the next round resumes it. `ctx` is mutated (examState,
- * seenIds) and shared across rounds.
+ * target questions → submit (abandon). Attempts the collector itself created
+ * are always ended; the user's in-progress attempts (wfs=0) are read-only.
+ * `ctx` is mutated (examState, seenIds) and shared across rounds.
  */
 async function collectRound(api, ctx) {
   const log = ctx.log || console;
@@ -352,9 +390,18 @@ async function collectRound(api, ctx) {
 
   const state = ctx.examState;
   const previous = state[id] || {};
+  // createdByUs: true only when this round creates a fresh attempt (wfs=1) or
+  // resumes one we previously created. A pendingSubmit without createdByUs on
+  // a wfs=0 paper is someone else's attempt — read-only, never submitted.
+  // Note: entering a wfs=1 paper always creates a fresh attempt we own, even
+  // when resuming a stale pendingSubmit marker.
+  const ownAttempt = exam.wfs === 1
+    ? true
+    : (picked.reason === "pendingSubmit" && state[id].createdByUs === true);
   state[id] = {
     ...previous,
     status: "pendingSubmit", // persisted by the caller — crash-safe resume
+    createdByUs: ownAttempt,
     name: exam.name,
     roundsCollected: (previous.roundsCollected || 0) + 1,
   };
@@ -364,21 +411,34 @@ async function collectRound(api, ctx) {
   const joined = joinQuestions(payload.questions, payload.states);
 
   const sections = {};
-  for (const j of joined) sections[j.section] = (sections[j.section] || 0) + 1;
-
-  const newQuestions = [];
   for (const j of joined) {
-    const category = matchCategory(j.section, ctx.targets);
-    if (!category) continue; // non-target sections never enter the bank
-    const questionId = String(j.question._id);
-    if (ctx.seenIds.has(questionId)) continue;
-    ctx.seenIds.add(questionId);
-    newQuestions.push(buildRecord(j.question, j.section, category, {
-      sourceExamId: exam.id,
-      sourceExamName: exam.name,
-      round: ctx.round,
-      collectedAt: new Date().toISOString(),
-    }));
+    const clean = cleanSection(j.section);
+    sections[clean] = (sections[clean] || 0) + 1;
+  }
+
+  const category = matchCategory(exam.name, ctx.targets);
+  const newQuestions = [];
+  if (category) {
+    for (const j of joined) {
+      const questionId = String(j.question._id);
+      if (ctx.seenIds.has(questionId)) continue;
+      ctx.seenIds.add(questionId);
+      newQuestions.push(buildRecord(j.question, j.section, category, {
+        sourceExamId: exam.id,
+        sourceExamName: exam.name,
+        round: ctx.round,
+        collectedAt: new Date().toISOString(),
+      }));
+    }
+  }
+
+  // An attempt we did not create (the user's in-progress work, or a resumed
+  // pendingSubmit that was never ours): never submit it — one read-only pass
+  // is complete (the paper's pool is fixed).
+  if (!ownAttempt) {
+    state[id].status = "drained";
+    state[id].drainedAt = new Date().toISOString();
+    return { exam, reason: picked.reason, newQuestions, sections, submitResult: null, drained: true };
   }
 
   let submitResult = null;
@@ -386,13 +446,11 @@ async function collectRound(api, ctx) {
     submitResult = await api.submit(id);
   } catch (err) {
     if (err instanceof ApiError && err.status === 502) {
-      // "考试未能结束" is transient — one retry, then leave pendingSubmit.
-      log.warn(`[round ${ctx.round}] submit transient failure, retrying`);
-      await new Promise((resolve) => setTimeout(resolve, ctx.submitRetryDelayMs ?? 5000));
-      try {
-        submitResult = await api.submit(id);
-      } catch (err2) {
-        log.warn(`[round ${ctx.round}] submit failed (${err2.message}), resuming next round`);
+      submitResult = await verifyEnded(api, id, ctx.verifyDelayMs);
+      if (submitResult) {
+        log.warn(`[round ${ctx.round}] submit returned 502 but the attempt ended (JSON success) — verified via exam list`);
+      } else {
+        log.warn(`[round ${ctx.round}] submit failed (${err.message}), resuming next round`);
         return { exam, reason: picked.reason, newQuestions, sections, submitResult: null, drained: false };
       }
     } else {
@@ -430,7 +488,7 @@ function delay(ms, signal) {
 /**
  * Collection loop. Options: { bankDir (required), targets, maxRounds=200,
  * idleLimit=3 (consecutive all-empty rounds → stop), roundDelayMs=1500,
- * singleExamId, log, onProgress, signal (AbortSignal) }.
+ * collectInProgress=true, singleExamId, log, onProgress, signal }.
  * Stops with: exhausted | idle | maxRounds | abort | auth | error.
  * Every round persists new records and meta.json, so any interrupted run can
  * resume by rerunning on the same bankDir.
@@ -453,7 +511,8 @@ async function runCollection(api, opts) {
     examState: meta.examState,
     seenIds: bank.seenIds,
     singleExamId: opts.singleExamId || null,
-    submitRetryDelayMs: opts.submitRetryDelayMs,
+    collectInProgress: opts.collectInProgress ?? true,
+    verifyDelayMs: opts.verifyDelayMs,
     log,
   };
 
@@ -490,7 +549,11 @@ async function runCollection(api, opts) {
       meta.stats.totalRounds = roundNumber;
       saveMeta(bankDir, meta);
 
-      const submit = result.submitResult ? `ok score=${result.submitResult.score}` : "failed";
+      const submit = !result.submitResult
+        ? "n/a"
+        : result.submitResult.score != null
+          ? `ok score=${result.submitResult.score}`
+          : "ok (JSON success)";
       log.info(
         `[round ${roundNumber}/${maxRounds}] ${result.exam.name} new=${result.newQuestions.length} `
         + `${summaryByCategory(result.newQuestions)} | `
@@ -547,7 +610,9 @@ module.exports = {
   ApiError,
   createHttpApi,
   normalizeSection,
+  cleanSection,
   matchCategory,
+  isTargetExam,
   joinQuestions,
   contentHash,
   buildRecord,

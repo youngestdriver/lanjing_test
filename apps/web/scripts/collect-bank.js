@@ -29,11 +29,12 @@ const USAGE = `用法: node scripts/collect-bank.js [选项]
   --idle-limit N    连续 N 轮无新题即停止 (默认 3)
   --round-delay ms  每轮之间的等待 (默认 1500)
   --bank-dir <path> 题库输出目录 (默认 <本地目录>/bank)
-  --targets a,b,c   目标分类 (默认 语言理解,数字运算,逻辑推理,资料分析,特有题型)
+  --targets a,b,c   目标分类 (默认 言语理解,数字运算,逻辑推理,资料分析,特有题型)
+  --skip-in-progress 跳过进行中的作答 (默认会只读收集用户进行中的卷，不提交)
   -h, --help        显示本帮助`;
 
 function parseArgs(argv) {
-  const opts = { exam: null, maxRounds: 200, idleLimit: 3, roundDelay: 1500, bankDir: null, targets: null };
+  const opts = { exam: null, maxRounds: 200, idleLimit: 3, roundDelay: 1500, bankDir: null, targets: null, skipInProgress: false };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     const value = () => argv[++i];
@@ -44,6 +45,7 @@ function parseArgs(argv) {
       case "--round-delay": opts.roundDelay = Number(value()); break;
       case "--bank-dir": opts.bankDir = value(); break;
       case "--targets": opts.targets = value().split(",").map((s) => s.trim()).filter(Boolean); break;
+      case "--skip-in-progress": opts.skipInProgress = true; break;
       case "-h":
       case "--help":
         console.log(USAGE);
@@ -103,9 +105,21 @@ async function ensureLoggedIn(api) {
     console.log("会话有效，复用已登录会话");
     return;
   }
+  // Headless runs: credentials via environment. They exist only in this
+  // process (never written to disk); the resulting session is saved exactly
+  // as the app normally does.
+  const envPhone = process.env.LANJING_PHONE;
+  const envPassword = process.env.LANJING_PASSWORD;
+  if (envPhone && envPassword) {
+    const login = await api.login(envPhone, envPassword);
+    if (!login.success) throw new Error(`登录失败: ${login.desc || "未知错误"}`);
+    console.log("登录成功，开始收集");
+    return;
+  }
   if (!process.stdin.isTTY) {
     throw new Error(
-      "没有可用会话，且当前不是交互式终端。请先启动应用登录一次（会话会保存在本地），再重跑本脚本",
+      "没有可用会话，且当前不是交互式终端。请先用 LANJING_PHONE/LANJING_PASSWORD 环境变量提供凭据，"
+      + "或启动应用登录一次（会话会保存在本地），再重跑本脚本",
     );
   }
   const phone = await prompt("手机号: ");
@@ -156,6 +170,7 @@ async function main() {
     idleLimit: opts.idleLimit,
     roundDelayMs: opts.roundDelay,
     singleExamId: opts.exam,
+    collectInProgress: !opts.skipInProgress,
     signal: controller.signal,
   });
 
