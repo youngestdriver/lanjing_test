@@ -13,6 +13,9 @@ const {
   TARGET_CATEGORIES,
   IMAGE_STEM,
   htmlToText,
+  htmlToMarkdown,
+  collectImageSources,
+  downloadImages,
   answerText,
   optionsText,
   recordToMarkdown,
@@ -98,7 +101,7 @@ test("exportBank writes one Markdown file per subCategory", () => {
     fs.writeFileSync(path.join(bankDir, cat + ".jsonl"), list.map((r) => JSON.stringify(r)).join("\n") + "\n", "utf8");
   }
 
-  const result = exportBank(bankDir, outDir, TARGET_CATEGORIES);
+  const result = exportBank(bankDir, outDir, { targets: TARGET_CATEGORIES });
   assert.equal(result.total, 3);
   assert.equal(result.files.length, 2);
 
@@ -118,8 +121,97 @@ test("exportBank writes one Markdown file per subCategory", () => {
 
 test("exportBank skips missing categories and reports 0 files", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lanjing-qexport-"));
-  const result = exportBank(path.join(dir, "nope"), path.join(dir, "out"), TARGET_CATEGORIES);
+  const result = exportBank(path.join(dir, "nope"), path.join(dir, "out"), { targets: TARGET_CATEGORIES });
   assert.equal(result.total, 0);
   assert.deepEqual(result.files, []);
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// ---------- image preservation ----------
+
+test("htmlToMarkdown keeps <img> as markdown links via the resolver", () => {
+  const html = '<p>甲车速度为<img src="https://fb.fbstatic.cn/api/planet/formulas?latex=abc&amp;fontSize=18">，乙车为<img src="https://x.cn/2.png"></p>';
+  // resolver: local copy when known, remote URL otherwise (like the CLI)
+  const resolver = (url) => (url.includes("abc") ? "images/h1.png" : url);
+  assert.equal(
+    htmlToMarkdown(html, resolver),
+    "甲车速度为![公式](images/h1.png)，乙车为![公式](https://x.cn/2.png)",
+  );
+  // entities inside the URL are decoded before the resolver sees them
+  let seen;
+  htmlToMarkdown('<img src="https://x.cn/a?b=1&amp;c=2">', (url) => { seen = url; return "images/a.png"; });
+  assert.equal(seen, "https://x.cn/a?b=1&c=2");
+  // resolver returning null drops the image
+  assert.equal(htmlToMarkdown('<p><img src="https://x.cn/1.png"></p>', () => null), IMAGE_STEM);
+  // without a resolver the remote URL is used directly
+  assert.equal(
+    htmlToMarkdown('<img src="https://x.cn/1.png">', null),
+    "![公式](https://x.cn/1.png)",
+  );
+  // protocol-relative src ("//host/…") is normalized to https
+  let seenUrl;
+  htmlToMarkdown('<img src="//fb.fbstatic.cn/1.png">', (url) => { seenUrl = url; return "images/1.png"; });
+  assert.equal(seenUrl, "https://fb.fbstatic.cn/1.png");
+});
+
+test("collectImageSources gathers distinct decoded img URLs", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lanjing-qimg-"));
+  const bankDir = path.join(dir, "bank");
+  fs.mkdirSync(bankDir, { recursive: true });
+  fs.writeFileSync(path.join(bankDir, "言语理解.jsonl"), [
+    JSON.stringify({ category: "言语理解", question: '<img src="https://a.cn/1.png?x=1&amp;y=2">', analysis: '<img src="https://a.cn/2.png">', options: ['<img src="https://a.cn/1.png?x=1&amp;y=2">', ""] }),
+    JSON.stringify({ category: "言语理解", question: "无图", analysis: "" }),
+  ].join("\n") + "\n", "utf8");
+  const sources = collectImageSources(bankDir, TARGET_CATEGORIES);
+  assert.deepEqual([...sources].sort(), ["https://a.cn/1.png?x=1&y=2", "https://a.cn/2.png"].sort());
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("downloadImages fetches, dedups by URL and skips existing files", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lanjing-qimg-"));
+  const outDir = path.join(dir, "out");
+  const seen = new Set();
+  const fakeFetch = async (url) => {
+    seen.add(url);
+    return new Response(Buffer.from("PNGDATA-" + url.slice(-1)), {
+      status: 200,
+      headers: { "Content-Type": "image/png" },
+    });
+  };
+  const sources = new Set(["https://a.cn/1.png", "https://a.cn/2.png"]);
+  const first = await downloadImages(sources, outDir, { fetchImpl: fakeFetch, log: { warn() {} } });
+  assert.equal(first.total, 2);
+  assert.equal(first.failed, 0);
+  assert.deepEqual([...first.map.keys()].sort(), [...sources].sort());
+  assert.equal(fs.readdirSync(path.join(outDir, "images")).length, 3); // 2 png + manifest.json
+
+  // rerun: existing files are reused, nothing re-fetched
+  const second = await downloadImages(sources, outDir, { fetchImpl: fakeFetch, log: { warn() {} } });
+  assert.equal(second.failed, 0);
+  assert.equal(seen.size, 2); // no second fetch
+  assert.deepEqual(second.map, first.map);
+
+  // failed downloads are absent from the map
+  const bad = await downloadImages(new Set(["https://a.cn/404.png"]), outDir, {
+    fetchImpl: async () => new Response("", { status: 404 }),
+    log: { warn() {} },
+  });
+  assert.equal(bad.failed, 1);
+  assert.equal(bad.map.size, 0);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("recordToMarkdown preserves images in 题干/选项/解析", () => {
+  const record = {
+    _id: "q1", category: "数字运算", section: "数量关系", subCategory: "行程问题",
+    question: '<p>两车相向而行<img src="https://a.cn/formula.png"></p>',
+    options: ["<p>60</p>", '<p><img src="https://a.cn/opt.png"></p>', "", ""],
+    answer: "A",
+    analysis: '<p>公式<img src="https://a.cn/ana.png"></p>',
+    sourceExamId: "E1", sourceExamName: "卷1", collectedAt: "2026-08-07T00:00:00.000Z",
+  };
+  const md = recordToMarkdown(record, 1, (url) => "images/" + url.split("/").pop());
+  assert.match(md, /两车相向而行!\[公式\]\(images\/formula\.png\)/);
+  assert.match(md, /B\. !\[公式\]\(images\/opt\.png\)/);
+  assert.match(md, /公式!\[公式\]\(images\/ana\.png\)/);
 });

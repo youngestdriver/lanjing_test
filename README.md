@@ -197,10 +197,10 @@ node apps/web/scripts/classify-bank.js [--bank-dir <path>] [--dry-run]
 
 ### Markdown 导出
 
-`apps/web/scripts/export-bank.js` 把题库导出为**人类可读的 Markdown**：每个 (分类-子类) 一个文件（`<bank-dir>/export/言语理解-成语辨析.md`），题干/选项/答案/解析清洗成纯文本（HTML 与实体解码、段落保留、公式图标注"（图片题）"）。共 83 个文件、约 2.8 MB。
+`apps/web/scripts/export-bank.js` 把题库导出为**人类可读的 Markdown**：每个 (分类-子类) 一个文件（`<bank-dir>/export/言语理解-成语辨析.md`），题干/选项/答案/解析清洗成纯文本（HTML 与实体解码、段落保留）。**题干/选项/解析中的公式图片会下载到 `<out>/images/` 并本地引用**（按 URL 去重，重跑跳过已存在文件，下载失败回退远程链接；纯图片题仍标注"（图片题）"）。当前 3065 题、83 个文件、4257 张公式图、共约 73 MB。
 
 ```text
-node apps/web/scripts/export-bank.js [--bank-dir <path>] [--out <path>] [--targets a,b,c]
+node apps/web/scripts/export-bank.js [--bank-dir <path>] [--out <path>] [--targets a,b,c] [--no-images]
 npm --prefix apps/web run export
 ```
 
