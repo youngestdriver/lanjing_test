@@ -552,6 +552,41 @@ async function cookieCloudPull() {
   return payload;
 }
 
+// Probe the upstream with a candidate jar without touching the module-level
+// cookieJar. Used by sync to decide which side's session is actually valid:
+// "校验哪个 cookie 有效，就更新为谁的". Network failures count as invalid
+// (conservative: never apply or propagate an unverified session).
+async function probeSession(jar) {
+  if (!jar.includes("sessionId=")) return false;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+  try {
+    const response = await fetch(BASE_URL + "/exam/current_exam_list", {
+      method: "POST",
+      headers: {
+        "User-Agent": UA, "X-Requested-With": "XMLHttpRequest",
+        Origin: BASE_URL, Referer: BASE_URL + "/exam",
+        Accept: "application/json, text/javascript, */*; q=0.01",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        Cookie: jar.replace(/\s+$/, ""),
+      },
+      body: new URLSearchParams({ page: "1", pageSize: "1" }),
+      redirect: "manual",
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    const redirectTargets = [];
+    const location = response.headers.get("location");
+    if (response.status >= 300 && response.status < 400 && location) redirectTargets.push(location);
+    if (response.redirected && response.url) redirectTargets.push(response.url);
+    return !detectSessionExpiry(response.status, text, redirectTargets);
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Push the local jar, keeping non-lanjingweike domains from the remote blob
 // so an extension's other-domain cookies survive our writes.
 async function cookieCloudPush() {
@@ -572,7 +607,10 @@ async function cookieCloudPush() {
 }
 
 // One pull-then-push sync; single-flight against debounced pushes. Never
-// rejects: errors land in cookieCloudState.lastError.
+// rejects: errors land in cookieCloudState.lastError. Both candidates are
+// validated against the upstream ("哪个 cookie 有效，就更新为谁的"):
+//   - the cloud session is applied only when it is valid;
+//   - the local session is pushed only when it is valid.
 async function syncNow() {
   if (syncInFlight) return syncInFlight;
   syncInFlight = (async () => {
@@ -580,24 +618,28 @@ async function syncNow() {
     try {
       if (!cookieCloudConfigured()) throw new Error("CookieCloud sync is not configured");
       const payload = await cookieCloudPull();
-      const incomingJar = cookiecloud.cookieDataToJar(payload?.cookie_data);
-      if (!incomingJar.includes("sessionId=")) {
+      const cloudJar = cookiecloud.cookieDataToJar(payload?.cookie_data);
+      if (!cloudJar.includes("sessionId=")) {
         console.log("[cookiecloud] Cloud data has no lanjingweike session; local session kept");
-      } else if (sha256(incomingJar) === lastPushedHash) {
+      } else if (sha256(cloudJar) === lastPushedHash) {
         console.log("[cookiecloud] Cloud data matches our last push; nothing to apply");
-      } else {
+      } else if (await probeSession(cloudJar)) {
         sessionGeneration++;
-        cookieJar = incomingJar;
+        cookieJar = cloudJar;
         examCache = {};
         examsCache = null;
         saveSession();
         lastPushedHash = sha256(cookieJar);
         cookieCloudState.lastPull = new Date().toISOString();
         result.applied = true;
-        console.log("[cookiecloud] Imported session from cloud");
+        console.log("[cookiecloud] Imported valid session from cloud");
+      } else {
+        console.log("[cookiecloud] Cloud session is invalid; keeping local session");
       }
-      // Push only when the jar genuinely diverged from what we last wrote.
-      if (cookieJar.includes("sessionId=") && sha256(cookieJar) !== lastPushedHash) {
+      // Push only when the (possibly just applied) jar diverged from what we
+      // last wrote and is still valid upstream.
+      if (cookieJar.includes("sessionId=") && sha256(cookieJar) !== lastPushedHash
+        && await probeSession(cookieJar)) {
         await cookieCloudPush();
         result.pushed = true;
       }
@@ -612,12 +654,31 @@ async function syncNow() {
   return syncInFlight;
 }
 
+// Debounced auto-push after login or an upstream response: the jar was just
+// validated by the request that changed it, so no probing is needed. Push
+// only — never apply the cloud over an actively used session.
+async function pushIfNeeded() {
+  if (syncInFlight) return syncInFlight;
+  syncInFlight = (async () => {
+    try {
+      if (!cookieCloudConfigured() || !cookieJar.includes("sessionId=")) return;
+      if (sha256(cookieJar) === lastPushedHash) return;
+      await cookieCloudPush();
+      cookieCloudState.lastError = null;
+    } catch (error) {
+      setCookieCloudError(error.message);
+    } finally {
+      syncInFlight = null;
+    }
+  })();
+  return syncInFlight;
+}
+
 function schedulePush() {
   if (!cookieCloudConfigured() || !cookieJar.includes("sessionId=")) return;
   clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
-    if (sha256(cookieJar) === lastPushedHash) return;
-    syncNow().catch(() => {});
+    pushIfNeeded().catch(() => {});
   }, 2000);
 }
 

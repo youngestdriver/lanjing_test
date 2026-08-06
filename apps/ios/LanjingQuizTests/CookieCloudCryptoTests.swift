@@ -169,17 +169,19 @@ final class CookieCloudCryptoTests: XCTestCase {
         XCTAssertEqual(persistent.expiresDate?.timeIntervalSince1970 ?? 0, 1_700_000_000, accuracy: 1)
     }
 
-    func testKSXCIDIsExcludedFromBothPushAndPull() throws {
+    func testKSXCIDSyncsLikeAnyOtherCookie() throws {
+        // The upstream cookie set is `JSESSIONID=...; KSX_CID=1; sessionId=...`;
+        // synced data must keep that full shape.
         let cookies = [
             try XCTUnwrap(makeCookie(name: "sessionId", value: "S1", domain: "test.lanjingweike.com")),
             try XCTUnwrap(makeCookie(name: "JSESSIONID", value: "J1", domain: "test.lanjingweike.com")),
             try XCTUnwrap(makeCookie(name: "KSX_CID", value: "1", domain: "test.lanjingweike.com")),
         ]
-        // Push: KSX_CID never reaches the cloud.
         let data = CookieCloudConversion.cookieData(from: cookies)
         let lanjing = try XCTUnwrap(data["test.lanjingweike.com"])
-        XCTAssertFalse(lanjing.contains { $0["name"] as? String == "KSX_CID" })
-        // Pull: a cloud blob containing KSX_CID imports without it.
+        XCTAssertEqual(lanjing.count, 3)
+        XCTAssertTrue(lanjing.contains { $0["name"] as? String == "KSX_CID" })
+        // Pull imports KSX_CID too.
         let cookieData: [String: Any] = [
             "test.lanjingweike.com": [
                 ["name": "sessionId", "value": "S1", "domain": "test.lanjingweike.com", "path": "/"],
@@ -187,7 +189,7 @@ final class CookieCloudCryptoTests: XCTestCase {
             ],
         ]
         let imported = CookieCloudConversion.cookies(from: cookieData)
-        XCTAssertFalse(imported.contains { $0.name == "KSX_CID" })
+        XCTAssertTrue(imported.contains { $0.name == "KSX_CID" })
         XCTAssertTrue(imported.contains { $0.name == "sessionId" })
     }
 

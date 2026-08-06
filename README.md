@@ -266,7 +266,7 @@ iOS 安装包应通过受控的 Release、TestFlight 或 CI artifact 分发，�
 - iOS 仅在登录请求中使用账号凭据，并把会话 Cookie 存入 Keychain；退出或会话失效时会清理 Cookie。
 - `apps/web/server.js` 的 Cookie 和考试缓存是进程级单例，因此不能作为多用户后端部署。
 - Web 默认绑定 `0.0.0.0`（所有网卡）并允许局域网访问；可在“我的 > 局域网访问”关闭，或用 `HOST` 环境变量指定绑定地址。开启时 Host/Origin 白名单包含本机所有非内部 IPv4 网卡地址，`TRUSTED_HOSTS` 可额外允许指定主机名；但共享会话、无 TLS 与限流等风险依旧，只应在可信网络使用。设置保存于 `apps/web/.local/settings.json`（权限 `0600`）。
-- CookieCloud 同步（Web 与 iOS 均可选启用，协议与官方浏览器扩展兼容）：登录成功后自动上传会话，启动时拉取一次云端会话，也可在设置中手动同步；推送前会先拉取远端数据，合并保留其中所有非 lanjingweike 域名条目，避免覆盖扩展同步的其他站点 cookie。UUID 与密码需与浏览器扩展一致才能互通；加密在客户端完成（Web 用 Node 内置 crypto，iOS 用 CommonCrypto），服务端只保存密文，未知算法或解密失败一律不应用。Web 端密码保存在 `apps/web/.local/settings.json`（权限 `0600`），iOS 端存入 Keychain；`/api/cookiecloud` 等读取接口永不下发密码。退出登录不会清除云端 blob，其他设备保持登录。
+- CookieCloud 同步（Web 与 iOS 均可选启用，协议与官方浏览器扩展兼容）：登录成功后自动上传会话，启动时拉取一次云端会话，也可在设置中手动同步；推送前会先拉取远端数据，合并保留其中所有非 lanjingweike 域名条目，避免覆盖扩展同步的其他站点 cookie。手动同步与启动拉取会**双向校验有效性**：云端与本地会话分别通过上游轻量接口探测（复用会话失效识别），只有有效的会话才会被应用或推送——过期的云端会话不会覆盖本地有效会话，反之本地无效会话也不会被传播。UUID 与密码需与浏览器扩展一致才能互通；加密在客户端完成（Web 用 Node 内置 crypto，iOS 用 CommonCrypto），服务端只保存密文，未知算法或解密失败一律不应用。Web 端密码保存在 `apps/web/.local/settings.json`（权限 `0600`），iOS 端存入 Keychain；`/api/cookiecloud` 等读取接口永不下发密码。退出登录不会清除云端 blob，其他设备保持登录。
 - iOS 仅对本地网络放行明文 HTTP（`NSAllowsLocalNetworking`，配合 `NSLocalNetworkUsageDescription` 权限文案），不会放开任意 HTTP；Web 端到自建 CookieCloud 服务的请求限 http/https 且带 10 秒超时。
 - 上游接口和 HTML 结构不属于本仓库控制范围；页面、字段或认证流程变化都可能导致解析失败。
 - `apps/web/tools/login-demo.js` 是历史调试工具，可能直接访问上游，不应作为普通启动命令或无人值守测试执行。
