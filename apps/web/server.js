@@ -19,6 +19,10 @@ const REQUEST_TIMEOUT = 30000;
 const LOCAL_DIR = path.resolve(process.env.LANJING_LOCAL_DIR || path.join(__dirname, ".local"));
 const SESSION_FILE = path.join(LOCAL_DIR, "session_cookies.txt");
 const SETTINGS_FILE = path.join(LOCAL_DIR, "settings.json");
+// Question bank served at /bank (plain HTTP GET for the iOS client).
+// LANJING_BANK_DIR lets tests point at a temp dir; in CI the dir may not
+// exist — the static mount then simply 404s every /bank/* route.
+const BANK_DIR = path.resolve(process.env.LANJING_BANK_DIR || path.join(__dirname, "..", "bank"));
 
 // ========== helpers ==========
 function sha256(s) { return crypto.createHash("sha256").update(s).digest("hex"); }
@@ -233,6 +237,14 @@ app.use("/api", (req, res, next) => {
 });
 app.use(express.json({ limit: "100kb" }));
 app.use(express.static(path.join(__dirname, "public")));
+
+// Question bank download endpoint for the iOS client. Mounted before the SPA
+// fallback below; express.static falls through on missing files, so pin
+// unknown /bank/* paths to 404 (otherwise the fallback would serve index.html).
+app.use("/bank", express.static(BANK_DIR, { index: false }));
+app.use("/bank", (req, res) => {
+  res.status(404).json({ error: "Bank file not found" });
+});
 
 // Check proxy result for auth expiry
 function isAuthError(result) {
