@@ -8,10 +8,7 @@
     "start": "node server.js",
     "test": "node --test test/*.test.js",
     "test:browser": "node test/browser-smoke.js",
-    "collect": "node scripts/collect-bank.js",
-    "classify": "node scripts/classify-bank.js",
-    "export": "node scripts/export-bank.js",
-    "check": "node --check server.js && node --check lib/parsers.js && node --check lib/cookiecloud.js && node --check lib/question-bank.js && node --check lib/question-classifier.js && node --check lib/bank-export.js && node --check scripts/collect-bank.js && node --check scripts/classify-bank.js && node --check scripts/export-bank.js && node --check public/js/app.js && node --check public/js/quiz-core.js && node --check public/sw.js && node --check tools/login-demo.js && node --check test/browser-smoke.js && node --check test/parsers.test.js && node --check test/quiz-core.test.js && node --check test/server-security.test.js && node --check test/server-lan.test.js && node --check test/cookiecloud.test.js && node --check test/server-cookiecloud.test.js && node --check test/question-bank.test.js && node --check test/question-classifier.test.js && node --check test/export-bank.test.js && node --check test/server-bank.test.js"
+    "check": "node --check server.js && node --check lib/parsers.js && node --check lib/cookiecloud.js && node --check public/js/app.js && node --check public/js/quiz-core.js && node --check public/sw.js && node --check tools/login-demo.js && node --check test/browser-smoke.js && node --check test/parsers.test.js && node --check test/quiz-core.test.js && node --check test/server-security.test.js && node --check test/server-lan.test.js && node --check test/cookiecloud.test.js && node --check test/server-cookiecloud.test.js && node --check test/server-bank.test.js"
   },
   "engines": {
     "node": ">=22"

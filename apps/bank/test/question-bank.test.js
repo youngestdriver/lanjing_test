@@ -1,16 +1,15 @@
 "use strict";
 
 // Question-bank collector tests. Unit tests drive the collector with a fake
-// `api` object; the integration test spawns the real server and stubs
-// global.fetch with upstream fixtures shaped like the live platform (fixed
-// per-paper pools, category in the paper name, JSON-success exam_ending).
-// No test ever touches the real upstream (unmatched URLs throw).
+// `api` object; the integration test drives it with the real upstream client
+// (lib/upstream.js) against a stubbed global.fetch shaped like the live
+// platform (fixed per-paper pools, category in the paper name, JSON-success
+// exam_ending). No test ever touches the real upstream (unmatched URLs throw).
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { once } = require("node:events");
 const { after, before, test } = require("node:test");
 
 const {
@@ -516,12 +515,10 @@ test("loadBank drops a truncated trailing line", () => {
   assert.equal(bank.seenIds.has("q9"), false);
 });
 
-// ---------- Integration: real server, stubbed upstream ----------
+// ---------- Integration: direct upstream client, stubbed upstream ----------
 
 const localDir = fs.mkdtempSync(path.join(os.tmpdir(), "lanjing-qbank-integration-"));
-process.env.LANJING_LOCAL_DIR = localDir;
-process.env.LANJING_BASE_URL = "https://upstream.fixture.test"; // tests never hit the real service
-process.env.HOST = "127.0.0.1";
+const sessionFile = path.join(localDir, "session_cookies.txt");
 
 // E1: fresh paper (wfs=1). E0: the user's in-progress attempt (wfs=0).
 // E9: out-of-scope 常识判断 paper. E8: out-of-scope mock style.
@@ -578,31 +575,21 @@ const QUESTIONS_E0 = [
 // Practice papers answer exam_ending with JSON success, not a result page.
 const END_JSON = { code: 10000, desc: "成功", englishDesc: "Success", success: true };
 
-let startServer;
-let server;
-let port;
 let originalFetch;
 let endCalls; // examInfoIds ended via exam_ending
 let enterCalls; // examInfoIds entered via the new-exam flow
 
 before(async () => {
-  // Pre-seed a session so the collector needs no login (server.js restores
-  // session_cookies.txt at startup, before this require).
+  // Pre-seed a session so the collector needs no login (the upstream client
+  // loads session_cookies.txt from its sessionFile at construction).
   fs.mkdirSync(localDir, { recursive: true, mode: 0o700 });
-  fs.writeFileSync(path.join(localDir, "session_cookies.txt"), "sessionId=TEST_SESSION; JSESSIONID=js1;", { mode: 0o600 });
-  ({ startServer } = require("../server"));
-  server = startServer(0);
-  await once(server, "listening");
-  port = server.address().port;
+  fs.writeFileSync(sessionFile, "sessionId=TEST_SESSION; JSESSIONID=js1;", { mode: 0o600 });
 
   endCalls = [];
   enterCalls = [];
   originalFetch = global.fetch;
   global.fetch = async (url, init = {}) => {
     const u = new URL(url);
-    // The collector talks to the local server over loopback — pass through.
-    if (u.hostname === "127.0.0.1") return originalFetch(url, init);
-
     const body = init.body ? String(init.body) : "";
     const json = (data, status = 200) => new Response(JSON.stringify(data), {
       status,
@@ -640,18 +627,14 @@ before(async () => {
 
 after(async () => {
   global.fetch = originalFetch;
-  if (server) {
-    await new Promise((resolve, reject) => {
-      server.close((error) => error ? reject(error) : resolve());
-    });
-  }
   fs.rmSync(localDir, { recursive: true, force: true });
 });
 
-test("integration: the collector drives the real server against stubbed upstream", async () => {
-  const { createHttpApi, runCollection } = require("../lib/question-bank");
+test("integration: the collector drives the direct upstream client against stubbed upstream", async () => {
+  const { createUpstreamApi } = require("../lib/upstream");
+  const { runCollection } = require("../lib/question-bank");
   const bankDir = path.join(localDir, "bank");
-  const api = createHttpApi(`http://127.0.0.1:${port}`);
+  const api = createUpstreamApi({ baseUrl: "https://upstream.fixture.test", sessionFile, retries: 0 });
   const summary = await runCollection(api, { bankDir, log: quietLog, roundDelayMs: 1 });
 
   assert.equal(summary.stoppedBy, "exhausted");
@@ -684,7 +667,7 @@ test("integration: the collector drives the real server against stubbed upstream
   assert.deepEqual(meta.counts, { 言语理解: 5 });
   assert.equal(meta.stats.totalRounds, 3);
 
-  // the running server session was not disturbed by the collection
-  const status = await fetch(`http://127.0.0.1:${port}/api/status`).then((r) => r.json());
-  assert.deepEqual(status, { loggedIn: true, hasSavedSession: true });
+  // the client's saved session was not disturbed by the collection (no login
+  // happened; the collector's own session file is untouched)
+  assert.equal(fs.readFileSync(sessionFile, "utf8"), "sessionId=TEST_SESSION; JSESSIONID=js1;");
 });

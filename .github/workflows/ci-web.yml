@@ -37,6 +37,7 @@ jobs:
           filters: |
             web:
               - "apps/web/**"
+              - "apps/bank/**"
               - "docs/**"
               - "README.md"
               - ".github/workflows/ci-web.yml"
@@ -70,6 +71,12 @@ jobs:
 
       - name: Run browser smoke test
         run: npm --prefix apps/web run test:browser
+
+      - name: Check bank tool syntax
+        run: npm --prefix apps/bank run check
+
+      - name: Run bank tool tests
+        run: npm --prefix apps/bank test
 
       - name: Smoke test server
         shell: bash

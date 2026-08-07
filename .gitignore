@@ -3,7 +3,7 @@ session_cookies.txt
 /apps/web/.local/
 
 # Question bank (collected exam data — upstream IP, kept out of the repo)
-/apps/bank/
+/apps/bank/data/
 
 # Saved exam data
 *_2026-*/

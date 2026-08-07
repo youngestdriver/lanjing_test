@@ -2,7 +2,7 @@ import Foundation
 
 /// Downloads the question bank from a plain-HTTP source: 5 category JSONL
 /// files + meta.json, fetched directly from the configured server
-/// (no API indirection — the web server serves apps/bank statically at /bank).
+/// (no API indirection — the web server serves apps/bank/data statically at /bank).
 ///
 /// Uses its own ephemeral session so bank traffic never mixes with the app's
 /// lanjingweike cookie jar (same isolation as CookieCloudClient). Formula

@@ -272,7 +272,7 @@ test("unknown category or section falls back to 其他", () => {
 // ---------- full-bank dry run (dev machine only) ----------
 
 test("full bank: every record classified, 其他 ratio < 5%", (t) => {
-  const bankDir = path.join(__dirname, "..", "..", "bank");
+  const bankDir = path.join(__dirname, "..", "data");
   if (!fs.existsSync(path.join(bankDir, "言语理解.jsonl"))) {
     t.skip("no local bank (CI)");
     return;

@@ -15,7 +15,7 @@ const { TARGET_CATEGORIES, classifyBank } = require("../lib/question-classifier"
 const USAGE = `用法: node scripts/classify-bank.js [选项]
 
 选项:
-  --bank-dir <path>  题库目录 (默认 apps/bank)
+  --bank-dir <path>  题库目录 (默认 apps/bank/data)
   --dry-run          只统计并打印，不写盘
   --no-backup        不创建 .bak 备份 (默认首次写盘前备份原文件)
   --targets a,b,c    目标分类 (默认 言语理解,数字运算,逻辑推理,资料分析,特有题型)
@@ -45,9 +45,9 @@ function parseArgs(argv) {
 
 function main() {
   const opts = parseArgs(process.argv.slice(2));
-  // The bank lives in its own top-level directory (apps/bank), independent of
-  // the web app's private .local state (session etc.).
-  const bankDir = path.resolve(opts.bankDir || path.join(__dirname, "..", "..", "bank"));
+  // The bank lives in its own top-level directory (apps/bank); data sits
+  // under apps/bank/data/.
+  const bankDir = path.resolve(opts.bankDir || path.join(__dirname, "..", "data"));
   const targets = opts.targets || TARGET_CATEGORIES;
 
   const result = classifyBank(bankDir, targets);
