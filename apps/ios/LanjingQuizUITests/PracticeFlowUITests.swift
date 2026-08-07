@@ -4,29 +4,24 @@ import XCTest
 /// upstream (LANJING_BASE_URL launch env) — login → 练习 → 分类 → 试卷 →
 /// 题型 → 答题 → 完成, then asserts the best-effort attempt end fired.
 /// Hermetic: runs in CI without any local server.
+///
+/// Setup happens inline in the test method (not in setUp/tearDown): those
+/// lifecycle overrides are nonisolated on older XCTest SDKs, which would
+/// make touching @MainActor properties a compile error there.
 @MainActor
 final class PracticeFlowUITests: XCTestCase {
 
-    private var server: MockUpstreamServer!
-    private var app: XCUIApplication!
-
-    override func setUpWithError() throws {
-        continueAfterFailure = false
-        server = MockUpstreamServer()
-        try server.start()
-        app = XCUIApplication()
-        app.launchEnvironment["LANJING_BASE_URL"] = "http://127.0.0.1:\(server.port)"
-    }
-
-    override func tearDownWithError() throws {
-        server?.stop()
-        server = nil
-        app = nil
-    }
-
     func testPracticeFlowLoadsQuestions() throws {
+        continueAfterFailure = false
+
+        let server = MockUpstreamServer()
+        try server.start()
+        defer { server.stop() }
+
+        let app = XCUIApplication()
+        app.launchEnvironment["LANJING_BASE_URL"] = "http://127.0.0.1:\(server.port)"
         app.launch()
-        logInIfNeeded()
+        logInIfNeeded(app)
 
         // Practice tab → category list (paper counts come from the mock list).
         let practiceTab = app.tabBars.buttons["练习"]
@@ -87,7 +82,7 @@ final class PracticeFlowUITests: XCTestCase {
     /// Local re-runs may restore a Keychain session (mock cookies persist per
     /// simulator); CI simulators are fresh, so the login page always shows
     /// there. Either way the app must reach the tab bar.
-    private func logInIfNeeded() {
+    private func logInIfNeeded(_ app: XCUIApplication) {
         guard app.buttons["password-login-entry"].waitForExistence(timeout: 5) else { return }
         // The user agreement is pre-checked by default — just enter the flow.
         app.buttons["password-login-entry"].tap()
