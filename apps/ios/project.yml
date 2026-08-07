@@ -13,6 +13,12 @@ settings:
     CURRENT_PROJECT_VERSION: 1
     MARKETING_VERSION: 1.0
     ENABLE_TESTABILITY: YES
+  configs:
+    # Without this, #if DEBUG is compiled out even in Debug builds (the
+    # project had no active compilation conditions at all). Debug-only
+    # hooks (e.g. the UI-testing -reset-bank bank wipe) rely on it.
+    Debug:
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
 targets:
   LanjingQuiz:
     type: application

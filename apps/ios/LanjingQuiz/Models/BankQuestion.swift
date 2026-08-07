@@ -1,18 +1,47 @@
 import Foundation
 
-/// One practice question, built from an upstream QuestionDTO + answer-card
-/// state (see PracticeMapping.bankQuestion). The answer is a letter or letter
-/// array (or nil when unknown); keys are derived from the letters so grading
-/// stays uniform. Formula images stay remote — only protocol-relative srcs
-/// are normalized at construction time.
-struct BankQuestion: Identifiable, Equatable, Sendable {
+/// One practice question. Crawled from upstream via PracticeMapping.bankQuestion
+/// and persisted as a JSONL line per category (same on-disk format as the
+/// collector's apps/bank/data), so it is Codable both ways: the answer encodes
+/// as a single letter string ("A"), a letter array (["A","C"]) or null —
+/// matching the collector's record format. Formula images stay remote — only
+/// protocol-relative srcs are normalized at construction/decoding time.
+struct BankQuestion: Identifiable, Equatable, Codable, Sendable {
 
-    /// "A" | ["A","C"] | nil. nil → the record has no known answer.
-    struct Answer: Equatable, Sendable {
+    /// answer: "A" | ["A","C"] | null. null → the record has no known answer.
+    struct Answer: Codable, Equatable, Sendable {
         let letters: [String]
 
         init(letters: [String]) {
             self.letters = letters
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let single = try? container.decode(String.self) {
+                letters = [single]
+            } else if let array = try? container.decode([String].self) {
+                letters = array
+            } else {
+                // JSON null decodes as nil at the answer field (try? at the
+                // call site); any other shape is a malformed record.
+                throw DecodingError.typeMismatch(
+                    Answer.self,
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "answer must be a string, an array of strings, or null"
+                    )
+                )
+            }
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            if letters.count == 1 {
+                try container.encode(letters[0])
+            } else {
+                try container.encode(letters)
+            }
         }
     }
 
@@ -70,5 +99,36 @@ struct BankQuestion: Identifiable, Equatable, Sendable {
         self.sourceExamName = sourceExamName
         self.round = round
         self.collectedAt = collectedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id = "_id"
+        case category
+        case section
+        case subCategory
+        case question
+        case options
+        case answer
+        case analysis
+        case sourceExamName
+        case round
+        case collectedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try container.decode(String.self, forKey: .id),
+            category: (try? container.decode(String.self, forKey: .category)) ?? "",
+            section: (try? container.decode(String.self, forKey: .section)) ?? "",
+            subCategory: (try? container.decode(String.self, forKey: .subCategory)) ?? "",
+            question: (try? container.decode(String.self, forKey: .question)) ?? "",
+            options: (try? container.decode([String].self, forKey: .options)) ?? [],
+            answer: try? container.decode(Answer.self, forKey: .answer),
+            analysis: try? container.decode(String.self, forKey: .analysis),
+            sourceExamName: try? container.decode(String.self, forKey: .sourceExamName),
+            round: try? container.decode(Int.self, forKey: .round),
+            collectedAt: try? container.decode(String.self, forKey: .collectedAt)
+        )
     }
 }
