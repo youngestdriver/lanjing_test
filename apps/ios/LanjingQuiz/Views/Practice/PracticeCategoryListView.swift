@@ -1,34 +1,28 @@
 import SwiftUI
 
-/// 大类 list with per-category counts from the bank meta, plus a footer with
-/// version info and a manual 更新题库 action.
+/// 大类 list with per-category paper counts from the live upstream exam list.
 struct PracticeCategoryListView: View {
     let vm: PracticeBankViewModel
 
     var body: some View {
         List {
-            Section("题库分类") {
+            Section {
                 ForEach(BankLogic.categories, id: \.self) { category in
-                    let count = vm.meta?.counts?[category] ?? 0
-                    NavigationLink(value: PracticeRoute.subcategories(category: category)) {
+                    let count = vm.paperCount(for: category)
+                    NavigationLink(value: PracticeRoute.papers(category: category)) {
                         HStack {
                             Text(category)
                             Spacer()
-                            Text("\(count) 题")
+                            Text("\(count) 篇试卷")
                                 .foregroundStyle(.secondary)
                         }
                     }
                     .disabled(count == 0)
                 }
-            }
-            if let meta = vm.meta {
-                Section {
-                    Button("更新题库") {
-                        Task { await vm.updateBank() }
-                    }
-                } footer: {
-                    Text("题库版本 round \(meta.round ?? 0) · 共 \(meta.totalCount) 题。首次进入本页会自动下载；图片不缓存，展示时从网络加载。")
-                }
+            } header: {
+                Text("题库分类")
+            } footer: {
+                Text("题目直接从蓝鲸平台实时获取；进入练习会占用一次作答机会，退出时自动结束本次作答，答案只在本机判分、不会提交。")
             }
         }
         .navigationTitle("练习")

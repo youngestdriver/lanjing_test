@@ -2,13 +2,13 @@ import SwiftUI
 
 /// Navigation values for the practice flow (NativeStack links).
 enum PracticeRoute: Hashable {
-    case subcategories(category: String)
-    case quiz(category: String, subCategory: String)
+    case papers(category: String)
+    case subcategories(paper: Exam)
+    case quiz(paper: Exam, subCategory: String)
 }
 
-/// The 练习 tab: gates practice on the local bank being downloaded (first
-/// use downloads it from the configured server; while downloading, only
-/// progress is shown), then offers 大类 → 子类 → 刷题.
+/// The 练习 tab: gates practice on an upstream session (questions are fetched
+/// directly from the 蓝鲸平台), then offers 分类 → 试卷 → 题型 → 刷题.
 struct PracticeBankView: View {
     @Environment(AppState.self) private var appState
     @State private var vm: PracticeBankViewModel?
@@ -17,10 +17,10 @@ struct PracticeBankView: View {
         NavigationStack {
             Group {
                 switch vm?.phase ?? .idle {
-                case .idle:
-                    downloadingView(nil)
-                case .downloading(let progress):
-                    downloadingView(progress)
+                case .idle, .loading:
+                    loadingView
+                case .needsLogin:
+                    needsLoginView
                 case .failed(let message):
                     failedView(message)
                 case .ready:
@@ -32,10 +32,12 @@ struct PracticeBankView: View {
             // button and swipe-back work at every level.
             .navigationDestination(for: PracticeRoute.self) { route in
                 switch route {
-                case .subcategories(let category):
-                    PracticeSubcategoryListView(vm: vm!, category: category)
-                case .quiz(let category, let subCategory):
-                    PracticeQuizView(vm: vm!, category: category, subCategory: subCategory)
+                case .papers(let category):
+                    PracticePaperListView(vm: vm!, category: category)
+                case .subcategories(let paper):
+                    PracticeSubcategoryListView(vm: vm!, paper: paper)
+                case .quiz(let paper, let subCategory):
+                    PracticeQuizView(vm: vm!, paper: paper, subCategory: subCategory)
                 }
             }
         }
@@ -43,38 +45,41 @@ struct PracticeBankView: View {
             if vm == nil {
                 vm = PracticeBankViewModel(appState: appState)
             }
-            await vm?.ensureBankReady()
+            await vm?.load()
         }
     }
 
-    /// First-use gate: downloading shows progress only, no other interaction.
-    private func downloadingView(_ progress: QuestionBankClient.Progress?) -> some View {
-        VStack(spacing: 16) {
-            ProgressView(value: Double(progress?.fileIndex ?? 0), total: Double(progress?.fileCount ?? 6))
-                .progressViewStyle(.linear)
-                .frame(maxWidth: 260)
-            Text("正在下载题库（\(min(progress?.fileIndex ?? 0, progress?.fileCount ?? 6))/\(progress?.fileCount ?? 6)）")
+    private var loadingView: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+            Text("正在加载试卷…")
                 .font(.system(size: 14, weight: .semibold))
-            if let progress {
-                Text(progress.fileName)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            Text("首次使用需下载全部题目到本机，完成后即可离线练习")
-                .font(.footnote)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private var needsLoginView: some View {
+        ContentUnavailableView {
+            Label("需要登录", systemImage: "person.crop.circle.badge.exclamationmark")
+        } description: {
+            Text("练习题目直接从蓝鲸平台获取，登录后才能使用。")
+        } actions: {
+            Button("去登录") {
+                appState.route = .login
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+
     private func failedView(_ message: String) -> some View {
         ContentUnavailableView {
-            Label("题库下载失败", systemImage: "exclamationmark.triangle")
+            Label("加载失败", systemImage: "exclamationmark.triangle")
         } description: {
-            Text("\(message)\n\n请检查服务器是否已启动，并在 我的 > 题库服务器地址 确认地址正确后重试。")
+            Text(message)
         } actions: {
             Button("重试") {
-                Task { await vm?.updateBank() }
+                Task { await vm?.load() }
             }
             .buttonStyle(.borderedProminent)
         }

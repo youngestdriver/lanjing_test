@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// 子类 (subCategory 题型细分) list for one category, with a shuffle toggle.
+/// 题型细分 (subCategory) list for one paper — fetched live on first entry
+/// (enter → questions → local classification), with a shuffle toggle.
 struct PracticeSubcategoryListView: View {
     @Bindable var vm: PracticeBankViewModel
-    let category: String
+    let paper: Exam
 
     var body: some View {
         List {
@@ -12,33 +13,57 @@ struct PracticeSubcategoryListView: View {
             } footer: {
                 Text("开启后每次练习按随机顺序出题")
             }
-            Section("题型") {
-                ForEach(vm.subcategories, id: \.name) { group in
-                    NavigationLink(value: PracticeRoute.quiz(category: category, subCategory: group.name)) {
+            if vm.subcategories.isEmpty {
+                if vm.isSubcategoryLoading {
+                    Section {
                         HStack {
-                            Text(group.name)
                             Spacer()
-                            Text("\(group.count) 题")
-                                .foregroundStyle(.secondary)
+                            ProgressView()
+                            Spacer()
                         }
                     }
-                    .disabled(group.count == 0)
+                } else if let error = vm.subcategoryError {
+                    Section {
+                        ContentUnavailableView {
+                            Label("加载失败", systemImage: "exclamationmark.triangle")
+                        } description: {
+                            Text(error)
+                        } actions: {
+                            Button("重试") {
+                                Task { await vm.loadSubcategories(paper: paper) }
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                    }
+                } else {
+                    Section {
+                        ContentUnavailableView {
+                            Label("该试卷暂无题目", systemImage: "tray")
+                        } description: {
+                            Text("题目从蓝鲸平台实时获取，若网络异常请重试。")
+                        }
+                    }
                 }
-            }
-            if vm.subcategories.isEmpty {
-                Section {
-                    ContentUnavailableView {
-                        Label("该分类暂无题目", systemImage: "tray")
-                    } description: {
-                        Text("本地题库可能不完整，请在 我的 > 更新题库 重新下载。")
+            } else {
+                Section("题型") {
+                    ForEach(vm.subcategories, id: \.name) { group in
+                        NavigationLink(value: PracticeRoute.quiz(paper: paper, subCategory: group.name)) {
+                            HStack {
+                                Text(group.name)
+                                Spacer()
+                                Text("\(group.count) 题")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .disabled(group.count == 0)
                     }
                 }
             }
         }
-        .navigationTitle(category)
+        .navigationTitle(paper.name)
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            await vm.openCategory(category)
+            await vm.loadSubcategories(paper: paper)
         }
     }
 }

@@ -145,7 +145,7 @@ private struct ProfileView: View {
                     }
                 }
 
-                PracticeBankSettingsSection()
+                PracticeSourceSection()
 
                 CookieCloudSection()
 
@@ -156,6 +156,20 @@ private struct ProfileView: View {
                 }
             }
             .navigationTitle("我的")
+        }
+    }
+}
+
+/// 练习 source info row: questions come straight from the 蓝鲸平台 (no LAN
+/// bank download anymore). Login state is shown in the 账户 section above.
+private struct PracticeSourceSection: View {
+    var body: some View {
+        Section {
+            Label("直连蓝鲸平台", systemImage: "globe")
+        } header: {
+            Text("练习")
+        } footer: {
+            Text("练习题目直接从蓝鲸平台获取，登录后即可使用；进入练习会占用一次作答机会，退出练习时自动结束本次作答，答案只在本机判分、不会提交。")
         }
     }
 }
