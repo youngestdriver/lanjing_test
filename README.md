@@ -305,12 +305,12 @@ workflow 本身始终运行（而不是在事件级用 `paths` 过滤）：GitHu
 
 ### 发布 (Release)
 
-[`release.yml`](.github/workflows/release.yml) 是手动触发的发布 workflow（Actions 页 → Release → Run workflow，或 `gh workflow run release.yml`），生成产物并创建带附件的 GitHub Release：
+[`release.yml`](.github/workflows/release.yml) 在**每次 push 到 `main` 时自动发布**（版本号自动取最新 tag 的 patch +1），也可手动触发（Actions 页 → Release → Run workflow，或 `gh workflow run release.yml -f version=v0.1.0`），生成产物并创建带附件的 GitHub Release：
 
 - **Web 免安装包**：`apps/web` 生产依赖打包（`npm ci --omit=dev`）+ 双击启动脚本（macOS `启动.command` / Windows `启动.bat`）+ 使用说明，版本号留空自动取最新 tag 的 patch +1；
 - **iOS 未签名 ipa**：始终构建（`CODE_SIGNING_ALLOWED=NO`），附安装说明——配合 Sideloadly/AltStore 用免费 Apple ID 签名后装真机（7 天续签一次）；
 - **iOS 签名 ipa（ADHOC）**：仅当配置了签名 secrets（`IOS_CERT_BASE64`、`IOS_CERT_PASSWORD`、`IOS_PROVISIONING_BASE64`、`DEVELOPMENT_TEAM`）时才会构建并签名，否则自动跳过；
-- **题库快照**：默认关闭的保留位（`include_bank` 输入）——题库数据因版权问题被 gitignore，公开发布需先定夺；定论后可在私有仓库纳入数据，或本地打包后 `gh release upload <tag> 题库导出-*.zip`。
+- **题库快照**：默认关闭的保留位（`include_bank` 输入，仅手动运行时可用）——题库数据因版权问题被 gitignore，不在 CI 工作区；如需附带，可在私有仓库纳入数据，或本地打包后 `gh release upload <tag> 题库导出-*.zip`。
 
 ## 开发流程
 
