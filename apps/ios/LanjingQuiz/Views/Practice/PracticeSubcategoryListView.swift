@@ -25,6 +25,15 @@ struct PracticeSubcategoryListView: View {
                     .disabled(group.count == 0)
                 }
             }
+            if vm.subcategories.isEmpty {
+                Section {
+                    ContentUnavailableView {
+                        Label("该分类暂无题目", systemImage: "tray")
+                    } description: {
+                        Text("本地题库可能不完整，请在 我的 > 更新题库 重新下载。")
+                    }
+                }
+            }
         }
         .navigationTitle(category)
         .navigationBarTitleDisplayMode(.inline)

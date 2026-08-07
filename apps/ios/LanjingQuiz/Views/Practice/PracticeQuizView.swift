@@ -14,10 +14,18 @@ struct PracticeQuizView: View {
 
     var body: some View {
         Group {
-            if let session, let question, !session.isFinished {
-                quizContent(session, question)
-            } else if let session, session.isFinished {
-                summaryCard(session)
+            if let session, !session.questions.isEmpty {
+                if session.isFinished {
+                    summaryCard(session)
+                } else if let question {
+                    quizContent(session, question)
+                }
+            } else if vm.phase != .ready {
+                // Bank became unavailable mid-session — the bank view's phase
+                // switch shows the failure screen instead.
+                EmptyView()
+            } else {
+                loadingPlaceholder
             }
         }
         .navigationTitle("\(vm.session?.subCategory ?? subCategory)")
@@ -31,11 +39,23 @@ struct PracticeQuizView: View {
             }
         }
         .task {
-            // The route carries the target; build the session once on entry.
-            if vm.session?.subCategory != subCategory || vm.session?.category != category {
-                vm.startSession(category: category, subCategory: subCategory)
-            }
+            // Always rebuild the session on entry: a stale session from a
+            // previous (system-back) exit must never be reused.
+            vm.startSession(category: category, subCategory: subCategory)
         }
+        .onDisappear {
+            vm.endSessionIfCurrent(category: category, subCategory: subCategory)
+        }
+    }
+
+    private var loadingPlaceholder: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+            Text("正在加载题目…")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func quizContent(_ session: PracticeSession, _ question: BankQuestion) -> some View {

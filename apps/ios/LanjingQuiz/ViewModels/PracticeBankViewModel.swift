@@ -96,7 +96,10 @@ final class PracticeBankViewModel {
     }
 
     func startSession(category: String, subCategory: String) {
-        guard let text = storage.loadCategoryText(category) else { return }
+        guard let text = storage.loadCategoryText(category) else {
+            phase = .failed("本地题库缺少 \(category).jsonl，请在 我的 > 更新题库 重新下载")
+            return
+        }
         let questions = BankLogic.parseJSONL(text).filter { $0.subCategory == subCategory }
         let ordered = isShuffleEnabled ? BankLogic.shuffled(questions, seed: UInt64.random(in: .min ... .max)) : questions
         session = PracticeSession(category: category, subCategory: subCategory, questions: ordered)
@@ -106,6 +109,15 @@ final class PracticeBankViewModel {
     /// @Environment(\.dismiss) when popping back).
     func endSession() {
         session = nil
+    }
+
+    /// Called on quiz-view disappear (including the system back button):
+    /// clears only a session that belongs to this quiz, so a stale session
+    /// can never leak into a later entry of the same subcategory.
+    func endSessionIfCurrent(category: String, subCategory: String) {
+        if session?.category == category && session?.subCategory == subCategory {
+            session = nil
+        }
     }
 
     // MARK: - Quiz
