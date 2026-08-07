@@ -58,7 +58,7 @@ xcodebuild -project LanjingQuiz.xcodeproj -scheme LanjingQuiz -showdestinations
 After sign-in, the root screen has three native tabs:
 
 - **Exam List**: The default tab. It groups available exams and supports starting a new exam or resuming an active one.
-- **Practice**: An entry point to begin practice from the available exam list. A dedicated practice catalog can be added without changing the root navigation.
+- **Practice**: Practice questions are fetched **directly from the upstream platform** (机考题库 papers from the exam list) — no LAN server or pre-downloaded bank is involved. The flow is 分类 → 试卷 → 题型细分 → 刷题; questions are classified into 题型细分 locally with the same rule engine as the collector (`QuestionClassifier`, ported from `apps/bank/lib/question-classifier.js`). Answers are graded **locally and never submitted upstream**; entering a 新开 (wfs=1) paper creates a real upstream attempt that is best-effort-ended when the practice session closes, while 进行中 (wfs=0) papers are entered read-only and never ended. Practice requires a login session.
 - **Me**: Theme selection and sign-out.
 
 On iOS 26 and later, the system-provided `TabView` automatically uses Apple's Liquid Glass tab bar. Earlier supported iOS releases use the system tab bar appearance for their platform version.
@@ -97,7 +97,9 @@ Network calls mirror the upstream login, exam-list, enter, answer, mark, submit,
 
 ## Verification
 
-The `LanjingQuizTests` target currently contains 99 unit tests covering answer mapping, exam and result parsing, session expiry detection, login form encoding, rich HTML content, hashing, quiz logic, CookieCloud crypto/conversion (same interop vectors as the web client), and the practice bank (JSONL decoding, sub-category grouping, grading, shuffled order, settings, file storage and the download client).
+The `LanjingQuizTests` target currently contains 119 unit tests covering answer mapping, exam and result parsing, session expiry detection, login form encoding, rich HTML content, hashing, quiz logic, CookieCloud crypto/conversion (same interop vectors as the web client), the practice 题型细分 classifier (ported from the collector's rule engine), and the practice-upstream mapping (paper filtering, section cleaning, state join, DTO → question).
+
+The UI test (`LanjingQuizUITests`) runs the practice flow end-to-end against an in-process mock upstream (`MockUpstreamServer`, selected via the `LANJING_BASE_URL` launch environment) — it is hermetic and runs in CI without any local server.
 
 Before delivering a change, build `LanjingQuiz`, run the test target, and validate affected user flows on a simulator or a signed physical device. Confirming **Abandon** has a real upstream effect, so do not use it as an unattended smoke test.
 

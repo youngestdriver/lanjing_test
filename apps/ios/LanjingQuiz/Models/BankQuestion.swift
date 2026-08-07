@@ -1,35 +1,15 @@
 import Foundation
 
-/// One bank record, decoded from a single apps/bank/*.jsonl line.
-///
-/// Unlike the exam Question (keyN flags), bank records carry the answer as a
-/// letter or letter array (or null when unknown); keys are derived from the
-/// letters so grading stays uniform. Formula images stay remote — only
-/// protocol-relative srcs are normalized at decode time.
-struct BankQuestion: Identifiable, Equatable, Decodable, Sendable {
+/// One practice question, built from an upstream QuestionDTO + answer-card
+/// state (see PracticeMapping.bankQuestion). The answer is a letter or letter
+/// array (or nil when unknown); keys are derived from the letters so grading
+/// stays uniform. Formula images stay remote — only protocol-relative srcs
+/// are normalized at construction time.
+struct BankQuestion: Identifiable, Equatable, Sendable {
 
-    /// answer: "A" | ["A","C"] | null. null → the record has no known answer.
-    struct Answer: Decodable, Equatable, Sendable {
+    /// "A" | ["A","C"] | nil. nil → the record has no known answer.
+    struct Answer: Equatable, Sendable {
         let letters: [String]
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.singleValueContainer()
-            if let single = try? container.decode(String.self) {
-                letters = [single]
-            } else if let array = try? container.decode([String].self) {
-                letters = array
-            } else {
-                // JSON null decodes as nil at the answer field (try? at the
-                // call site); any other shape is a malformed record.
-                throw DecodingError.typeMismatch(
-                    Answer.self,
-                    DecodingError.Context(
-                        codingPath: decoder.codingPath,
-                        debugDescription: "answer must be a string, an array of strings, or null"
-                    )
-                )
-            }
-        }
 
         init(letters: [String]) {
             self.letters = letters
@@ -38,9 +18,9 @@ struct BankQuestion: Identifiable, Equatable, Decodable, Sendable {
 
     let id: String // _id
     let category: String
-    let section: String // coarser group, e.g. 逻辑判断 (kept for metadata display)
+    let section: String // coarser group, e.g. 逻辑填空 (kept for metadata display)
     let subCategory: String // 题型细分, e.g. 加强支持 — the practice grouping key
-    let question: String // HTML, img srcs normalized at decode time
+    let question: String // HTML, img srcs normalized at construction time
     let options: [String] // all 4 slots preserved; empty strings = 填空 slots
     let answer: Answer?
     let analysis: String?
@@ -90,36 +70,5 @@ struct BankQuestion: Identifiable, Equatable, Decodable, Sendable {
         self.sourceExamName = sourceExamName
         self.round = round
         self.collectedAt = collectedAt
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case id = "_id"
-        case category
-        case section
-        case subCategory
-        case question
-        case options
-        case answer
-        case analysis
-        case sourceExamName
-        case round
-        case collectedAt
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
-            id: try container.decode(String.self, forKey: .id),
-            category: (try? container.decode(String.self, forKey: .category)) ?? "",
-            section: (try? container.decode(String.self, forKey: .section)) ?? "",
-            subCategory: (try? container.decode(String.self, forKey: .subCategory)) ?? "",
-            question: (try? container.decode(String.self, forKey: .question)) ?? "",
-            options: (try? container.decode([String].self, forKey: .options)) ?? [],
-            answer: try? container.decode(Answer.self, forKey: .answer),
-            analysis: try? container.decode(String.self, forKey: .analysis),
-            sourceExamName: try? container.decode(String.self, forKey: .sourceExamName),
-            round: try? container.decode(Int.self, forKey: .round),
-            collectedAt: try? container.decode(String.self, forKey: .collectedAt)
-        )
     }
 }

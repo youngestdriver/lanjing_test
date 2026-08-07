@@ -4,7 +4,7 @@ import SwiftUI
 /// answer-reveal banner (with remote formula images), next/finish.
 struct PracticeQuizView: View {
     let vm: PracticeBankViewModel
-    let category: String
+    let paper: Exam
     let subCategory: String
 
     @Environment(\.dismiss) private var dismiss
@@ -41,10 +41,10 @@ struct PracticeQuizView: View {
         .task {
             // Always rebuild the session on entry: a stale session from a
             // previous (system-back) exit must never be reused.
-            vm.startSession(category: category, subCategory: subCategory)
+            await vm.startSession(paper: paper, subCategory: subCategory)
         }
         .onDisappear {
-            vm.endSessionIfCurrent(category: category, subCategory: subCategory)
+            vm.endSessionIfCurrent(paper: paper, subCategory: subCategory)
         }
     }
 

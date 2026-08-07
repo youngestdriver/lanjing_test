@@ -5,7 +5,16 @@ import Foundation
 /// questions → answer → mark → submit).
 @MainActor
 final class APIClient: NSObject, URLSessionDelegate {
-    nonisolated static let baseURL = URL(string: "https://test.lanjingweike.com")!
+    /// Overridable via the LANJING_BASE_URL launch environment (UI tests point
+    /// it at an in-process mock upstream) — mirrors the collector's
+    /// LANJING_BASE_URL support in apps/bank/lib/upstream.js.
+    nonisolated static let baseURL: URL = {
+        if let raw = ProcessInfo.processInfo.environment["LANJING_BASE_URL"],
+           let url = URL(string: raw) {
+            return url
+        }
+        return URL(string: "https://test.lanjingweike.com")!
+    }()
     static let userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0"
 
     let cookieStore: CookieStore
@@ -234,9 +243,12 @@ final class APIClient: NSObject, URLSessionDelegate {
         )
     }
 
-    /// Port of fetchAllQuestions: batches of 50, uuids repeated per batch.
-    func fetchQuestions(_ session: ExamSession) async throws -> [Question] {
-        var all: [Question] = []
+    /// Port of fetchAllQuestions: batches of 50, uuids repeated per batch,
+    /// returning the raw DTOs (the exam flow maps them to `Question`; the
+    /// practice flow maps them to `BankQuestion` and must keep all 4 option
+    /// slots, which `Question.init(dto:)` drops).
+    func fetchQuestionDTOs(_ session: ExamSession) async throws -> [QuestionDTO] {
+        var all: [QuestionDTO] = []
         let testIds = session.testIds
         let uuid = session.uuid
         for batchStart in stride(from: 0, to: testIds.count, by: 50) {
@@ -252,9 +264,13 @@ final class APIClient: NSObject, URLSessionDelegate {
             guard let dtos = try? decode([QuestionDTO].self, from: response.text) else {
                 throw APIError.invalidResponse
             }
-            all.append(contentsOf: dtos.map(Question.init(dto:)))
+            all.append(contentsOf: dtos)
         }
         return all
+    }
+
+    func fetchQuestions(_ session: ExamSession) async throws -> [Question] {
+        try await fetchQuestionDTOs(session).map(Question.init(dto:))
     }
 
     /// Port of POST /api/exams/:id/answer → /exam/exam_start_ing_multi.

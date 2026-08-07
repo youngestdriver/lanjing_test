@@ -3,10 +3,29 @@ import XCTest
 
 final class BankLogicTests: XCTestCase {
 
+    private func makeQuestion(
+        _ id: String,
+        subCategory: String = "类",
+        answer: BankQuestion.Answer? = BankQuestion.Answer(letters: ["A"])
+    ) -> BankQuestion {
+        BankQuestion(
+            id: id,
+            category: "言语理解",
+            section: "逻辑填空",
+            subCategory: subCategory,
+            question: "<p>题干</p>",
+            options: ["<p>A</p>", "<p>B</p>", "<p>C</p>", "<p>D</p>"],
+            answer: answer,
+            analysis: nil,
+            sourceExamName: nil,
+            round: nil,
+            collectedAt: nil
+        )
+    }
+
     private func questions(_ ids: [String], subCategory: String? = nil) -> [BankQuestion] {
         ids.enumerated().map { index, id in
-            let line = Fixtures.bankRecord(id, subCategory: subCategory ?? "类\(index % 2)")
-            return try! JSONDecoder().decode(BankQuestion.self, from: Data(line.utf8))
+            makeQuestion(id, subCategory: subCategory ?? "类\(index % 2)")
         }
     }
 
@@ -26,37 +45,30 @@ final class BankLogicTests: XCTestCase {
 
     // MARK: - grading
 
-    private func makeQuestion(answer: Fixtures.BankAnswerSpec, isMulti: Bool = false) -> BankQuestion {
-        try! JSONDecoder().decode(
-            BankQuestion.self,
-            from: Data(Fixtures.bankRecord(answer: answer).utf8)
-        )
-    }
-
     func testGradeSingleCorrect() {
-        let question = makeQuestion(answer: .single("A"))
+        let question = makeQuestion("q1", answer: .init(letters: ["A"]))
         XCTAssertEqual(BankLogic.grade(selected: ["A"], question: question), true)
     }
 
     func testGradeSingleWrong() {
-        let question = makeQuestion(answer: .single("A"))
+        let question = makeQuestion("q1", answer: .init(letters: ["A"]))
         XCTAssertEqual(BankLogic.grade(selected: ["B"], question: question), false)
     }
 
     func testGradeMultiExactSet() {
-        let question = makeQuestion(answer: .multi(["A", "C"]))
+        let question = makeQuestion("q1", answer: .init(letters: ["A", "C"]))
         XCTAssertEqual(BankLogic.grade(selected: ["A", "C"], question: question), true)
         XCTAssertEqual(BankLogic.grade(selected: ["C", "A"], question: question), true) // order-insensitive
     }
 
     func testGradeMultiWrongSet() {
-        let question = makeQuestion(answer: .multi(["A", "C"]))
+        let question = makeQuestion("q1", answer: .init(letters: ["A", "C"]))
         XCTAssertEqual(BankLogic.grade(selected: ["A"], question: question), false) // incomplete
         XCTAssertEqual(BankLogic.grade(selected: ["A", "B"], question: question), false) // wrong member
     }
 
     func testGradeUngradableReturnsNil() {
-        let question = makeQuestion(answer: .none)
+        let question = makeQuestion("q1", answer: nil)
         XCTAssertNil(BankLogic.grade(selected: ["A"], question: question))
     }
 
@@ -84,28 +96,5 @@ final class BankLogicTests: XCTestCase {
         let b = BankLogic.shuffled(source, seed: 2)
         XCTAssertNotEqual(a.map(\.id), b.map(\.id))
         XCTAssertEqual(Set(a.map(\.id)), Set(source.map(\.id))) // same members
-    }
-
-    // MARK: - BankSettings
-
-    func testBankSettingsDefaultServerURL() {
-        let suiteName = "BankLogicTests.\(UUID().uuidString)"
-        guard let defaults = UserDefaults(suiteName: suiteName) else {
-            return XCTFail("no isolated defaults suite")
-        }
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        XCTAssertEqual(BankSettings.loadServerURL(from: defaults), "http://127.0.0.1:3000")
-        BankSettings.saveServerURL("http://192.168.1.5:3000", to: defaults)
-        XCTAssertEqual(BankSettings.loadServerURL(from: defaults), "http://192.168.1.5:3000")
-    }
-
-    func testBaseURLValidation() {
-        XCTAssertEqual(BankSettings.baseURL(from: "http://127.0.0.1:3000")?.absoluteString, "http://127.0.0.1:3000")
-        XCTAssertEqual(BankSettings.baseURL(from: "http://127.0.0.1:3000/")?.absoluteString, "http://127.0.0.1:3000")
-        XCTAssertEqual(BankSettings.baseURL(from: "  https://example.com/bank/  ")?.absoluteString, "https://example.com/bank")
-        XCTAssertNil(BankSettings.baseURL(from: ""))
-        XCTAssertNil(BankSettings.baseURL(from: "ftp://example.com"))
-        XCTAssertNil(BankSettings.baseURL(from: "not a url"))
     }
 }

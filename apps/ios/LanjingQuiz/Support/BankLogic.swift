@@ -3,21 +3,8 @@ import Foundation
 /// Pure, nonisolated practice-bank helpers so unit tests never need the VM.
 enum BankLogic {
 
-    /// The 5 机考 categories; file base names in apps/bank. Fixed list —
-    /// never derived from meta.json targets (see BankMeta's note).
+    /// The 5 机考 categories (paper-name matching + classifier input).
     static let categories: [String] = ["言语理解", "数字运算", "逻辑推理", "资料分析", "特有题型"]
-
-    /// Split text on "\n" and decode each non-empty line; malformed lines are
-    /// dropped (the collector guarantees only the trailing line may be corrupt).
-    static func parseJSONL(_ text: String) -> [BankQuestion] {
-        let decoder = JSONDecoder()
-        return text
-            .split(separator: "\n", omittingEmptySubsequences: true)
-            .compactMap { line in
-                guard let data = String(line).data(using: .utf8) else { return nil }
-                return try? decoder.decode(BankQuestion.self, from: data)
-            }
-    }
 
     /// Group questions by subCategory, preserving first-appearance order.
     static func groupBySubcategory(_ questions: [BankQuestion]) -> [(name: String, questions: [BankQuestion])] {
