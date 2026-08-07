@@ -3,22 +3,21 @@ import XCTest
 /// Exercises the practice flow end-to-end against the local bank server
 /// (127.0.0.1:3000 — start `npm --prefix apps/web start` first). Skips when
 /// the server is unreachable (CI has no bank server).
+@MainActor
 final class PracticeFlowUITests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
 
-    func testPracticeFlowLoadsQuestions() throws {
+    func testPracticeFlowLoadsQuestions() async throws {
         // Server liveness probe — CI has no bank server, so skip there.
-        let probe = URLSession.shared.dataTask(with: URL(string: "http://127.0.0.1:3000/bank/meta.json")!)
-        let semaphore = DispatchSemaphore(value: 0)
+        var probe = URLRequest(url: URL(string: "http://127.0.0.1:3000/bank/meta.json")!)
+        probe.timeoutInterval = 3
         var reachable = false
-        URLSession.shared.dataTask(with: probe.originalRequest ?? URLRequest(url: URL(string: "http://127.0.0.1:3000/bank/meta.json")!)) { _, response, _ in
+        if let (_, response) = try? await URLSession.shared.data(for: probe) {
             reachable = (response as? HTTPURLResponse)?.statusCode == 200
-            semaphore.signal()
-        }.resume()
-        _ = semaphore.wait(timeout: .now() + 3)
+        }
         try XCTSkipUnless(reachable, "bank server not reachable — start apps/web first")
 
         let app = XCUIApplication()
