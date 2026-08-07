@@ -2,6 +2,7 @@
 
 [![CI Web](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-web.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-web.yml)
 [![CI iOS](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-ios.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-ios.yml)
+[![CI Bank](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-bank.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-bank.yml)
 
 面向蓝鲸微课考试流程的第三方学习客户端。本仓库按应用维护 Web/PWA 与原生 iOS 两套独立实现。两端现已覆盖同一组核心考试流程，但仍拥有各自的网络层、会话存储、界面代码和测试体系，不共享运行时或业务实现。
 
@@ -211,6 +212,7 @@ npm --prefix apps/bank run export
 .
 ├── .github/workflows/ci-web.yml    # Web 持续集成（路径检测 + 条件跳过）
 ├── .github/workflows/ci-ios.yml    # iOS 持续集成（路径检测 + 条件跳过）
+├── .github/workflows/ci-bank.yml   # 题库工具持续集成（路径检测 + 条件跳过）
 ├── apps/
 │   ├── bank/                       # 独立题库工具（收集/子分类/导出 CLI + 直连上游客户端）
 │   │   ├── lib/                    # 收集器核心、子分类规则、导出、上游解析与直连客户端
@@ -291,12 +293,13 @@ xcodebuild \
 
 ### GitHub Actions
 
-持续集成拆分为两个 workflow，在推送到 `main` 或创建目标为 `main` 的 PR 时运行；每个 workflow 都会执行一个轻量的改动检测 job（`dorny/paths-filter`），与检测范围不匹配时实际构建 job 会被跳过：
+持续集成拆分为三个 workflow，在推送到 `main` 或创建目标为 `main` 的 PR 时运行；每个 workflow 都会执行一个轻量的改动检测 job（`dorny/paths-filter`），与检测范围不匹配时实际构建 job 会被跳过：
 
 - [`ci-web.yml`](.github/workflows/ci-web.yml)（`Node`）：当改动涉及 `apps/web/`、`docs/`、`README.md` 或该 workflow 自身时运行 Node job；Ubuntu、Node 22、依赖安装、JavaScript 语法检查、51 项单元与安全测试、mock API 浏览器回归和 `/api/status` smoke test
 - [`ci-ios.yml`](.github/workflows/ci-ios.yml)（`iOS`）：当改动涉及 `apps/ios/` 或该 workflow 自身时运行 iOS job；macOS 15、Xcode 16.4、动态选择可用 iPhone 模拟器并运行测试
+- [`ci-bank.yml`](.github/workflows/ci-bank.yml)（`Bank`）：当改动涉及 `apps/bank/` 或该 workflow 自身时运行 Bank job；Ubuntu、Node 22，题库工具零 npm 依赖所以无需安装，直接跑语法检查与题库测试（收集器、直连上游客户端、子分类、导出；全库 dry-run 在无本地数据时自动跳过）
 
-workflow 本身始终运行（而不是在事件级用 `paths` 过滤）：GitHub 只对**被跳过的 job** 自动放行 required check，对因路径过滤而从未运行的 workflow 不会放行——那样纯 Web 或纯 iOS 的 PR 会永远卡在分支保护上。不匹配任何检测范围时（例如仅修改 `.github/` 下其他文件）两个构建 job 都会被跳过，`Node` 与 `iOS` 检查自动通过。
+workflow 本身始终运行（而不是在事件级用 `paths` 过滤）：GitHub 只对**被跳过的 job** 自动放行 required check，对因路径过滤而从未运行的 workflow 不会放行——那样纯 Web、纯 iOS 或纯题库的 PR 会永远卡在分支保护上。不匹配任何检测范围时（例如仅修改 `.github/` 下其他文件）三个构建 job 都会被跳过，`Node`、`iOS` 与 `Bank` 检查自动通过。
 
 这些检查验证基础构建、单元测试和本地浏览器流程，不等同于真实账号、真实上游、真机、签名或归档验证。
 
@@ -337,7 +340,7 @@ iOS 安装包应通过受控的 Release、TestFlight 或 CI artifact 分发，�
 
 - [本地 API 与上游映射](docs/web-api.md)
 - [原生 iOS 构建、架构与验证](apps/ios/README.md)
-- [Web 持续集成](.github/workflows/ci-web.yml) 与 [iOS 持续集成](.github/workflows/ci-ios.yml)
+- [Web 持续集成](.github/workflows/ci-web.yml)、[iOS 持续集成](.github/workflows/ci-ios.yml) 与 [题库工具持续集成](.github/workflows/ci-bank.yml)
 
 ## 许可与免责声明
 
