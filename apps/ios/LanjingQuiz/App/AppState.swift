@@ -21,10 +21,12 @@ final class AppState {
     var notice: String?
     let api: APIClient
     let cookieCloudSync: CookieCloudSync
+    let bankStorage: BankStorage
 
-    init(api: APIClient = APIClient()) {
+    init(api: APIClient = APIClient(), bankStorage: BankStorage = FileManagerBankStorage()) {
         self.api = api
         self.cookieCloudSync = CookieCloudSync(cookieStore: api.cookieStore)
+        self.bankStorage = bankStorage
         self.theme = Theme.load()
         self.autoAdvanceOnCorrect = QuizSettings.loadAutoAdvanceOnCorrect()
     }
@@ -33,6 +35,14 @@ final class AppState {
     /// before deciding the route, so a fresh device with a cloud session
     /// lands on the exam list without logging in again.
     func start() async {
+        #if DEBUG
+        // UI-testing hook: wipe the local bank so the practice crawl runs
+        // deterministically on every test execution (the argument is never
+        // passed in production builds).
+        if ProcessInfo.processInfo.arguments.contains("-reset-bank") {
+            try? bankStorage.removeAll()
+        }
+        #endif
         let hasSession = await cookieCloudSync.pullAndApplyIfNeeded()
         route = hasSession ? .examList : .login
     }

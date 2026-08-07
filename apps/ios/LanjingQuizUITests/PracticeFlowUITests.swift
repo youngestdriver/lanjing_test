@@ -1,8 +1,9 @@
 import XCTest
 
 /// Exercises the practice flow end-to-end against an in-process mock
-/// upstream (LANJING_BASE_URL launch env) — login → 练习 → 分类 → 试卷 →
-/// 题型 → 答题 → 完成, then asserts the best-effort attempt end fired.
+/// upstream (LANJING_BASE_URL launch env): login → 练习 → auto-crawl of the
+/// whole 机考题库 → 分类 (counts from the local bank) → 题型 → 答题 → 完成,
+/// then asserts the crawl best-effort-ended the fresh attempt exactly once.
 /// Hermetic: runs in CI without any local server.
 ///
 /// Setup happens inline in the test method (not in setUp/tearDown): those
@@ -20,25 +21,26 @@ final class PracticeFlowUITests: XCTestCase {
 
         let app = XCUIApplication()
         app.launchEnvironment["LANJING_BASE_URL"] = "http://127.0.0.1:\(server.port)"
+        // Wipe the local bank so the crawl (and its attempt-end) runs on
+        // every execution, not just the first one per simulator.
+        app.launchArguments = ["-reset-bank"]
         app.launch()
         logInIfNeeded(app)
 
-        // Practice tab → category list (paper counts come from the mock list).
+        // Practice tab → the first-use crawl runs automatically, then the
+        // category list appears with per-category counts from the local bank.
         let practiceTab = app.tabBars.buttons["练习"]
         XCTAssertTrue(practiceTab.waitForExistence(timeout: 10), "练习 tab missing")
         practiceTab.tap()
 
+        // Both mock papers are 言语理解 with the same q1–q3 batch — the crawl
+        // dedupes by _id, so the category holds exactly 3 questions.
         let categoryRow = app.staticTexts["言语理解"]
-        XCTAssertTrue(categoryRow.waitForExistence(timeout: 10), "category list never appeared")
+        XCTAssertTrue(categoryRow.waitForExistence(timeout: 20), "category list never appeared (crawl failed?)")
+        XCTAssertTrue(app.staticTexts["3 题"].waitForExistence(timeout: 5), "category count missing")
         categoryRow.tap()
 
-        // Paper list — both 机考题库 papers visible, non-target paper filtered.
-        let paperRow = app.staticTexts["【言语理解（二）】机考题库"]
-        XCTAssertTrue(paperRow.waitForExistence(timeout: 10), "paper list is blank — no rows appeared")
-        XCTAssertFalse(app.staticTexts["【中国石化模拟卷（四）】"].exists, "non-target paper must be filtered out")
-        paperRow.tap()
-
-        // Subcategory list — the mock batch classifies to 成语辨析.
+        // Subcategory list groups the crawled questions by 题型细分.
         let subRow = app.staticTexts["成语辨析"]
         XCTAssertTrue(subRow.waitForExistence(timeout: 10), "subcategory list is blank — no rows appeared")
         subRow.tap()
@@ -65,18 +67,20 @@ final class PracticeFlowUITests: XCTestCase {
         // Summary card.
         let summary = app.staticTexts["练习完成"]
         XCTAssertTrue(summary.waitForExistence(timeout: 10), "summary card never appeared")
-        app.buttons["返回题型列表"].tap()
 
-        // The session end fired the best-effort attempt end (submitExam →
-        // exam_ending, which the practice mock answers with JSON success).
+        // The crawl best-effort-ended exactly the wfs=1 paper's attempt
+        // (paper 111 → exam_ending); the wfs=0 paper 222 was read-only.
         let ended = XCTNSPredicateExpectation(
             predicate: NSPredicate { [weak server] _, _ in
-                server?.calls.contains { $0.path.hasPrefix("/exam/exam_ending") } ?? false
+                server?.calls.filter { $0.path.hasPrefix("/exam/exam_ending") }.count == 1
             },
             object: nil
         )
         let waitResult = XCTWaiter().wait(for: [ended], timeout: 10)
-        XCTAssertEqual(waitResult, .completed, "best-effort attempt end never reached /exam/exam_ending")
+        if waitResult != .completed {
+            print("MOCK CALLS: \(server.calls.map { "\($0.method) \($0.path)" }.joined(separator: " | "))")
+        }
+        XCTAssertEqual(waitResult, .completed, "crawl did not end the fresh attempt exactly once")
     }
 
     /// Local re-runs may restore a Keychain session (mock cookies persist per

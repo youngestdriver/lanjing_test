@@ -1,65 +1,77 @@
 import Foundation
 import Observation
 
-/// Drives the 练习 tab: login gate, upstream paper list (机考题库), per-paper
-/// question fetching with local classification, and the 分类 → 试卷 → 题型 →
-/// quiz flow. Practice answers are graded locally and never submitted
-/// upstream; the facade ends the created attempt when a session closes.
+/// Drives the 练习 tab: the local question bank is crawled **directly from
+/// the upstream platform** on first use (every 机考题库 paper, stored as
+/// JSONL per category), then practice aggregates it by 一级分类 (大类) →
+/// 二级分类 (题型细分) entirely offline. Answers are graded locally and
+/// never submitted upstream.
 @MainActor
 @Observable
 final class PracticeBankViewModel {
 
     enum Phase: Equatable {
-        case idle // not loaded yet
+        case idle // storage not yet checked
+        case downloading(PracticeUpstreamClient.CrawlProgress)
         case needsLogin
-        case loading
         case failed(String)
         case ready
     }
 
     private let appState: AppState
+    private let storage: BankStorage
     private let facade: PracticeUpstreamClient
 
     var phase: Phase = .idle
-    var papersByCategory: [String: [Exam]] = [:]
+    var meta: BankMeta?
     var subcategories: [(name: String, count: Int)] = []
-    var isSubcategoryLoading = false
-    var subcategoryError: String?
     var isShuffleEnabled = false
     var session: PracticeSession?
 
-    /// Per-paper fetch cache — re-entering a subcategory of the same paper
-    /// (or a stale back-stack session) refetches nothing.
-    private var questionsByPaper: [Int: [BankQuestion]] = [:]
-
-    init(appState: AppState, facade: PracticeUpstreamClient? = nil) {
+    init(appState: AppState, storage: BankStorage? = nil, facade: PracticeUpstreamClient? = nil) {
         self.appState = appState
+        self.storage = storage ?? appState.bankStorage
         self.facade = facade ?? PracticeUpstreamClient(api: appState.api)
     }
 
-    // MARK: - Paper list
+    // MARK: - Bank availability
 
-    /// Entry point from the practice tab's .task: load the 机考题库 paper list
-    /// grouped by category. Requires an upstream session.
-    func load() async {
-        // Entry from .idle (first appearance) or .failed (retry button).
-        if phase != .idle {
-            guard case .failed = phase else { return }
+    /// Entry point from the practice tab's .task: use the local bank when
+    /// present, otherwise crawl the whole 机考题库 from upstream. The crawl
+    /// blocks all practice UI while .downloading.
+    func ensureBankReady() async {
+        guard phase == .idle else { return }
+        if storage.isPopulated(), let meta = storage.loadMeta() {
+            self.meta = meta
+            phase = .ready
+            return
         }
+        await crawlIfNeeded(force: false)
+    }
+
+    /// 我的 > 更新题库: force a re-crawl. Completed papers are skipped
+    /// (their pools are fixed); new papers get crawled and deduped by _id.
+    func updateBank() async {
+        await crawlIfNeeded(force: true)
+    }
+
+    private func crawlIfNeeded(force: Bool) async {
+        guard force || phase != .ready else { return }
         guard appState.api.hasSession else {
             phase = .needsLogin
             return
         }
-        phase = .loading
+        phase = .downloading(PracticeUpstreamClient.CrawlProgress(index: 0, total: 0, paperName: ""))
         do {
-            let papers = try await facade.paperList()
-            var grouped: [String: [Exam]] = [:]
-            for paper in papers {
-                guard let category = PracticeMapping.matchCategory(paper.name) else { continue }
-                grouped[category, default: []].append(paper)
+            try await facade.crawlAllPapers(storage: storage) { [weak self] progress in
+                // The facade is @MainActor, so this callback is already on it.
+                if case .downloading = self?.phase { self?.phase = .downloading(progress) }
             }
-            papersByCategory = grouped
+            meta = storage.loadMeta()
             phase = .ready
+        } catch is CancellationError {
+            // Tab switched away mid-crawl: per-paper meta.papers progress is
+            // persisted, so the next entry resumes without re-entering papers.
         } catch {
             if !handleError(error) {
                 phase = .failed(message(for: error))
@@ -67,69 +79,46 @@ final class PracticeBankViewModel {
         }
     }
 
-    func paperCount(for category: String) -> Int {
-        papersByCategory[category]?.count ?? 0
-    }
+    // MARK: - Navigation
 
-    func papers(for category: String) -> [Exam] {
-        papersByCategory[category] ?? []
-    }
-
-    // MARK: - Subcategories
-
-    /// Loads and groups one paper's questions into 题型细分 groups (called from
-    /// the subcategory list's .task; the paper is entered on first fetch).
-    func loadSubcategories(paper: Exam) async {
-        isSubcategoryLoading = true
-        subcategoryError = nil
-        defer { isSubcategoryLoading = false }
-        do {
-            let questions = try await questions(for: paper)
-            subcategories = BankLogic.groupBySubcategory(questions)
-                .map { (name: $0.name, count: $0.questions.count) }
-        } catch {
-            if !handleError(error) {
-                subcategoryError = message(for: error)
-            }
+    /// Loads and groups one category's questions (called from the subcategory
+    /// list's .task; navigation itself is driven by NavigationStack links).
+    func openCategory(_ category: String) async {
+        guard let text = storage.loadCategoryText(category) else {
+            phase = .failed("本地题库缺少 \(category).jsonl，请在 我的 > 更新题库 重新爬取")
+            return
         }
+        let questions: [BankQuestion] = await Task.detached(priority: .userInitiated) {
+            BankLogic.parseJSONL(text)
+        }.value
+        let groups = BankLogic.groupBySubcategory(questions)
+        subcategories = groups.map { (name: $0.name, count: $0.questions.count) }
     }
 
-    // MARK: - Quiz session
-
-    func startSession(paper: Exam, subCategory: String) async {
-        do {
-            let questions = try await questions(for: paper).filter { $0.subCategory == subCategory }
-            let ordered = isShuffleEnabled
-                ? BankLogic.shuffled(questions, seed: UInt64.random(in: .min ... .max))
-                : questions
-            session = PracticeSession(
-                paper: paper,
-                category: PracticeMapping.matchCategory(paper.name) ?? "",
-                subCategory: subCategory,
-                questions: ordered
-            )
-        } catch {
-            if !handleError(error) {
-                phase = .failed(message(for: error))
-            }
+    /// Local-only session start (no network): parse the category file, filter
+    /// by 题型细分, optionally shuffle.
+    func startSession(category: String, subCategory: String) {
+        guard let text = storage.loadCategoryText(category) else {
+            phase = .failed("本地题库缺少 \(category).jsonl，请在 我的 > 更新题库 重新爬取")
+            return
         }
+        let questions = BankLogic.parseJSONL(text).filter { $0.subCategory == subCategory }
+        let ordered = isShuffleEnabled ? BankLogic.shuffled(questions, seed: UInt64.random(in: .min ... .max)) : questions
+        session = PracticeSession(category: category, subCategory: subCategory, questions: ordered)
     }
 
-    /// Ends the session and best-effort-ends the attempt the app created for
-    /// this paper (no-op for wfs=0 papers). Called on quiz exit.
+    /// Clears the finished session (the quiz view dismisses itself via
+    /// @Environment(\.dismiss) when popping back).
     func endSession() {
-        if let paper = session?.paper {
-            facade.endAttempt(paper: paper)
-        }
         session = nil
     }
 
     /// Called on quiz-view disappear (including the system back button):
-    /// ends only a session that belongs to this quiz, so a stale session can
-    /// never leak into a later entry of the same subcategory.
-    func endSessionIfCurrent(paper: Exam, subCategory: String) {
-        if session?.paper.id == paper.id && session?.subCategory == subCategory {
-            endSession()
+    /// clears only a session that belongs to this quiz, so a stale session
+    /// can never leak into a later entry of the same subcategory.
+    func endSessionIfCurrent(category: String, subCategory: String) {
+        if session?.category == category && session?.subCategory == subCategory {
+            session = nil
         }
     }
 
@@ -186,13 +175,6 @@ final class PracticeBankViewModel {
 
     // MARK: - Helpers
 
-    private func questions(for paper: Exam) async throws -> [BankQuestion] {
-        if let cached = questionsByPaper[paper.id] { return cached }
-        let questions = try await facade.enterPaper(paper)
-        questionsByPaper[paper.id] = questions
-        return questions
-    }
-
     /// Routes session-expiry/login errors through AppState (which redirects
     /// to the login screen); returns true when it did.
     private func handleError(_ error: Error) -> Bool {
@@ -213,7 +195,6 @@ final class PracticeBankViewModel {
 /// One practice run. Value type mutated wholesale through the @Observable
 /// property (Observation's modify accessor tracks it).
 struct PracticeSession: Equatable {
-    let paper: Exam
     let category: String
     let subCategory: String
     let questions: [BankQuestion]

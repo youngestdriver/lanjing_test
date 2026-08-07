@@ -43,6 +43,22 @@ final class BankLogicTests: XCTestCase {
         XCTAssertEqual(groups.map(\.name), ["未分类"])
     }
 
+    // MARK: - parseJSONL
+
+    func testParseJSONLDropsMalformedLines() throws {
+        let encoder = JSONEncoder()
+        let q1 = try encoder.encode(makeQuestion("q1"))
+        let q2 = try encoder.encode(makeQuestion("q2", subCategory: "实词辨析"))
+        let text = [
+            String(data: q1, encoding: .utf8)!,
+            "this is not json",
+            String(data: q2, encoding: .utf8)!,
+            "", // blank line skipped
+        ].joined(separator: "\n")
+        let questions = BankLogic.parseJSONL(text)
+        XCTAssertEqual(questions.map(\.id), ["q1", "q2"])
+    }
+
     // MARK: - grading
 
     func testGradeSingleCorrect() {

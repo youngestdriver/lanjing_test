@@ -69,4 +69,58 @@ final class BankModelTests: XCTestCase {
         let question = makeQuestion(analysis: "<p><img src='//x.cn/a.png'></p>")
         XCTAssertEqual(question.analysis, "<p><img src='https://x.cn/a.png'></p>")
     }
+
+    // MARK: - JSONL persistence (crawl → store → read back)
+
+    private func roundTrip(_ question: BankQuestion) throws -> BankQuestion {
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(question)
+        return try JSONDecoder().decode(BankQuestion.self, from: data)
+    }
+
+    func testEncodeDecodeRoundTripPreservesFields() throws {
+        let original = makeQuestion()
+        let decoded = try roundTrip(original)
+        XCTAssertEqual(decoded, original)
+        XCTAssertEqual(decoded.id, "b1")
+        XCTAssertEqual(decoded.category, "言语理解")
+        XCTAssertEqual(decoded.section, "逻辑填空")
+        XCTAssertEqual(decoded.subCategory, "成语辨析")
+        XCTAssertEqual(decoded.answer?.letters, ["A"])
+        XCTAssertEqual(decoded.sourceExamName, "【言语理解（二）】机考题库")
+        XCTAssertNil(decoded.round) // crawled records have no collector metadata
+    }
+
+    func testEncodeAnswerSingleLetterAsStringMultiAsArray() throws {
+        let encoder = JSONEncoder()
+        // single → "A" (collector-compatible string form)
+        let single = try encoder.encode(makeQuestion(answer: .init(letters: ["A"])))
+        XCTAssertTrue(String(data: single, encoding: .utf8)!.contains("\"answer\":\"A\""))
+        // multi → ["A","C"]
+        let multi = try encoder.encode(makeQuestion(answer: .init(letters: ["A", "C"])))
+        XCTAssertTrue(String(data: multi, encoding: .utf8)!.contains("\"answer\":[\"A\",\"C\"]"))
+        // nil → key omitted (synthesized encodeIfPresent); decoding tolerates
+        // both omission and the collector's explicit "answer":null.
+        let none = try encoder.encode(makeQuestion(answer: nil))
+        let noneJSON = String(data: none, encoding: .utf8)!
+        XCTAssertFalse(noneJSON.contains("\"answer\""))
+        XCTAssertNoThrow(try JSONDecoder().decode(BankQuestion.self, from: none))
+    }
+
+    func testDecodesCollectorFormatLine() throws {
+        // A hand-written line in apps/bank/data format (round/collectedAt
+        // present, answer as array).
+        let line = """
+        {"_id":"q9","category":"言语理解","section":"逻辑填空","subCategory":"成语辨析",\
+        "question":"<p>题干</p>","options":["<p>A</p>","","",""],\
+        "answer":["A","C"],"analysis":"<p>解析</p>","sourceExamName":"【言语理解（二）】机考题库",\
+        "round":4,"collectedAt":"2026-08-07T00:00:00.000Z"}
+        """
+        let question = try JSONDecoder().decode(BankQuestion.self, from: Data(line.utf8))
+        XCTAssertEqual(question.id, "q9")
+        XCTAssertEqual(question.options, ["<p>A</p>", "", "", ""])
+        XCTAssertEqual(question.answer?.letters, ["A", "C"])
+        XCTAssertTrue(question.isMulti)
+        XCTAssertEqual(question.round, 4)
+    }
 }
