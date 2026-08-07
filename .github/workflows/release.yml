@@ -17,9 +17,12 @@ name: Release
 # Artifacts:
 #   1. Web 免安装包 — zip of apps/web with production-only dependencies
 #      (npm ci --omit=dev), one-click start scripts and usage notes.
-#   2. iOS ipa (ADHOC) — built and signed only when the signing secrets are
-#      configured; the job self-skips otherwise.
-#   3. 题库快照 — only when include_bank=true AND the data exists in the
+#   2. iOS 未签名 ipa — always built (CODE_SIGNING_ALLOWED=NO); installable
+#      on real devices only after re-signing with a free Apple ID via
+#      Sideloadly/AltStore (instructions attached in the release).
+#   3. iOS 签名 ipa (ADHOC) — additionally built and signed when the signing
+#      secrets are configured; that job self-skips otherwise.
+#   4. 题库快照 — only when include_bank=true AND the data exists in the
 #      workspace (it does not in CI; see the bank-snapshot job).
 #
 # iOS signing secrets (add in repo Settings → Secrets and variables → Actions
@@ -166,6 +169,63 @@ jobs:
           path: "${{ runner.temp }}/lanjing-web-${{ needs.version.outputs.version }}.zip"
           if-no-files-found: error
 
+  # Always built: unsigned Release ipa. Not directly installable — the
+  # attached install notes explain re-signing with a free Apple ID
+  # (Sideloadly/AltStore, 7-day refresh).
+  ios-unsigned:
+    name: iOS 未签名 ipa
+    needs: version
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Build Release without code signing
+        run: |
+          xcodebuild build \
+            -project apps/ios/LanjingQuiz.xcodeproj \
+            -scheme LanjingQuiz \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath "$RUNNER_TEMP/unsigned-dd" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+
+      - name: Package unsigned ipa and install notes
+        run: |
+          app="$RUNNER_TEMP/unsigned-dd/Build/Products/Release-iphoneos/LanjingQuiz.app"
+          if [ ! -d "$app" ]; then
+            echo "::error::未找到构建产物 $app"
+            exit 1
+          fi
+          pkg="$RUNNER_TEMP/assets"
+          mkdir -p "$pkg/Payload"
+          cp -R "$app" "$pkg/Payload/"
+          cd "$pkg"
+          zip -r -q "LanjingQuiz-unsigned-${{ needs.version.outputs.version }}.ipa" Payload
+          cat > "未签名ipa安装说明.txt" <<'EOF'
+          未签名 ipa(LanjingQuiz-unsigned-*.ipa)不能直接安装。它没有签名,
+          需要用免费工具 + 你自己的 Apple ID 签名后装到真机(每 7 天重新签名一次):
+
+          1. 下载 Sideloadly(https://sideloadly.io,macOS/Windows)或 AltStore;
+          2. iPhone 连接电脑并解锁;
+          3. Sideloadly 中选择本 ipa,填入你的 Apple ID 和密码(仅用于签名,
+             官方工具本地处理,不上传);
+          4. 点击 Start;完成后到手机:设置 → 通用 → VPN 与设备管理 →
+             开发者 App → 信任;
+          5. 信任后即可使用;7 天后过期需重新签名。
+
+          若 release 里另有 LanjingQuiz-*.ipa(带签名,ADHOC),那是已签好的
+          正式包,直接安装即可,无需本步骤。
+          EOF
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-unsigned
+          path: "${{ runner.temp }}/assets"
+          if-no-files-found: error
+
   # Skeleton: activates when the signing secrets exist (IOS_CERT_BASE64 set).
   # Without a certificate no installable ipa can be produced, so the job
   # self-skips and the release proceeds without it.
@@ -272,7 +332,7 @@ jobs:
 
   release:
     name: 创建 Release
-    needs: [version, web-package, ios-ipa, bank-snapshot]
+    needs: [version, web-package, ios-unsigned, ios-ipa, bank-snapshot]
     if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     permissions:
