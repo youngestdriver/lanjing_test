@@ -1,0 +1,303 @@
+name: Release
+
+# Manual release builder: produces the distributable artifacts and creates a
+# GitHub Release with them. Run from the Actions tab ("Release" → Run
+# workflow) or: gh workflow run release.yml -f version=v0.1.0
+#
+# Inputs:
+#   version      — tag to publish (e.g. v0.1.0); leave empty to auto-bump the
+#                  patch number of the latest tag (v0.1.0 → v0.1.1)
+#   include_bank — reserved skeleton: packages the question-bank snapshot
+#                  (apps/bank/data) into the release. Disabled by default:
+#                  the bank data is intentionally gitignored as upstream IP
+#                  and publishing it publicly needs a deliberate decision
+#                  first (see README). Flip to 'true' only once that is
+#                  settled.
+#
+# Artifacts:
+#   1. Web 免安装包 — zip of apps/web with production-only dependencies
+#      (npm ci --omit=dev), one-click start scripts and usage notes.
+#   2. iOS ipa (ADHOC) — built and signed only when the signing secrets are
+#      configured; the job self-skips otherwise.
+#   3. 题库快照 — only when include_bank=true AND the data exists in the
+#      workspace (it does not in CI; see the bank-snapshot job).
+#
+# iOS signing secrets (add in repo Settings → Secrets and variables → Actions
+# when you have an Apple Developer certificate):
+#   IOS_CERT_BASE64          — export.p12, base64-encoded
+#   IOS_CERT_PASSWORD        — p12 export password
+#   IOS_PROVISIONING_BASE64  — ADHOC provisioning profile (.mobileprovision),
+#                              base64-encoded, for bundle id com.qzh.lanjingquiz
+#   DEVELOPMENT_TEAM         — team ID (e.g. AB12CD34EF)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "发布版本号,如 v0.1.0(留空自动 +1 patch)"
+        required: false
+        default: ""
+      include_bank:
+        description: "附带题库快照(公开性定论后启用)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.compute.outputs.version }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Compute release version
+        id: compute
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            latest=$(git tag --sort=-v:refname | head -1)
+            [ -z "$latest" ] && latest="v0.0.0"
+            next=$(echo "$latest" | awk -F. '{printf "v%d.%d.%d", $1+0, $2+0, $3+1}')
+            echo "version=$next" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Release version: $(grep '^version=' "$GITHUB_OUTPUT" | cut -d= -f2)"
+
+  web-package:
+    name: Web 免安装包
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Assemble staging copy (no tests/tools/dev artifacts)
+        run: |
+          stage="$RUNNER_TEMP/lanjing-web-${{ needs.version.outputs.version }}"
+          mkdir -p "$stage"
+          tar -C apps/web -cf - \
+            --exclude=node_modules --exclude=test --exclude=tools \
+            --exclude=.local --exclude=build \
+            . | tar -C "$stage" -xf -
+
+      - name: Install production dependencies only
+        run: npm ci --omit=dev --prefix "$RUNNER_TEMP/lanjing-web-${{ needs.version.outputs.version }}"
+
+      - name: Write one-click start scripts and usage notes
+        run: |
+          stage="$RUNNER_TEMP/lanjing-web-${{ needs.version.outputs.version }}"
+          cat > "$stage/启动.command" <<'EOF'
+          #!/bin/bash
+          cd "$(dirname "$0")/app" || exit 1
+          if ! command -v node >/dev/null 2>&1; then
+            echo "未检测到 Node.js(需要 22 或更高): https://nodejs.org"
+            read -r -p "按回车退出"; exit 1
+          fi
+          echo "蓝鲸助手已启动: http://127.0.0.1:3000 (局域网: http://<本机IP>:3000)"
+          echo "按 Ctrl+C 停止"
+          node server.js
+          read -r -p "服务已退出,按回车关闭窗口"
+          EOF
+          chmod +x "$stage/启动.command"
+
+          cat > "$stage/启动.bat" <<'EOF'
+          @echo off
+          cd /d "%~dp0app"
+          where node >nul 2>nul
+          if errorlevel 1 (
+            echo 未检测到 Node.js(需要 22 或更高): https://nodejs.org
+            pause
+            exit /b 1
+          )
+          echo 蓝鲸助手已启动: http://127.0.0.1:3000
+          echo 按 Ctrl+C 停止
+          node server.js
+          pause
+          EOF
+
+          cat > "$stage/使用说明.txt" <<'EOF'
+          蓝鲸助手 Web 免安装包 v${{ needs.version.outputs.version }}
+          ============================================
+          运行: 双击 启动.command(macOS)或 启动.bat(Windows)。
+          前置: 本机需安装 Node.js 22 或更高版本(https://nodejs.org)。
+
+          浏览器打开 http://127.0.0.1:3000 使用;首次登录后会话保存在本地。
+
+          局域网访问: 服务默认监听所有网卡,同一局域网设备可用 http://<本机IP>:3000
+          访问,也可在「我的 > 局域网访问」关闭。⚠️ 该服务共享同一份会话,没有多用户
+          隔离/TLS/限流,只适合可信局域网,请勿暴露到公网。
+
+          iOS 练习页题库(可选): 把题库数据放到本目录 bank/data/ 下(meta.json 与
+          各分类 .jsonl),iOS 客户端即可从 /bank 下载;不放则练习页题库相关功能不可用,
+          其余功能不受影响。
+
+          停止: 在终端按 Ctrl+C。
+          EOF
+
+      - name: Package zip
+        run: |
+          cd "$RUNNER_TEMP"
+          zip -r -q "lanjing-web-${{ needs.version.outputs.version }}.zip" \
+            "lanjing-web-${{ needs.version.outputs.version }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-zip
+          path: "${{ runner.temp }}/lanjing-web-${{ needs.version.outputs.version }}.zip"
+          if-no-files-found: error
+
+  # Skeleton: activates when the signing secrets exist (IOS_CERT_BASE64 set).
+  # Without a certificate no installable ipa can be produced, so the job
+  # self-skips and the release proceeds without it.
+  ios-ipa:
+    name: iOS ipa (ADHOC)
+    if: env.IOS_CERT_BASE64 != ''
+    env:
+      IOS_CERT_BASE64: ${{ secrets.IOS_CERT_BASE64 }}
+      IOS_CERT_PASSWORD: ${{ secrets.IOS_CERT_PASSWORD }}
+      IOS_PROVISIONING_BASE64: ${{ secrets.IOS_PROVISIONING_BASE64 }}
+      DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Import signing certificate into a build keychain
+        run: |
+          echo "$IOS_CERT_BASE64" | base64 --decode > /tmp/cert.p12
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import /tmp/cert.p12 -k build.keychain -P "$IOS_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
+
+      - name: Install provisioning profile
+        run: |
+          echo "$IOS_PROVISIONING_BASE64" | base64 --decode > /tmp/profile.mobileprovision
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          uuid=$(security cms -D -i /tmp/profile.mobileprovision | plutil -extract UUID raw -)
+          cp /tmp/profile.mobileprovision "$HOME/Library/MobileDevice/Provisioning Profiles/$uuid.mobileprovision"
+
+      - name: Archive (Release configuration)
+        run: |
+          xcodebuild archive \
+            -project apps/ios/LanjingQuiz.xcodeproj \
+            -scheme LanjingQuiz \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$RUNNER_TEMP/LanjingQuiz.xcarchive" \
+            DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" CODE_SIGN_STYLE=Automatic \
+            -allowProvisioningUpdates
+
+      - name: Export ADHOC ipa
+        run: |
+          cat > "$RUNNER_TEMP/export.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>ad-hoc</string>
+            <key>teamID</key><string>${DEVELOPMENT_TEAM}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>stripSwiftSymbols</key><true/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/LanjingQuiz.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/export.plist" \
+            -exportPath "$RUNNER_TEMP/ipa" \
+            -allowProvisioningUpdates
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: "${{ runner.temp }}/ipa/*.ipa"
+          if-no-files-found: error
+
+  # Reserved slot for the question-bank snapshot. The data is gitignored, so
+  # it is normally absent from the CI workspace — the job then fails with a
+  # clear message instead of silently producing an empty release. Once the
+  # public/private decision is made (see README), either commit the data into
+  # a private fork or upload the locally packaged zip manually:
+  #   zip -r 题库导出-vX.Y.Z.zip apps/bank/data
+  #   gh release upload <tag> 题库导出-vX.Y.Z.zip
+  bank-snapshot:
+    name: 题库快照 (默认关闭)
+    if: inputs.include_bank == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Verify bank data is present in the workspace
+        run: |
+          if [ ! -d apps/bank/data ] || [ -z "$(ls -A apps/bank/data 2>/dev/null)" ]; then
+            echo "::error::题库数据不在 CI 工作区(gitignore)。要么改用私有仓库并纳入数据,要么在本地打包后手动 gh release upload。"
+            exit 1
+          fi
+
+      - name: Package bank snapshot
+        run: |
+          zip -r -q "题库导出-${{ needs.version.outputs.version }}.zip" apps/bank/data
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bank-snapshot
+          path: "题库导出-${{ needs.version.outputs.version }}.zip"
+          if-no-files-found: error
+
+  release:
+    name: 创建 Release
+    needs: [version, web-package, ios-ipa, bank-snapshot]
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: "${{ runner.temp }}/assets"
+          merge-multiple: true
+
+      - name: Create GitHub Release with assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          assets=()
+          for f in "${{ runner.temp }}"/assets/*; do
+            [ -f "$f" ] && assets+=("$f")
+          done
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "::warning::没有可发布的产物(web 包总是存在;ipa 需要签名密钥)"
+          fi
+          gh release create "${{ needs.version.outputs.version }}" \
+            "${assets[@]}" \
+            --title "蓝鲸助手 ${{ needs.version.outputs.version }}" \
+            --generate-notes \
+            --repo "${{ github.repository }}"
+          echo "Release: https://github.com/${{ github.repository }}/releases/tag/${{ needs.version.outputs.version }}"

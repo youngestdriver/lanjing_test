@@ -303,6 +303,14 @@ workflow 本身始终运行（而不是在事件级用 `paths` 过滤）：GitHu
 
 这些检查验证基础构建、单元测试和本地浏览器流程，不等同于真实账号、真实上游、真机、签名或归档验证。
 
+### 发布 (Release)
+
+[`release.yml`](.github/workflows/release.yml) 是手动触发的发布 workflow（Actions 页 → Release → Run workflow，或 `gh workflow run release.yml`），生成产物并创建带附件的 GitHub Release：
+
+- **Web 免安装包**：`apps/web` 生产依赖打包（`npm ci --omit=dev`）+ 双击启动脚本（macOS `启动.command` / Windows `启动.bat`）+ 使用说明，版本号留空自动取最新 tag 的 patch +1；
+- **iOS ipa（ADHOC）**：仅当配置了签名 secrets（`IOS_CERT_BASE64`、`IOS_CERT_PASSWORD`、`IOS_PROVISIONING_BASE64`、`DEVELOPMENT_TEAM`）时才会构建并签名，否则自动跳过；
+- **题库快照**：默认关闭的保留位（`include_bank` 输入）——题库数据因版权问题被 gitignore，公开发布需先定夺；定论后可在私有仓库纳入数据，或本地打包后 `gh release upload <tag> 题库导出-*.zip`。
+
 ## 开发流程
 
 `main` 是唯一长期分支，并受分支保护：
@@ -340,7 +348,7 @@ iOS 安装包应通过受控的 Release、TestFlight 或 CI artifact 分发，�
 
 - [本地 API 与上游映射](docs/web-api.md)
 - [原生 iOS 构建、架构与验证](apps/ios/README.md)
-- [Web 持续集成](.github/workflows/ci-web.yml)、[iOS 持续集成](.github/workflows/ci-ios.yml) 与 [题库工具持续集成](.github/workflows/ci-bank.yml)
+- [Web 持续集成](.github/workflows/ci-web.yml)、[iOS 持续集成](.github/workflows/ci-ios.yml)、[题库工具持续集成](.github/workflows/ci-bank.yml) 与 [发布 workflow](.github/workflows/release.yml)
 
 ## 许可与免责声明
 
