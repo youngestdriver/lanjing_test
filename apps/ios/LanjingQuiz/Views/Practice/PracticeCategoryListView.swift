@@ -10,17 +10,12 @@ struct PracticeCategoryListView: View {
             Section("题库分类") {
                 ForEach(BankLogic.categories, id: \.self) { category in
                     let count = vm.meta?.counts?[category] ?? 0
-                    Button {
-                        Task { await vm.openCategory(category) }
-                    } label: {
+                    NavigationLink(value: PracticeRoute.subcategories(category: category)) {
                         HStack {
                             Text(category)
                             Spacer()
                             Text("\(count) 题")
                                 .foregroundStyle(.secondary)
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.tertiary)
                         }
                     }
                     .disabled(count == 0)

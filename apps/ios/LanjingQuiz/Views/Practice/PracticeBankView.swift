@@ -1,5 +1,11 @@
 import SwiftUI
 
+/// Navigation values for the practice flow (NativeStack links).
+enum PracticeRoute: Hashable {
+    case subcategories(category: String)
+    case quiz(category: String, subCategory: String)
+}
+
 /// The 练习 tab: gates practice on the local bank being downloaded (first
 /// use downloads it from the configured server; while downloading, only
 /// progress is shown), then offers 大类 → 子类 → 刷题.
@@ -18,30 +24,26 @@ struct PracticeBankView: View {
                 case .failed(let message):
                     failedView(message)
                 case .ready:
-                    content
+                    PracticeCategoryListView(vm: vm!)
                 }
             }
             .navigationTitle("练习")
+            // Native push/pop via NavigationLink values — the system back
+            // button and swipe-back work at every level.
+            .navigationDestination(for: PracticeRoute.self) { route in
+                switch route {
+                case .subcategories(let category):
+                    PracticeSubcategoryListView(vm: vm!, category: category)
+                case .quiz(let category, let subCategory):
+                    PracticeQuizView(vm: vm!, category: category, subCategory: subCategory)
+                }
+            }
         }
         .task {
             if vm == nil {
                 vm = PracticeBankViewModel(appState: appState)
             }
             await vm?.ensureBankReady()
-        }
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        if let vm {
-            switch vm.screen {
-            case .categoryList:
-                PracticeCategoryListView(vm: vm)
-            case .subcategoryList(let category):
-                PracticeSubcategoryListView(vm: vm, category: category)
-            case .quiz:
-                PracticeQuizView(vm: vm)
-            }
         }
     }
 

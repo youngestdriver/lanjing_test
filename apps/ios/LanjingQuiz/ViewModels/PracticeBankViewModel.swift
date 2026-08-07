@@ -15,18 +15,11 @@ final class PracticeBankViewModel {
         case ready
     }
 
-    enum Screen: Equatable {
-        case categoryList
-        case subcategoryList(category: String)
-        case quiz
-    }
-
     private let appState: AppState
     private let client: QuestionBankClient
     private let storage: BankStorage
 
     var phase: Phase = .idle
-    var screen: Screen = .categoryList
     var meta: BankMeta?
     var subcategories: [(name: String, count: Int)] = []
     var isShuffleEnabled = false
@@ -88,6 +81,8 @@ final class PracticeBankViewModel {
 
     // MARK: - Navigation
 
+    /// Loads and groups one category's questions (called from the subcategory
+    /// list's .task; navigation itself is driven by NavigationStack links).
     func openCategory(_ category: String) async {
         guard let text = storage.loadCategoryText(category) else {
             phase = .failed("本地题库缺少 \(category).jsonl，请在 我的 > 更新题库 重新下载")
@@ -98,12 +93,6 @@ final class PracticeBankViewModel {
         }.value
         let groups = BankLogic.groupBySubcategory(questions)
         subcategories = groups.map { (name: $0.name, count: $0.questions.count) }
-        screen = .subcategoryList(category: category)
-    }
-
-    func backToCategories() {
-        session = nil
-        screen = .categoryList
     }
 
     func startSession(category: String, subCategory: String) {
@@ -111,17 +100,12 @@ final class PracticeBankViewModel {
         let questions = BankLogic.parseJSONL(text).filter { $0.subCategory == subCategory }
         let ordered = isShuffleEnabled ? BankLogic.shuffled(questions, seed: UInt64.random(in: .min ... .max)) : questions
         session = PracticeSession(category: category, subCategory: subCategory, questions: ordered)
-        screen = .quiz
     }
 
+    /// Clears the finished session (the quiz view dismisses itself via
+    /// @Environment(\.dismiss) when popping back).
     func endSession() {
-        let category = session?.category
         session = nil
-        if let category {
-            screen = .subcategoryList(category: category)
-        } else {
-            screen = .categoryList
-        }
     }
 
     // MARK: - Quiz

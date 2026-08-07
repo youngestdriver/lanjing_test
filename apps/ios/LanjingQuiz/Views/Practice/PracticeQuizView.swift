@@ -4,6 +4,10 @@ import SwiftUI
 /// answer-reveal banner (with remote formula images), next/finish.
 struct PracticeQuizView: View {
     let vm: PracticeBankViewModel
+    let category: String
+    let subCategory: String
+
+    @Environment(\.dismiss) private var dismiss
 
     private var session: PracticeSession? { vm.session }
     private var question: BankQuestion? { vm.currentQuestion }
@@ -16,11 +20,20 @@ struct PracticeQuizView: View {
                 summaryCard(session)
             }
         }
-        .navigationTitle("\(session?.subCategory ?? "练习")")
+        .navigationTitle("\(vm.session?.subCategory ?? subCategory)")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("退出") { vm.endSession() }
+                Button("退出") {
+                    vm.endSession()
+                    dismiss()
+                }
+            }
+        }
+        .task {
+            // The route carries the target; build the session once on entry.
+            if vm.session?.subCategory != subCategory || vm.session?.category != category {
+                vm.startSession(category: category, subCategory: subCategory)
             }
         }
     }
@@ -120,6 +133,7 @@ struct PracticeQuizView: View {
             .font(.system(size: 15))
             Button("返回题型列表") {
                 vm.endSession()
+                dismiss()
             }
             .buttonStyle(KeycapButtonStyle(color: DS.accent, radius: DS.radiusSM))
         }

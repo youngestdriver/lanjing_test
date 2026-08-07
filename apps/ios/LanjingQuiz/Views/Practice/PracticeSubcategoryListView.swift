@@ -14,17 +14,12 @@ struct PracticeSubcategoryListView: View {
             }
             Section("题型") {
                 ForEach(vm.subcategories, id: \.name) { group in
-                    Button {
-                        vm.startSession(category: category, subCategory: group.name)
-                    } label: {
+                    NavigationLink(value: PracticeRoute.quiz(category: category, subCategory: group.name)) {
                         HStack {
                             Text(group.name)
                             Spacer()
                             Text("\(group.count) 题")
                                 .foregroundStyle(.secondary)
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.tertiary)
                         }
                     }
                     .disabled(group.count == 0)
@@ -33,5 +28,8 @@ struct PracticeSubcategoryListView: View {
         }
         .navigationTitle(category)
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await vm.openCategory(category)
+        }
     }
 }
