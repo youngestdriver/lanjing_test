@@ -55,6 +55,7 @@
 		BDE3C65C32DB85CAA56DD049 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1613A3AFDED5B85859DEFE16 /* LoginView.swift */; };
 		BFCD0D3496DEFA1596CA5A03 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6188CFE56F186CCECDC684FA /* KeychainHelper.swift */; };
 		C1D291D2218D1C8A3673108A /* ExamHTMLParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = B72877EE1B6AC80597824B95 /* ExamHTMLParser.swift */; };
+		C3956E80C719138DA82AD9E0 /* PracticeFlowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6AC6144CF6B87E67A637A1F /* PracticeFlowUITests.swift */; };
 		C4BE7800CECC374BED24BCF4 /* LoginViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A070395E3E9F666EC2C0C25E /* LoginViewModel.swift */; };
 		C5047112E513B1B1AA2E68B5 /* RichHTMLContentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EDCC049B5A9A32493EF2075 /* RichHTMLContentTests.swift */; };
 		C9EF3541101112BD8F1872DF /* Exam.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24F8FFE9E2E034F4369A9FF7 /* Exam.swift */; };
@@ -83,6 +84,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		10C3D0B78B2F43BCD52BF02D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 307D030F24AAC786DF24A8EE /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F8EC58A49AAF88C8742B1D96;
+			remoteInfo = LanjingQuiz;
+		};
 		17868492DDDE39AA1DDD6790 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 307D030F24AAC786DF24A8EE /* Project object */;
@@ -108,6 +116,7 @@
 		2D0EF14F9E652B9F68490FB0 /* QuestionTimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuestionTimerView.swift; sourceTree = "<group>"; };
 		2D6B481FC05585B2110A8B19 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		2EC6D828E6FA0AB00C311AF9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		329985DEEC96E51CF14F8407 /* LanjingQuizUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LanjingQuizUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		32BFB7AB9B136148CFC37135 /* LanjingQuizTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LanjingQuizTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		33F905DFA804D34FFB20F66C /* PracticeBankViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeBankViewModel.swift; sourceTree = "<group>"; };
 		34E242E150FF74041E7BA8E5 /* Question.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Question.swift; sourceTree = "<group>"; };
@@ -129,7 +138,7 @@
 		5FF5AB4B1C7BCE1D1BA79FA0 /* BankStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankStorageTests.swift; sourceTree = "<group>"; };
 		615EE3D6375CB52ADD9D0984 /* SessionExpiryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionExpiryTests.swift; sourceTree = "<group>"; };
 		6188CFE56F186CCECDC684FA /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
-		6665ACEC7ADB34A675333AB2 /* LanjingQuiz.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LanjingQuiz.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6665ACEC7ADB34A675333AB2 /* LanjingQuiz.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LanjingQuiz.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		67F512FD68645C1849B92BDF /* BankLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankLogic.swift; sourceTree = "<group>"; };
 		6913CBFD4AD1D569021F5032 /* CookieCloudCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieCloudCrypto.swift; sourceTree = "<group>"; };
 		6C66501C84823829FBA3D384 /* CookieStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieStore.swift; sourceTree = "<group>"; };
@@ -163,6 +172,7 @@
 		DDA0F435FACAC1527BB92A1D /* BankModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankModelTests.swift; sourceTree = "<group>"; };
 		E21335F7B31985CE3647EE6E /* LoginFormTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginFormTests.swift; sourceTree = "<group>"; };
 		E2584DF0E03F4C66B86C082D /* ResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultView.swift; sourceTree = "<group>"; };
+		E6AC6144CF6B87E67A637A1F /* PracticeFlowUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeFlowUITests.swift; sourceTree = "<group>"; };
 		E79BCB55F107262197AF9EF9 /* ExamCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExamCardView.swift; sourceTree = "<group>"; };
 		EBEC331B9CC28250E7160459 /* PracticeOptionRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeOptionRowView.swift; sourceTree = "<group>"; };
 		EDFE012A3AB01CDD9BC0235F /* APIError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIError.swift; sourceTree = "<group>"; };
@@ -172,6 +182,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		0540C0AA22A845FD0F1F5509 /* LanjingQuizUITests */ = {
+			isa = PBXGroup;
+			children = (
+				E6AC6144CF6B87E67A637A1F /* PracticeFlowUITests.swift */,
+			);
+			path = LanjingQuizUITests;
+			sourceTree = "<group>";
+		};
 		2E17EEBC320C3297E093A5BE /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
@@ -210,6 +228,7 @@
 			children = (
 				6665ACEC7ADB34A675333AB2 /* LanjingQuiz.app */,
 				32BFB7AB9B136148CFC37135 /* LanjingQuizTests.xctest */,
+				329985DEEC96E51CF14F8407 /* LanjingQuizUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -275,6 +294,7 @@
 			children = (
 				ED0B896545ED55D2769CA402 /* LanjingQuiz */,
 				3526706A038F6173DFF2E9F6 /* LanjingQuizTests */,
+				0540C0AA22A845FD0F1F5509 /* LanjingQuizUITests */,
 				38AB61676CB2F85505F3E0A8 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -395,6 +415,24 @@
 			productReference = 32BFB7AB9B136148CFC37135 /* LanjingQuizTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		D85D4EDF1C35CDFAA0D0DE1E /* LanjingQuizUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 582F727981612A01D542962E /* Build configuration list for PBXNativeTarget "LanjingQuizUITests" */;
+			buildPhases = (
+				645957343C127D70941794B3 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				12375E67E33E56F32EF635CD /* PBXTargetDependency */,
+			);
+			name = LanjingQuizUITests;
+			packageProductDependencies = (
+			);
+			productName = LanjingQuizUITests;
+			productReference = 329985DEEC96E51CF14F8407 /* LanjingQuizUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		F8EC58A49AAF88C8742B1D96 /* LanjingQuiz */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 52C92ABCA41B13FC73E5482C /* Build configuration list for PBXNativeTarget "LanjingQuiz" */;
@@ -425,8 +463,11 @@
 					B6BE649ABCCB08E66D46E020 = {
 						ProvisioningStyle = Automatic;
 					};
+					D85D4EDF1C35CDFAA0D0DE1E = {
+						ProvisioningStyle = Automatic;
+						TestTargetID = F8EC58A49AAF88C8742B1D96;
+					};
 					F8EC58A49AAF88C8742B1D96 = {
-						DevelopmentTeam = "${DEVELOPMENT_TEAM}";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -447,6 +488,7 @@
 			targets = (
 				F8EC58A49AAF88C8742B1D96 /* LanjingQuiz */,
 				B6BE649ABCCB08E66D46E020 /* LanjingQuizTests */,
+				D85D4EDF1C35CDFAA0D0DE1E /* LanjingQuizUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -528,6 +570,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		645957343C127D70941794B3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C3956E80C719138DA82AD9E0 /* PracticeFlowUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		88BC8394203FF47A456D9B26 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -552,6 +602,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		12375E67E33E56F32EF635CD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F8EC58A49AAF88C8742B1D96 /* LanjingQuiz */;
+			targetProxy = 10C3D0B78B2F43BCD52BF02D /* PBXContainerItemProxy */;
+		};
 		A5413AB497C1C210D971586B /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = F8EC58A49AAF88C8742B1D96 /* LanjingQuiz */;
@@ -583,6 +638,16 @@
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
+		};
+		80C5C9C0C3E954EAC70D31AB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.qzh.lanjingquiz.uitests;
+				PRODUCT_NAME = LanjingQuizUITests;
+				TEST_TARGET_NAME = LanjingQuiz;
+			};
+			name = Debug;
 		};
 		8224AEA241A45E98E0FDF978 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -627,6 +692,16 @@
 			};
 			name = Debug;
 		};
+		AA3DDF22B7CD49B5A583FA02 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.qzh.lanjingquiz.uitests;
+				PRODUCT_NAME = LanjingQuizUITests;
+				TEST_TARGET_NAME = LanjingQuiz;
+			};
+			name = Release;
+		};
 		E24383539B944CA3C3E3C71E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -655,6 +730,15 @@
 			buildConfigurations = (
 				9E72222DDE21737765062549 /* Debug */,
 				7C6A9290C772700022A948EE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		582F727981612A01D542962E /* Build configuration list for PBXNativeTarget "LanjingQuizUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				80C5C9C0C3E954EAC70D31AB /* Debug */,
+				AA3DDF22B7CD49B5A583FA02 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

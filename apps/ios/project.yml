@@ -66,6 +66,19 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.qzh.lanjingquiz.tests
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LanjingQuiz.app/LanjingQuiz"
         BUNDLE_LOADER: "$(TEST_HOST)"
+  LanjingQuizUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - LanjingQuizUITests
+    dependencies:
+      - target: LanjingQuiz
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_NAME: LanjingQuizUITests
+        PRODUCT_BUNDLE_IDENTIFIER: com.qzh.lanjingquiz.uitests
+        TEST_TARGET_NAME: LanjingQuiz
 schemes:
   LanjingQuiz:
     build:
@@ -77,3 +90,4 @@ schemes:
       config: Debug
       targets:
         - LanjingQuizTests
+        - LanjingQuizUITests

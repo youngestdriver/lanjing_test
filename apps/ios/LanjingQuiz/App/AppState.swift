@@ -41,6 +41,15 @@ final class AppState {
     /// before deciding the route, so a fresh device with a cloud session
     /// lands on the exam list without logging in again.
     func start() async {
+        #if DEBUG
+        // UI-testing hook: skip login so the practice flow can be exercised
+        // without a real upstream session (the argument is never passed in
+        // production builds).
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing") {
+            route = .examList
+            return
+        }
+        #endif
         let hasSession = await cookieCloudSync.pullAndApplyIfNeeded()
         route = hasSession ? .examList : .login
     }
