@@ -13,6 +13,9 @@ name: Release
 #                  and publishing it publicly needs a deliberate decision
 #                  first (see README). Flip to 'true' only once that is
 #                  settled.
+#   include_ipa  — additionally build a signed ADHOC ipa (requires the
+#                  signing secrets below; fails fast with a clear message
+#                  when they are missing). The unsigned ipa is always built.
 #
 # Artifacts:
 #   1. Web 免安装包 — zip of apps/web with production-only dependencies
@@ -42,6 +45,11 @@ on:
         default: ""
       include_bank:
         description: "附带题库快照(公开性定论后启用)"
+        required: false
+        default: false
+        type: boolean
+      include_ipa:
+        description: "构建并附带签名 ipa(需先配置签名 secrets)"
         required: false
         default: false
         type: boolean
@@ -226,12 +234,13 @@ jobs:
           path: "${{ runner.temp }}/assets"
           if-no-files-found: error
 
-  # Skeleton: activates when the signing secrets exist (IOS_CERT_BASE64 set).
-  # Without a certificate no installable ipa can be produced, so the job
-  # self-skips and the release proceeds without it.
+  # Signed ADHOC ipa, opt-in via the include_ipa input (job-level `if` cannot
+  # read secrets/env, so the decision comes from the dispatch inputs). The
+  # first step fails fast with a clear message when the signing secrets are
+  # missing; without a certificate no installable signed ipa can be produced.
   ios-ipa:
-    name: iOS ipa (ADHOC)
-    if: env.IOS_CERT_BASE64 != ''
+    name: iOS 签名 ipa (ADHOC)
+    if: inputs.include_ipa == 'true'
     env:
       IOS_CERT_BASE64: ${{ secrets.IOS_CERT_BASE64 }}
       IOS_CERT_PASSWORD: ${{ secrets.IOS_CERT_PASSWORD }}
@@ -242,6 +251,17 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+
+      - name: Verify signing secrets are configured
+        run: |
+          missing=""
+          for var in IOS_CERT_BASE64 IOS_CERT_PASSWORD IOS_PROVISIONING_BASE64 DEVELOPMENT_TEAM; do
+            [ -n "${!var}" ] || missing="$missing $var"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::勾选了 include_ipa 但签名 secrets 未配置:$missing。请先在仓库 Settings → Secrets and variables → Actions 配置后再发布。"
+            exit 1
+          fi
 
       - name: Import signing certificate into a build keychain
         run: |
@@ -306,6 +326,7 @@ jobs:
   #   gh release upload <tag> 题库导出-vX.Y.Z.zip
   bank-snapshot:
     name: 题库快照 (默认关闭)
+    needs: version
     if: inputs.include_bank == 'true'
     runs-on: ubuntu-latest
     steps:
