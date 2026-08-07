@@ -86,7 +86,7 @@ private struct HomeTabView: View {
                 }
                 .tag(HomeTab.exams)
 
-            PracticeView(showExamList: { selectedTab = .exams })
+            PracticeBankView()
                 .tabItem {
                     Label("练习", systemImage: "target")
                 }
@@ -97,24 +97,6 @@ private struct HomeTabView: View {
                     Label("我的", systemImage: "person.crop.circle")
                 }
                 .tag(HomeTab.profile)
-        }
-    }
-}
-
-private struct PracticeView: View {
-    let showExamList: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            ContentUnavailableView {
-                Label("开始练习", systemImage: "target")
-            } description: {
-                Text("从考试列表选择一份试卷开始答题")
-            } actions: {
-                Button("前往考试列表", action: showExamList)
-                    .buttonStyle(.borderedProminent)
-            }
-            .navigationTitle("练习")
         }
     }
 }
@@ -162,6 +144,8 @@ private struct ProfileView: View {
                         Label("答对后自动下一题", systemImage: "arrow.right.square")
                     }
                 }
+
+                PracticeBankSettingsSection()
 
                 CookieCloudSection()
 

@@ -96,3 +96,53 @@ enum Fixtures {
         )
     }
 }
+
+// MARK: - Question bank fixtures
+
+extension Fixtures {
+
+    enum BankAnswerSpec {
+        case single(String)
+        case multi([String])
+        case none
+    }
+
+    /// Builds one JSONL line for a bank record. HTML strings are JSON-escaped
+    /// (attribute quotes must not break the line).
+    static func bankRecord(
+        _ id: String = "b1",
+        category: String = "言语理解",
+        section: String = "逻辑填空",
+        subCategory: String = "成语辨析",
+        question: String = "<p>题干</p>",
+        options: [String] = ["<p>A选项</p>", "<p>B选项</p>", "<p>C选项</p>", "<p>D选项</p>"],
+        answer: BankAnswerSpec = .single("A"),
+        analysis: String? = "<p>解析</p>",
+        sourceExamName: String? = "【言语理解（二）】机考题库",
+        round: Int? = 4,
+        collectedAt: String? = "2026-08-07T00:00:00.000Z"
+    ) -> String {
+        let jsonEscape = { (s: String) -> String in
+            s.replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+                .replacingOccurrences(of: "\n", with: "\\n")
+        }
+        let answerJSON: String
+        switch answer {
+        case .single(let letter): answerJSON = "\"\(letter)\""
+        case .multi(let letters): answerJSON = "[\"\(letters.joined(separator: "\",\""))\"]"
+        case .none: answerJSON = "null"
+        }
+        let analysisJSON = analysis.map { "\"\(jsonEscape($0))\"" } ?? "null"
+        let sourceJSON = sourceExamName.map { "\"\(jsonEscape($0))\"" } ?? "null"
+        let roundJSON = round.map(String.init) ?? "null"
+        let collectedJSON = collectedAt.map { "\"\(jsonEscape($0))\"" } ?? "null"
+        let optionsJSON = options.map(jsonEscape).joined(separator: "\",\"")
+        return """
+        {"_id":"\(jsonEscape(id))","category":"\(jsonEscape(category))","section":"\(jsonEscape(section))",\
+        "subCategory":"\(jsonEscape(subCategory))","question":"\(jsonEscape(question))","options":["\(optionsJSON)"],\
+        "answer":\(answerJSON),"analysis":\(analysisJSON),"sourceExamName":\(sourceJSON),\
+        "round":\(roundJSON),"collectedAt":\(collectedJSON)}
+        """
+    }
+}

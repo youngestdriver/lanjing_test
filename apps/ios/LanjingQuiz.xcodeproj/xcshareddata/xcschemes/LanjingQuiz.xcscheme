@@ -48,7 +48,20 @@
                ReferencedContainer = "container:LanjingQuiz.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D85D4EDF1C35CDFAA0D0DE1E"
+               BuildableName = "LanjingQuizUITests.xctest"
+               BlueprintName = "LanjingQuizUITests"
+               ReferencedContainer = "container:LanjingQuiz.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
+      <CommandLineArguments>
+      </CommandLineArguments>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
@@ -70,6 +83,8 @@
             ReferencedContainer = "container:LanjingQuiz.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <CommandLineArguments>
+      </CommandLineArguments>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"

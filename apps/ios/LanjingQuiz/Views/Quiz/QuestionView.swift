@@ -34,7 +34,11 @@ struct QuestionView: View {
                 RichHTMLContent(html: question.text, fontSize: 17)
                 options(for: question)
                 if isAnswered {
-                    explainBanner(for: question, state: state)
+                    ExplainBannerView(
+                        correct: state.state == .right,
+                        answerLabel: answerLabel(for: question),
+                        analysis: question.analysis
+                    )
                 }
             }
             .padding()
@@ -50,7 +54,11 @@ struct QuestionView: View {
                     headerRow(question, state)
                     RichHTMLContent(html: question.text, fontSize: 17)
                     if isAnswered {
-                        explainBanner(for: question, state: state)
+                        ExplainBannerView(
+                            correct: state.state == .right,
+                            answerLabel: answerLabel(for: question),
+                            analysis: question.analysis
+                        )
                     }
                 }
                 .padding()
@@ -126,27 +134,10 @@ struct QuestionView: View {
         }
     }
 
-    private func explainBanner(for question: Question, state: QuestionState) -> some View {
-        let correct = state.state == .right
-        let answerLabel = question.correctAnswers.isEmpty
+    private func answerLabel(for question: Question) -> String {
+        question.correctAnswers.isEmpty
             ? question.firstAnswer
             : question.correctAnswers.joined(separator: "、")
-        return VStack(alignment: .leading, spacing: 10) {
-            Text(correct ? "棒极了！回答正确！" : "加油！再接再厉！")
-                .font(.system(size: 15, weight: .heavy))
-            if !correct {
-                Text("正确答案：\(answerLabel)")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(DS.accent)
-            }
-            if let analysis = question.analysis, !analysis.isEmpty {
-                RichHTMLContent(html: analysis, fontSize: 14)
-            }
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background((correct ? DS.accent : DS.red).opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: DS.radiusMD))
     }
 
     private func icon(for state: QuestionState.State) -> String {
