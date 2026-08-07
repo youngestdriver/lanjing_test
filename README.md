@@ -2,6 +2,7 @@
 
 [![CI Web](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-web.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-web.yml)
 [![CI iOS](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-ios.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-ios.yml)
+[![CI Bank](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-bank.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-bank.yml)
 
 面向蓝鲸微课考试流程的第三方学习客户端。本仓库按应用维护 Web/PWA 与原生 iOS 两套独立实现。两端现已覆盖同一组核心考试流程，但仍拥有各自的网络层、会话存储、界面代码和测试体系，不共享运行时或业务实现。
 
@@ -158,12 +159,12 @@ Web 前端通过同源的 `/api` 路由访问本地 Express 代理：
 
 ## 题库收集器
 
-`apps/web/scripts/collect-bank.js` 是一个独立 CLI，把机考题库中的题目（题干、选项、正确答案、解析）逐份收集并去重保存，用于为后续功能准备本地题库。
+`apps/bank/scripts/collect-bank.js` 是独立于 Web 与 iOS 的题库工具（`apps/bank/`，纯 Node、零 npm 依赖）中的收集 CLI：通过 `lib/upstream.js` **直连上游**把机考题库中的题目（题干、选项、正确答案、解析）逐份收集并去重保存，用于为后续功能准备本地题库。不需要启动 Web 服务。
 
 上游平台的实际结构（已对真实服务验证）：每份机考卷（【言语理解（二）】机考题库 等）是**固定题池**——重新进入只会拿到同一批题，同类不同卷（一）（二）（三）之间题目互不重叠；分类写在**卷名**里（言语理解/数字运算/逻辑推理/资料分析/特有题型），卷内 section 是子题型（逻辑填空、图形推理、时政等）。因此收集 = 每份目标卷进入一次即可全量（目前共 14 份目标卷、约 3000 题）：进入 → 抓取 → 空答案提交放弃（或对用户进行中的卷只读收集）→ 下一份。
 
 ```text
-node apps/web/scripts/collect-bank.js [--exam <id>] [--max-rounds N]
+node apps/bank/scripts/collect-bank.js [--exam <id>] [--max-rounds N]
        [--idle-limit N] [--round-delay ms] [--bank-dir <path>]
        [--targets a,b,c] [--skip-in-progress]
 ```
@@ -174,35 +175,35 @@ node apps/web/scripts/collect-bank.js [--exam <id>] [--max-rounds N]
 | `--max-rounds N` | 200 | 最大轮数安全上限 |
 | `--idle-limit N` | 3 | 连续 N 轮无新题即停止 |
 | `--round-delay ms` | 1500 | 每轮间隔 |
-| `--bank-dir <path>` | `apps/bank/` | 题库输出目录 |
+| `--bank-dir <path>` | `apps/bank/data/` | 题库输出目录 |
 | `--targets a,b,c` | 5 个机考分类 | 目标分类（按卷名子串匹配；可自行加"常识判断"等） |
 | `--skip-in-progress` | 收集 | 跳过进行中的作答（默认只读收集用户进行中的卷，**不提交**） |
 
-- 数据落盘在 `apps/bank/`（独立于 web 应用，已 gitignore）：每个目标分类一个 JSONL（`言语理解.jsonl` 等），外加 `meta.json` 记录轮次、各卷状态与统计；任意中断后重跑同一目录即可续接（去重按题目 `_id`，损坏尾行自动丢弃）。每条记录含 `_id`、`category`（分类）、`section`（子题型，已去掉"(共N题…)"后缀）、`question`、`options`（4 槽）、`answer`（单选字母/多选数组/兜底/`null`）、`analysis`（解析）、来源卷与轮次。该目录同时由 server 在 `/bank` 静态托管，供 iOS 练习页下载
-- 会话复用本地保存的登录态；没有可用会话时在交互式终端提示输入手机号和密码，密码仅在运行时存在于内存，**绝不落盘**。后台无人值守运行可改用 `LANJING_PHONE` / `LANJING_PASSWORD` 环境变量提供凭据（同样只存在于进程内，不写入任何文件）
+- 数据落盘在 `apps/bank/data/`（gitignore，不入库）：每个目标分类一个 JSONL（`言语理解.jsonl` 等），外加 `meta.json` 记录轮次、各卷状态与统计；任意中断后重跑同一目录即可续接（去重按题目 `_id`，损坏尾行自动丢弃）。每条记录含 `_id`、`category`（分类）、`section`（子题型，已去掉"(共N题…)"后缀）、`question`、`options`（4 槽）、`answer`（单选字母/多选数组/兜底/`null`）、`analysis`（解析）、来源卷与轮次。该目录同时由 server 在 `/bank` 静态托管，供 iOS 练习页下载
+- 会话由收集器**自己管理**（`apps/bank/data/session_cookies.txt`，mode 0o600），不复用 Web 应用的登录态；登录一次后即可复用。没有可用会话时在交互式终端提示输入手机号和密码，密码仅在运行时存在于内存，**绝不落盘**。后台无人值守运行可改用 `LANJING_PHONE` / `LANJING_PASSWORD` 环境变量提供凭据（同样只存在于进程内，不写入任何文件）
 - ⚠️ 与 `enter`/`submit` 相关：收集器对 `wfs=1` 的卷每轮会创建一份空答案作答并立即放弃（消耗考试次数）；对 `wfs=0` 的卷（你自己的进行中作答）只读取题、绝不提交。机考卷的交卷接口返回 JSON 成功而非成绩页，收集器通过重拉考试列表验证 wfs 翻回判定放弃成功
 - 停止条件：所有目标卷耗尽、连续 `--idle-limit` 轮无新题、轮数上限，或 Ctrl+C（完成当前轮后停止，数据已落盘）
 
 ## 题库子分类
 
-`apps/web/scripts/classify-bank.js` 是题库的离线子分类 CLI：为 `apps/bank/` 下每条记录追加 `subCategory`（更细的题型类别，如 言语理解|阅读理解 → 主旨概括/意图推断/细节理解/标题选择…，数字运算|数量关系 → 行程/工程/利润/浓度…，资料分析 → 增长率/增长量/比重/平均数/倍数与比值/综合分析…，特有题型 → 直接用 section 名）。规则在 `apps/web/lib/question-classifier.js`：按 (category, section) 分组的有序正则，对「题干+解析」去 HTML 后的纯文本首条命中即定类，section 内规则优先，未命中落入各 section 兜底类（如 数量关系→和差倍比与方程、逻辑填空→实词辨析）；当前 3065 题「其他」占比约 1%。
+`apps/bank/scripts/classify-bank.js` 是题库的离线子分类 CLI：为 `apps/bank/data/` 下每条记录追加 `subCategory`（更细的题型类别，如 言语理解|阅读理解 → 主旨概括/意图推断/细节理解/标题选择…，数字运算|数量关系 → 行程/工程/利润/浓度…，资料分析 → 增长率/增长量/比重/平均数/倍数与比值/综合分析…，特有题型 → 直接用 section 名）。规则在 `apps/bank/lib/question-classifier.js`：按 (category, section) 分组的有序正则，对「题干+解析」去 HTML 后的纯文本首条命中即定类，section 内规则优先，未命中落入各 section 兜底类（如 数量关系→和差倍比与方程、逻辑填空→实词辨析）；当前 3065 题「其他」占比约 1%。
 
 ```text
-node apps/web/scripts/classify-bank.js [--bank-dir <path>] [--dry-run]
+node apps/bank/scripts/classify-bank.js [--bank-dir <path>] [--dry-run]
        [--no-backup] [--targets a,b,c]
 ```
 
 - `--dry-run` 只统计并打印分类表，不写盘；正式运行首次写盘前把原文件备份为 `*.jsonl.bak`（一次性，重跑不覆盖），随后原子重写
 - 幂等：重跑输出与上次字节一致，不产生重复；新收集的题目补跑一次即可
-- 停止后（或任何时刻）可用 `npm --prefix apps/web run classify` 或直接运行脚本重跑
+- 停止后（或任何时刻）可用 `npm --prefix apps/bank run classify` 或直接运行脚本重跑
 
 ### Markdown 导出
 
-`apps/web/scripts/export-bank.js` 把题库导出为**人类可读的 Markdown**：每个 (分类-子类) 一个文件（`<bank-dir>/export/言语理解-成语辨析.md`），题干/选项/答案/解析清洗成纯文本（HTML 与实体解码、段落保留）。**题干/选项/解析中的公式图片会下载到 `<out>/images/` 并本地引用**（按 URL 去重，重跑跳过已存在文件，下载失败回退远程链接；纯图片题仍标注"（图片题）"）。当前 3065 题、83 个文件、4257 张公式图、共约 73 MB。
+`apps/bank/scripts/export-bank.js` 把题库导出为**人类可读的 Markdown**：每个 (分类-子类) 一个文件（`<bank-dir>/export/言语理解-成语辨析.md`），题干/选项/答案/解析清洗成纯文本（HTML 与实体解码、段落保留）。**题干/选项/解析中的公式图片会下载到 `<out>/images/` 并本地引用**（按 URL 去重，重跑跳过已存在文件，下载失败回退远程链接；纯图片题仍标注"（图片题）"）。当前 3065 题、83 个文件、4257 张公式图、共约 73 MB。
 
 ```text
-node apps/web/scripts/export-bank.js [--bank-dir <path>] [--out <path>] [--targets a,b,c] [--no-images]
-npm --prefix apps/web run export
+node apps/bank/scripts/export-bank.js [--bank-dir <path>] [--out <path>] [--targets a,b,c] [--no-images]
+npm --prefix apps/bank run export
 ```
 
 ## 项目结构
@@ -211,8 +212,15 @@ npm --prefix apps/web run export
 .
 ├── .github/workflows/ci-web.yml    # Web 持续集成（路径检测 + 条件跳过）
 ├── .github/workflows/ci-ios.yml    # iOS 持续集成（路径检测 + 条件跳过）
+├── .github/workflows/ci-bank.yml   # 题库工具持续集成（路径检测 + 条件跳过）
 ├── apps/
-│   ├── bank/                       # 本地题库（收集/分类/导出的数据，gitignore）
+│   ├── bank/                       # 独立题库工具（收集/子分类/导出 CLI + 直连上游客户端）
+│   │   ├── lib/                    # 收集器核心、子分类规则、导出、上游解析与直连客户端
+│   │   ├── scripts/                # collect-bank / classify-bank / export-bank CLI
+│   │   ├── test/                   # Node 单元与集成测试（stub 上游）
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   └── data/                   # 收集/分类/导出的数据（gitignore，不入库）
 │   ├── ios/
 │   │   ├── LanjingQuiz.xcodeproj/  # 已提交的 Xcode 工程与共享 scheme
 │   │   ├── LanjingQuiz/            # SwiftUI 应用源码
@@ -222,9 +230,6 @@ npm --prefix apps/web run export
 │   └── web/
 │       ├── lib/parsers.js          # 考试页、成绩页与会话解析器
 │       ├── lib/cookiecloud.js      # CookieCloud 加密协议与 cookie 转换（与官方扩展互操作）
-│       ├── lib/question-bank.js    # 题库收集器核心（进入/抓取/去重/JSONL 存储）
-│       ├── lib/question-classifier.js  # 题库子分类规则引擎（subCategory）
-│       ├── lib/bank-export.js      # Markdown 导出（HTML→纯文本转换）
 │       ├── public/
 │       │   ├── js/                 # 浏览器应用与可测试答题逻辑
 │       │   ├── index.html          # 单页应用结构
@@ -242,16 +247,20 @@ npm --prefix apps/web run export
 
 ### Node
 
-Web 使用 Node 内置测试框架验证解析器和答题纯逻辑，并通过本机 Chrome 验证完整浏览器交互。提交前运行：
+Web 使用 Node 内置测试框架验证解析器和答题纯逻辑，并通过本机 Chrome 验证完整浏览器交互。题库工具（`apps/bank/`）零 npm 依赖，直接运行其 `check`/`test` 即可。提交前运行：
 
 ```bash
 npm --prefix apps/web ci
 npm --prefix apps/web run check
 npm --prefix apps/web test
 npm --prefix apps/web run test:browser
+npm --prefix apps/bank run check
+npm --prefix apps/bank test
 ```
 
-当前 101 项单元与安全测试覆盖历史答案映射、考试页与成绩页解析、会话失效识别、多选集合判定、答案编码、下一未答题、陈旧考试抑制，本地 API 的 Host、Origin、JSON 写请求、登录重定向识别、退出登录、旧上游响应隔离、局域网默认绑定与 `TRUSTED_HOSTS` 白名单、局域网访问开关的即时生效与持久化，以及 CookieCloud 的两种加密算法与官方扩展互操作向量（crypto-js 参考实现 + openssl 交叉验证）、fail-closed 解密、cookie 转换与域名过滤、配置校验与密码掩码、拉取/推送/合并/去重语义、重启后配置持久化。题库收集器测试覆盖卷名分类匹配、section 清洗（去"(共N题…)"后缀）、题卡位置关联、记录 schema（单选/多选/兜底答案/填空）、考试选择策略（pendingSubmit 优先、目标卷过滤、`wfs=0` 只读收集、强制 `--exam`）、502 交卷验证（重拉列表判定 wfs 翻回）、"未创建的作答绝不提交"保护、跨轮去重与 resume、损坏尾行容错、空闲/上限/会话失效停止，以及真实服务器 + stub 上游的端到端收集（新卷流程、JSON 成功交卷、进行中卷只读收集、非目标卷不进入）。题库子分类测试覆盖 HTML 剥离与实体解码、各 section 规则命中、优先级（意图先于主旨、削弱先于翻译、增长量先于增长率、综合分析先于增长率）、兜底类、特有题型 section 即子类、字段保真与幂等重写，以及全库 dry-run（其他 <5%，无 bank 文件时自动跳过）。浏览器回归会启动本地服务和真实 Chrome，并完全拦截 `/api/*`：它验证三个首页入口及其深链接和浏览器历史、桌面侧栏与移动底栏、主题和自动切题设置持久化、CookieCloud 设置 UI（开关、输入框、警告文案与手动同步）、真实退出入口、多选提交、历史答案恢复、同步失败重试、交卷与旧 `401` 响应的竞态隔离、成绩页终态、键盘和触控交互、PWA 应用壳预缓存与离线导航回退，以及桌面、390px、320px 和低高度横屏布局。两类测试都不访问真实上游；浏览器回归需要系统已安装 Google Chrome，或通过 `CHROME_PATH` 指定兼容的 Chromium 可执行文件。
+当前 101 项单元与安全测试覆盖历史答案映射、考试页与成绩页解析、会话失效识别、多选集合判定、答案编码、下一未答题、陈旧考试抑制，本地 API 的 Host、Origin、JSON 写请求、登录重定向识别、退出登录、旧上游响应隔离、局域网默认绑定与 `TRUSTED_HOSTS` 白名单、局域网访问开关的即时生效与持久化，以及 CookieCloud 的两种加密算法与官方扩展互操作向量（crypto-js 参考实现 + openssl 交叉验证）、fail-closed 解密、cookie 转换与域名过滤、配置校验与密码掩码、拉取/推送/合并/去重语义、重启后配置持久化。浏览器回归会启动本地服务和真实 Chrome，并完全拦截 `/api/*`：它验证三个首页入口及其深链接和浏览器历史、桌面侧栏与移动底栏、主题和自动切题设置持久化、CookieCloud 设置 UI（开关、输入框、警告文案与手动同步）、真实退出入口、多选提交、历史答案恢复、同步失败重试、交卷与旧 `401` 响应的竞态隔离、成绩页终态、键盘和触控交互、PWA 应用壳预缓存与离线导航回退，以及桌面、390px、320px 和低高度横屏布局。Web 侧测试都不访问真实上游；浏览器回归需要系统已安装 Google Chrome，或通过 `CHROME_PATH` 指定兼容的 Chromium 可执行文件。
+
+题库工具测试（`apps/bank/test/`）覆盖：收集器的卷名分类匹配、section 清洗（去"(共N题…)"后缀）、题卡位置关联、记录 schema（单选/多选/兜底答案/填空）、考试选择策略（pendingSubmit 优先、目标卷过滤、`wfs=0` 只读收集、强制 `--exam`）、502 交卷验证（重拉列表判定 wfs 翻回）、"未创建的作答绝不提交"保护、跨轮去重与 resume、损坏尾行容错、空闲/上限/会话失效停止；直连上游客户端的登录全流程（JSESSIONID 引导、表单编码、会话落盘）、登录失败、未登录拦截、会话过期（`onlineStatus:"0"` 与重定向到登录页两种识别）、cookie jar 合并与失效（`max-age=0` 删除）、幂等读取的重试语义；以及直连客户端 + stub 上游的端到端收集（新卷流程、JSON 成功交卷、进行中卷只读收集、非目标卷不进入、收集不扰动客户端已存会话）。题库子分类测试覆盖 HTML 剥离与实体解码、各 section 规则命中、优先级（意图先于主旨、削弱先于翻译、增长量先于增长率、综合分析先于增长率）、兜底类、特有题型 section 即子类、字段保真与幂等重写，以及全库 dry-run（其他 <5%，无 bank 文件时自动跳过）。
 
 启动服务后，还可按“快速开始”中的命令请求 `/api/status`；CI 会执行同样的无副作用 HTTP smoke test。
 
@@ -284,12 +293,13 @@ xcodebuild \
 
 ### GitHub Actions
 
-持续集成拆分为两个 workflow，在推送到 `main` 或创建目标为 `main` 的 PR 时运行；每个 workflow 都会执行一个轻量的改动检测 job（`dorny/paths-filter`），与检测范围不匹配时实际构建 job 会被跳过：
+持续集成拆分为三个 workflow，在推送到 `main` 或创建目标为 `main` 的 PR 时运行；每个 workflow 都会执行一个轻量的改动检测 job（`dorny/paths-filter`），与检测范围不匹配时实际构建 job 会被跳过：
 
 - [`ci-web.yml`](.github/workflows/ci-web.yml)（`Node`）：当改动涉及 `apps/web/`、`docs/`、`README.md` 或该 workflow 自身时运行 Node job；Ubuntu、Node 22、依赖安装、JavaScript 语法检查、51 项单元与安全测试、mock API 浏览器回归和 `/api/status` smoke test
 - [`ci-ios.yml`](.github/workflows/ci-ios.yml)（`iOS`）：当改动涉及 `apps/ios/` 或该 workflow 自身时运行 iOS job；macOS 15、Xcode 16.4、动态选择可用 iPhone 模拟器并运行测试
+- [`ci-bank.yml`](.github/workflows/ci-bank.yml)（`Bank`）：当改动涉及 `apps/bank/` 或该 workflow 自身时运行 Bank job；Ubuntu、Node 22，题库工具零 npm 依赖所以无需安装，直接跑语法检查与题库测试（收集器、直连上游客户端、子分类、导出；全库 dry-run 在无本地数据时自动跳过）
 
-workflow 本身始终运行（而不是在事件级用 `paths` 过滤）：GitHub 只对**被跳过的 job** 自动放行 required check，对因路径过滤而从未运行的 workflow 不会放行——那样纯 Web 或纯 iOS 的 PR 会永远卡在分支保护上。不匹配任何检测范围时（例如仅修改 `.github/` 下其他文件）两个构建 job 都会被跳过，`Node` 与 `iOS` 检查自动通过。
+workflow 本身始终运行（而不是在事件级用 `paths` 过滤）：GitHub 只对**被跳过的 job** 自动放行 required check，对因路径过滤而从未运行的 workflow 不会放行——那样纯 Web、纯 iOS 或纯题库的 PR 会永远卡在分支保护上。不匹配任何检测范围时（例如仅修改 `.github/` 下其他文件）三个构建 job 都会被跳过，`Node`、`iOS` 与 `Bank` 检查自动通过。
 
 这些检查验证基础构建、单元测试和本地浏览器流程，不等同于真实账号、真实上游、真机、签名或归档验证。
 
@@ -330,7 +340,7 @@ iOS 安装包应通过受控的 Release、TestFlight 或 CI artifact 分发，�
 
 - [本地 API 与上游映射](docs/web-api.md)
 - [原生 iOS 构建、架构与验证](apps/ios/README.md)
-- [Web 持续集成](.github/workflows/ci-web.yml) 与 [iOS 持续集成](.github/workflows/ci-ios.yml)
+- [Web 持续集成](.github/workflows/ci-web.yml)、[iOS 持续集成](.github/workflows/ci-ios.yml) 与 [题库工具持续集成](.github/workflows/ci-bank.yml)
 
 ## 许可与免责声明
 

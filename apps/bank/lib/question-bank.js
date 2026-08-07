@@ -2,7 +2,7 @@
 
 // Question-bank collector: enter 机考题库 papers, fetch every question with
 // its answer key and 解析, and append deduplicated records to per-category
-// JSONL files under <dir>/bank/.
+// JSONL files under <bankDir>/.
 //
 // Reality of the upstream platform (verified against the live service):
 //   - each paper (【言语理解（二）】机考题库 …) has a FIXED question pool;
@@ -13,14 +13,16 @@
 //     "逻辑填空(共200题,每题1分,合计200.0分)";
 //   - exam_ending for practice papers answers JSON {"code":10000,"success":true}
 //     (not a result HTML page), and the exam list's wfs flips back to 1
-//     immediately, so a "502 考试未能结束" from the proxy means the attempt
+//     immediately, so a "502 考试未能结束" from submit means the attempt
 //     actually ended — verify via a fresh exam-list refetch;
 //   - wfs=0 papers are the user's own in-progress attempts: their questions
 //     can be read without submitting, so the collector collects them
 //     read-only (enter-continue → fetch → never submit).
 //
 // Pure Node module (node:crypto/fs/path only): unit tests drive it with a fake
-// `api` object, the CLI drives it over real HTTP against the local server.
+// `api` object; the collector CLI wires it to lib/upstream.js, a direct
+// upstream client with the same api contract (status/login/getExams/enter/
+// getQuestions/submit).
 
 const crypto = require("node:crypto");
 const fs = require("node:fs");
@@ -234,77 +236,11 @@ function saveMeta(bankDir, meta) {
   fs.renameSync(tmp, path.join(bankDir, "meta.json"));
 }
 
-// ---------- HTTP client (drives the local server API) ----------
-
-function createHttpApi(baseUrl, opts = {}) {
-  const retries = opts.retries ?? 2;
-  const retryDelayMs = opts.retryDelayMs ?? 3000;
-
-  async function fetchJson(route, { method = "GET", body, timeoutMs = 60000 } = {}) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const response = await fetch(baseUrl + route, {
-        method,
-        headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
-        body: body !== undefined ? JSON.stringify(body) : undefined,
-        signal: controller.signal,
-      });
-      const text = await response.text();
-      let data = null;
-      try { data = text ? JSON.parse(text) : null; } catch {}
-      if (!response.ok) {
-        throw new ApiError(response.status, (data && data.error) || `HTTP ${response.status}`);
-      }
-      return data;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  // Idempotent GETs retry on network errors / 5xx; POSTs never auto-retry
-  // (enter/submit create real upstream attempts — non-idempotent).
-  async function withRetry(fn) {
-    let lastError;
-    for (let attempt = 0; attempt <= retries; attempt += 1) {
-      try {
-        return await fn();
-      } catch (err) {
-        lastError = err;
-        if (err instanceof ApiError && err.status < 500 && err.status !== 408 && err.status !== 429) throw err;
-        if (attempt < retries) await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
-      }
-    }
-    throw lastError;
-  }
-
-  return {
-    async status() {
-      return fetchJson("/api/status");
-    },
-    async login(phone, password) {
-      return fetchJson("/api/login", { method: "POST", body: { phone, password } });
-    },
-    async getExams() {
-      // /api/exams responds with { total, styles, exams } — unwrap the array.
-      return withRetry(async () => (await fetchJson("/api/exams"))?.exams || []);
-    },
-    async enter(id) {
-      // Queue polling can take ~2 minutes for a fresh exam.
-      return fetchJson(`/api/exams/${encodeURIComponent(id)}/enter`, {
-        method: "POST",
-        body: {},
-        timeoutMs: 180000,
-      });
-    },
-    async getQuestions(id) {
-      return withRetry(() => fetchJson(`/api/exams/${encodeURIComponent(id)}/questions`));
-    },
-    async submit(id) {
-      return fetchJson(`/api/exams/${encodeURIComponent(id)}/submit`, { method: "POST", body: {} });
-    },
-  };
-}
+// The `api` object driving runCollection is provided by lib/upstream.js
+// (createUpstreamApi) — a direct upstream client with the same contract the
+// old web-server-backed createHttpApi exposed (status/login/getExams/enter/
+// getQuestions/submit; errors thrown as ApiError). Unit tests inject a fake
+// api object instead.
 
 // ---------- Exam selection ----------
 
@@ -608,7 +544,6 @@ module.exports = {
   TARGET_CATEGORIES,
   DEFAULT_SECTION,
   ApiError,
-  createHttpApi,
   normalizeSection,
   cleanSection,
   matchCategory,

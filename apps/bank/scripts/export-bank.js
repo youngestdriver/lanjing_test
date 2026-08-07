@@ -16,7 +16,7 @@ const { TARGET_CATEGORIES, exportBank, collectImageSources, downloadImages } = r
 const USAGE = `用法: node scripts/export-bank.js [选项]
 
 选项:
-  --bank-dir <path>  题库目录 (默认 apps/bank)
+  --bank-dir <path>  题库目录 (默认 apps/bank/data)
   --out <path>       导出目录 (默认 <bank-dir>/export)
   --targets a,b,c    目标分类 (默认 5 个机考分类)
   --no-images        不下载图片 (Markdown 里直接引用远程 URL)
@@ -46,9 +46,9 @@ function parseArgs(argv) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  // The bank lives in its own top-level directory (apps/bank), independent of
-  // the web app's private .local state (session etc.).
-  const bankDir = path.resolve(opts.bankDir || path.join(__dirname, "..", "..", "bank"));
+  // The bank lives in its own top-level directory (apps/bank); data sits
+  // under apps/bank/data/.
+  const bankDir = path.resolve(opts.bankDir || path.join(__dirname, "..", "data"));
   const outDir = path.resolve(opts.out || path.join(bankDir, "export"));
   const targets = opts.targets || TARGET_CATEGORIES;
 

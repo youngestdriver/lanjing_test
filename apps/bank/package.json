@@ -1,0 +1,17 @@
+{
+  "name": "lanjing-bank-tool",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone question-bank tool for Lanjing Weike: collect the full 机考题库, classify sub-types, export Markdown.",
+  "scripts": {
+    "collect": "node scripts/collect-bank.js",
+    "classify": "node scripts/classify-bank.js",
+    "export": "node scripts/export-bank.js",
+    "test": "node --test test/*.test.js",
+    "check": "node --check lib/question-bank.js && node --check lib/question-classifier.js && node --check lib/bank-export.js && node --check lib/parsers.js && node --check lib/upstream.js && node --check scripts/collect-bank.js && node --check scripts/classify-bank.js && node --check scripts/export-bank.js && node --check test/question-bank.test.js && node --check test/question-classifier.test.js && node --check test/export-bank.test.js && node --check test/upstream.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {}
+}

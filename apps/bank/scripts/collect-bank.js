@@ -1,25 +1,26 @@
 "use strict";
 
-// Question-bank collector CLI. Boots the local proxy server on a random port,
-// reuses the saved session (or prompts for credentials when running
-// interactively), then drives the collection loop over HTTP.
+// Question-bank collector CLI. Talks to the upstream platform directly via
+// lib/upstream.js (its own cookie jar, login and session file — independent
+// of the web app), reuses the saved session or prompts for credentials when
+// running interactively, then drives the collection loop.
 //
 // Usage: node scripts/collect-bank.js [--exam <id>] [--max-rounds N]
 //         [--idle-limit N] [--round-delay ms] [--bank-dir <path>]
 //         [--targets a,b,c]
 //
-// Data lands in apps/bank/ (gitignored): one JSONL file per category plus
-// meta.json for resume. Any interrupted run continues where it left off when
-// rerun on the same bank dir.
+// Data lands in apps/bank/data/ (gitignored): one JSONL file per category,
+// meta.json for resume, session_cookies.txt for the login session. Any
+// interrupted run continues where it left off when rerun on the same bank
+// dir.
 //
 // The password is prompted at runtime and never persisted; enter/submit write
 // real (abandoned) attempt records on the upstream account.
 
 const path = require("node:path");
 const readline = require("node:readline");
-const { once } = require("node:events");
-const { startServer } = require("../server");
-const { createHttpApi, runCollection, TARGET_CATEGORIES } = require("../lib/question-bank");
+const { createUpstreamApi } = require("../lib/upstream");
+const { runCollection, TARGET_CATEGORIES } = require("../lib/question-bank");
 
 const USAGE = `用法: node scripts/collect-bank.js [选项]
 
@@ -28,7 +29,7 @@ const USAGE = `用法: node scripts/collect-bank.js [选项]
   --max-rounds N    最大轮数上限 (默认 200)
   --idle-limit N    连续 N 轮无新题即停止 (默认 3)
   --round-delay ms  每轮之间的等待 (默认 1500)
-  --bank-dir <path> 题库输出目录 (默认 apps/bank)
+  --bank-dir <path> 题库输出目录 (默认 apps/bank/data)
   --targets a,b,c   目标分类 (默认 言语理解,数字运算,逻辑推理,资料分析,特有题型)
   --skip-in-progress 跳过进行中的作答 (默认会只读收集用户进行中的卷，不提交)
   -h, --help        显示本帮助`;
@@ -119,7 +120,7 @@ async function ensureLoggedIn(api) {
   if (!process.stdin.isTTY) {
     throw new Error(
       "没有可用会话，且当前不是交互式终端。请先用 LANJING_PHONE/LANJING_PASSWORD 环境变量提供凭据，"
-      + "或启动应用登录一次（会话会保存在本地），再重跑本脚本",
+      + "或用本脚本登录一次（会话保存在 <bank-dir>/session_cookies.txt），再重跑本脚本",
     );
   }
   const phone = await prompt("手机号: ");
@@ -131,14 +132,13 @@ async function ensureLoggedIn(api) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  // The bank lives in its own top-level directory (apps/bank), independent of
-  // the web app's private .local state (session etc.).
-  const bankDir = path.resolve(opts.bankDir || path.join(__dirname, "..", "..", "bank"));
+  // The bank lives in its own top-level directory (apps/bank): data and the
+  // collector's own session live under apps/bank/data/, independent of the
+  // web app's .local state.
+  const bankDir = path.resolve(opts.bankDir || path.join(__dirname, "..", "data"));
   const targets = opts.targets || TARGET_CATEGORIES;
 
-  const server = startServer(0);
-  await once(server, "listening");
-  const api = createHttpApi(`http://127.0.0.1:${server.address().port}`);
+  const api = createUpstreamApi({ sessionFile: path.join(bankDir, "session_cookies.txt") });
 
   const controller = new AbortController();
   let interrupted = false;
@@ -156,7 +156,6 @@ async function main() {
     await ensureLoggedIn(api);
   } catch (err) {
     console.error(`\n无法开始收集: ${err.message}`);
-    server.close();
     process.exit(1);
   }
 
@@ -185,7 +184,6 @@ async function main() {
   console.log(`  共 ${summary.round} 轮，处理 ${summary.examsProcessed} 份考试`);
   console.log(`  数据位置: ${bankDir}`);
 
-  await new Promise((resolve) => server.close(resolve));
   process.exit(["auth", "error"].includes(summary.stoppedBy) ? 1 : 0);
 }
 

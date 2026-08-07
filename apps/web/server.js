@@ -19,10 +19,12 @@ const REQUEST_TIMEOUT = 30000;
 const LOCAL_DIR = path.resolve(process.env.LANJING_LOCAL_DIR || path.join(__dirname, ".local"));
 const SESSION_FILE = path.join(LOCAL_DIR, "session_cookies.txt");
 const SETTINGS_FILE = path.join(LOCAL_DIR, "settings.json");
-// Question bank served at /bank (plain HTTP GET for the iOS client).
-// LANJING_BANK_DIR lets tests point at a temp dir; in CI the dir may not
-// exist — the static mount then simply 404s every /bank/* route.
-const BANK_DIR = path.resolve(process.env.LANJING_BANK_DIR || path.join(__dirname, "..", "bank"));
+// Question bank served at /bank (plain HTTP GET for the iOS client). The bank
+// tool lives in apps/bank/ (its own standalone app); the data it collects is
+// under apps/bank/data/. LANJING_BANK_DIR lets tests point at a temp dir; in
+// CI the dir may not exist — the static mount then simply 404s every /bank/*
+// route.
+const BANK_DIR = path.resolve(process.env.LANJING_BANK_DIR || path.join(__dirname, "..", "bank", "data"));
 
 // ========== helpers ==========
 function sha256(s) { return crypto.createHash("sha256").update(s).digest("hex"); }
