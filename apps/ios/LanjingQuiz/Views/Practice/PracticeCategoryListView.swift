@@ -31,7 +31,7 @@ struct PracticeCategoryListView: View {
                         Task { await vm.updateBank() }
                     }
                 } footer: {
-                    Text("题库版本 round \(meta.round ?? 0) · 共 \(meta.totalCount) 题。重新爬取会跳过已完成的试卷，只补新卷。")
+                    Text("题库版本 round \(meta.round ?? 0) · 共 \(meta.totalCount) 题。更新题库会重新爬取全部试卷以刷新本地题库；失败时保留旧题库。")
                 }
             }
         }

@@ -49,8 +49,8 @@ final class PracticeBankViewModel {
         await crawlIfNeeded(force: false)
     }
 
-    /// 我的 > 更新题库: force a re-crawl. Completed papers are skipped
-    /// (their pools are fixed); new papers get crawled and deduped by _id.
+    /// 我的 > 更新题库: re-crawl EVERY paper and atomically replace the local
+    /// bank (refresh mode — the old bank stays intact on failure).
     func updateBank() async {
         await crawlIfNeeded(force: true)
     }
@@ -63,7 +63,7 @@ final class PracticeBankViewModel {
         }
         phase = .downloading(PracticeUpstreamClient.CrawlProgress(index: 0, total: 0, paperName: ""))
         do {
-            try await facade.crawlAllPapers(storage: storage) { [weak self] progress in
+            try await facade.crawlAllPapers(storage: storage, refresh: force) { [weak self] progress in
                 // The facade is @MainActor, so this callback is already on it.
                 if case .downloading = self?.phase { self?.phase = .downloading(progress) }
             }
