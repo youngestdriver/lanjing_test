@@ -75,9 +75,14 @@ final class PracticeFlowUITests: XCTestCase {
 
         // 我的 > 更新题库 re-crawls EVERY paper and atomically replaces the
         // local bank (refresh mode): paper 111 gets a second attempt+end.
+        // Pop back to the tab root first; each level waits for its nav bar to
+        // settle so the back buttons exist (pop transitions differ per OS).
         app.buttons["返回题型列表"].tap()
-        app.navigationBars.buttons.element(boundBy: 0).tap() // back to category list
-        app.navigationBars.buttons.element(boundBy: 0).tap() // back to the tab root
+        // The category list is the NavigationStack ROOT, so one back tap from
+        // the subcategory list returns to the tab root.
+        let subListBar = app.navigationBars["言语理解"] // the subcategory list's title is the category name
+        XCTAssertTrue(subListBar.waitForExistence(timeout: 5), "subcategory list never reappeared")
+        tapBackButton(in: subListBar)
         let profileTab = app.tabBars.buttons["我的"]
         XCTAssertTrue(profileTab.waitForExistence(timeout: 5), "tab bar never reappeared")
         profileTab.tap()
@@ -90,6 +95,14 @@ final class PracticeFlowUITests: XCTestCase {
                       "更新题库 did not re-crawl the fresh paper")
         let refreshedStatus = app.staticTexts.matching(NSPredicate(format: "label CONTAINS '已爬取'")).firstMatch
         XCTAssertTrue(refreshedStatus.waitForExistence(timeout: 10), "refresh status never shown")
+    }
+
+    /// Taps the nav bar's back button, waiting for it to exist first (pop
+    /// transitions differ per OS and the button may lag the bar's title).
+    private func tapBackButton(in navBar: XCUIElement) {
+        let back = navBar.buttons.element(boundBy: 0)
+        XCTAssertTrue(back.waitForExistence(timeout: 5), "back button missing in \(navBar.identifier)")
+        back.tap()
     }
 
     /// Waits until the mock has seen exactly `count` calls with the path prefix.
