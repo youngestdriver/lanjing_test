@@ -70,17 +70,41 @@ final class PracticeFlowUITests: XCTestCase {
 
         // The crawl best-effort-ended exactly the wfs=1 paper's attempt
         // (paper 111 → exam_ending); the wfs=0 paper 222 was read-only.
-        let ended = XCTNSPredicateExpectation(
+        XCTAssertTrue(waitForCallCount(server, pathPrefix: "/exam/exam_ending", count: 1, timeout: 10),
+                      "crawl did not end the fresh attempt exactly once")
+
+        // 我的 > 更新题库 re-crawls EVERY paper and atomically replaces the
+        // local bank (refresh mode): paper 111 gets a second attempt+end.
+        app.buttons["返回题型列表"].tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap() // back to category list
+        app.navigationBars.buttons.element(boundBy: 0).tap() // back to the tab root
+        let profileTab = app.tabBars.buttons["我的"]
+        XCTAssertTrue(profileTab.waitForExistence(timeout: 5), "tab bar never reappeared")
+        profileTab.tap()
+
+        let updateButton = app.buttons["更新题库"]
+        XCTAssertTrue(updateButton.waitForExistence(timeout: 10), "更新题库 button missing")
+        updateButton.tap()
+
+        XCTAssertTrue(waitForCallCount(server, pathPrefix: "/exam/exam_ending", count: 2, timeout: 10),
+                      "更新题库 did not re-crawl the fresh paper")
+        let refreshedStatus = app.staticTexts.matching(NSPredicate(format: "label CONTAINS '已爬取'")).firstMatch
+        XCTAssertTrue(refreshedStatus.waitForExistence(timeout: 10), "refresh status never shown")
+    }
+
+    /// Waits until the mock has seen exactly `count` calls with the path prefix.
+    private func waitForCallCount(_ server: MockUpstreamServer, pathPrefix: String, count: Int, timeout: TimeInterval) -> Bool {
+        let expectation = XCTNSPredicateExpectation(
             predicate: NSPredicate { [weak server] _, _ in
-                server?.calls.filter { $0.path.hasPrefix("/exam/exam_ending") }.count == 1
+                server?.calls.filter { $0.path.hasPrefix(pathPrefix) }.count == count
             },
             object: nil
         )
-        let waitResult = XCTWaiter().wait(for: [ended], timeout: 10)
-        if waitResult != .completed {
+        let result = XCTWaiter().wait(for: [expectation], timeout: timeout)
+        if result != .completed {
             print("MOCK CALLS: \(server.calls.map { "\($0.method) \($0.path)" }.joined(separator: " | "))")
         }
-        XCTAssertEqual(waitResult, .completed, "crawl did not end the fresh attempt exactly once")
+        return result == .completed
     }
 
     /// Local re-runs may restore a Keychain session (mock cookies persist per

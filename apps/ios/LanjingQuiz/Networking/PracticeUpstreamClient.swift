@@ -163,67 +163,96 @@ final class PracticeUpstreamClient {
     }
 
     /// Crawl every 机考题库 paper into the local bank — the iOS port of the
-    /// collector's runCollection, crash-safe per paper:
+    /// collector's runCollection. Two modes:
+    ///
+    /// `refresh == false` (first use): crash-safe incremental crawl.
     ///   - papers already marked done in meta.papers are skipped (resume);
-    ///   - each new paper is entered (wfs=1 creates a fresh attempt which is
-    ///     best-effort-ended after fetching; wfs=0 is read-only, never ended);
     ///   - records are deduped by _id against the stored bank, appended per
     ///     category, and meta.json (papers + counts) is saved after every
     ///     paper, so an interruption resumes without re-entering anything.
-    func crawlAllPapers(storage: BankStorage, progress: @escaping (CrawlProgress) -> Void) async throws {
+    ///
+    /// `refresh == true` (我的 > 更新题库): re-crawl EVERY paper and atomically
+    ///   replace the whole bank (all 5 category files + meta via saveAll) —
+    ///   on failure nothing is committed and the old bank stays intact.
+    ///
+    /// Either way: a wfs=1 paper creates a fresh upstream attempt which is
+    /// best-effort-ended after fetching; wfs=0 papers are read-only, never
+    /// ended, and no answer is ever submitted.
+    func crawlAllPapers(storage: BankStorage, refresh: Bool = false, progress: @escaping (CrawlProgress) -> Void) async throws {
         let papers = try await paperList()
-        guard !papers.isEmpty else {
-            // Nothing to crawl — still record the attempt so the store is
-            // marked populated with a valid (empty) meta.
-            try storage.saveMeta(BankMeta(version: 1, round: 1, lastRun: Self.timestamp(), targets: BankLogic.categories, counts: [:], papers: [:]))
-            return
-        }
-        var meta = storage.loadMeta() ?? BankMeta(version: 1, targets: BankLogic.categories)
-        var counts = meta.counts ?? [:]
-        var seenIds = Self.loadSeenIds(storage: storage)
+        let previousRound = storage.loadMeta()?.round ?? 0
+        var meta = refresh ? nil : storage.loadMeta()
+        var counts = meta?.counts ?? [:]
+        var seenIds = refresh ? [] : Self.loadSeenIds(storage: storage)
+        var byCategory: [String: [BankQuestion]] = [:] // refresh mode only
+        var papersDone: [String: Bool] = [:]
 
         for (index, paper) in papers.enumerated() {
             let paperId = String(paper.id)
-            if meta.papers?[paperId] == true { continue }
+            if !refresh, meta?.papers?[paperId] == true { continue }
 
             let records = try await enterPaper(paper)
             var newRecords: [BankQuestion] = []
-            var byCategory: [String: [BankQuestion]] = [:]
-            for record in records {
-                guard !seenIds.contains(record.id) else { continue }
-                seenIds.insert(record.id)
+            for record in records where seenIds.insert(record.id).inserted {
                 newRecords.append(record)
-                byCategory[record.category, default: []].append(record)
             }
-            for (category, categoryRecords) in byCategory {
-                try storage.appendRecords(categoryRecords, for: category)
-                counts[category, default: 0] += categoryRecords.count
+
+            if refresh {
+                for record in newRecords {
+                    byCategory[record.category, default: []].append(record)
+                }
+            } else {
+                var grouped: [String: [BankQuestion]] = [:]
+                for record in newRecords {
+                    grouped[record.category, default: []].append(record)
+                }
+                for (category, categoryRecords) in grouped {
+                    try storage.appendRecords(categoryRecords, for: category)
+                    counts[category, default: 0] += categoryRecords.count
+                }
             }
+            papersDone[paperId] = true
             endAttempt(paper: paper)
 
-            var papers = meta.papers ?? [:]
-            papers[paperId] = true
-            meta = BankMeta(
-                version: 1,
-                round: meta.round,
-                lastRun: meta.lastRun,
-                targets: BankLogic.categories,
-                counts: counts,
-                papers: papers
-            )
-            try storage.saveMeta(meta)
+            if !refresh {
+                meta = BankMeta(
+                    version: 1,
+                    round: previousRound,
+                    lastRun: meta?.lastRun,
+                    targets: BankLogic.categories,
+                    counts: counts,
+                    papers: papersDone
+                )
+                try storage.saveMeta(meta!)
+            }
             progress(CrawlProgress(index: index + 1, total: papers.count, paperName: paper.name))
         }
 
-        meta = BankMeta(
+        let finalCounts: [String: Int]
+        if refresh {
+            finalCounts = Dictionary(uniqueKeysWithValues: byCategory.map { ($0.key, $0.value.count) })
+        } else {
+            finalCounts = counts
+        }
+        let finalMeta = BankMeta(
             version: 1,
-            round: (meta.round ?? 0) + 1,
+            round: previousRound + 1,
             lastRun: Self.timestamp(),
             targets: BankLogic.categories,
-            counts: counts,
-            papers: meta.papers
+            counts: finalCounts,
+            papers: papersDone
         )
-        try storage.saveMeta(meta)
+        if refresh {
+            // All 5 category files written (empty for no-record categories),
+            // then meta last — the atomic commit; the old bank survives any
+            // failure before this point.
+            let files = BankLogic.categories.map { category in
+                (category: category, text: byCategory[category].map(Self.encodeJSONL) ?? "")
+            }
+            try storage.saveAll(files: files, meta: finalMeta)
+        } else {
+            try storage.saveMeta(finalMeta)
+        }
     }
 
     /// All stored record ids across the target categories (dedupe set).
@@ -236,6 +265,18 @@ final class PracticeUpstreamClient {
             }
         }
         return ids
+    }
+
+    /// One JSONL line per record (write-side of the collector's bank format).
+    private static func encodeJSONL(_ records: [BankQuestion]) -> String {
+        let encoder = JSONEncoder()
+        var lines = ""
+        for record in records {
+            if let json = try? encoder.encode(record), let text = String(data: json, encoding: .utf8) {
+                lines += text + "\n"
+            }
+        }
+        return lines
     }
 
     private static func timestamp() -> String {
