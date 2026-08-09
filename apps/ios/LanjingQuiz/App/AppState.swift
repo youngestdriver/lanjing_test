@@ -58,8 +58,22 @@ final class AppState {
         route = api.hasSession ? .examList : .login
     }
 
+    /// 我的 > 外观 > 跟随系统颜色设置. Turning it on remembers the current
+    /// manual light/dark choice (restored when turned off); off restores it.
+    func setFollowsSystem(_ follows: Bool) {
+        if follows {
+            if theme != .system { Theme.saveManual(theme) }
+            theme = .system
+        } else {
+            theme = Theme.loadManual()
+        }
+        theme.save()
+    }
+
     func toggleTheme() {
-        theme = (theme == .light) ? .dark : .light
+        // Quiz-header quick flip: light ↔ dark; tapping while following the
+        // system switches to a fixed dark theme (exits follow-system).
+        theme = theme == .dark ? .light : .dark
         theme.save()
     }
 
