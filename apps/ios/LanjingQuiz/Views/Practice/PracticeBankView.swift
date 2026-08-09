@@ -80,9 +80,6 @@ struct PracticeBankView: View {
                 Text("正在爬取题库…")
                     .font(.system(size: 14, weight: .semibold))
             }
-            Text("首次使用会直接从蓝鲸平台抓取全部题目到本机，完成后即可离线练习")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

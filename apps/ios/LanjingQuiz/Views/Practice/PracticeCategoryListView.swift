@@ -26,7 +26,6 @@ struct PracticeCategoryListView: View {
             } header: {
                 Text("题库分类")
             } footer: {
-                Text("题目从蓝鲸平台实时爬取并保存在本机，可离线练习；首次进入本页会自动爬取，图片不缓存，展示时从网络加载。")
                 if let meta = vm.meta {
                     Text("题库版本 round \(meta.round ?? 0) · 共 \(meta.totalCount) 题")
                 }

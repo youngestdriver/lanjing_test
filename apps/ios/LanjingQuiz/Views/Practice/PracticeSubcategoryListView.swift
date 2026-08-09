@@ -1,17 +1,17 @@
 import SwiftUI
 
 /// 题型细分 (subCategory) list for one category — grouped from the locally
-/// crawled bank, with a shuffle toggle.
+/// crawled bank, with a shuffle toggle that is remembered per 大类.
 struct PracticeSubcategoryListView: View {
-    @Bindable var vm: PracticeBankViewModel
+    let vm: PracticeBankViewModel
     let category: String
 
     var body: some View {
         List {
             Section {
-                Toggle("随机顺序", isOn: $vm.isShuffleEnabled)
+                Toggle("随机顺序", isOn: shuffleBinding)
             } footer: {
-                Text("开启后每次练习按随机顺序出题")
+                Text("开启后本大类下每次练习按随机顺序出题；资料分析中共享同一材料的题目会保持在一起")
             }
             Section("题型") {
                 ForEach(vm.subcategories, id: \.name) { group in
@@ -41,5 +41,13 @@ struct PracticeSubcategoryListView: View {
         .task {
             await vm.openCategory(category)
         }
+    }
+
+    /// This 大类's own shuffle switch, persisted independently.
+    private var shuffleBinding: Binding<Bool> {
+        Binding(
+            get: { vm.shuffleEnabled(category: category) },
+            set: { vm.setShuffleEnabled($0, category: category) }
+        )
     }
 }

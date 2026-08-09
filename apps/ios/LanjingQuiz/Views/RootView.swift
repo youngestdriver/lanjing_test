@@ -163,9 +163,25 @@ private struct ProfileView: View {
                         appState.logout()
                     }
                 }
+
+                Section {
+                    HStack {
+                        Text("版本")
+                        Spacer()
+                        Text(appVersion)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             .navigationTitle("我的")
         }
+    }
+
+    /// "1.0 (1)" from the bundle (MARKETING_VERSION + CURRENT_PROJECT_VERSION).
+    private var appVersion: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+        return build.isEmpty ? version : "\(version) (\(build))"
     }
 }
 

@@ -54,6 +54,27 @@ enum BankLogic {
         return questions.shuffled(using: &generator)
     }
 
+    /// Shuffle while keeping comb (资料分析) questions that share the same
+    /// stem (大序号 group, e.g. "1.1"/"1.2") adjacent: groups are shuffled as
+    /// units with intra-group order preserved. Questions without a stem are
+    /// single-question units, so for stem-less banks this is a plain shuffle.
+    static func shuffledKeepingGroups(_ questions: [BankQuestion], seed: UInt64) -> [BankQuestion] {
+        var generator = SeededGenerator(seed: seed)
+        var indexByStem: [String: Int] = [:]
+        var units: [[BankQuestion]] = []
+        for question in questions {
+            if let stem = question.stem, !stem.isEmpty, let index = indexByStem[stem] {
+                units[index].append(question)
+                continue
+            }
+            if let stem = question.stem, !stem.isEmpty {
+                indexByStem[stem] = units.count
+            }
+            units.append([question])
+        }
+        return units.shuffled(using: &generator).flatMap { $0 }
+    }
+
     // MARK: - 日志导出 (crawl-log plain-text export)
 
     /// Plain-text export of the crawl log for the 我的 > 题库 > 日志导出 row:
