@@ -93,8 +93,15 @@ final class PracticeFlowUITests: XCTestCase {
 
         XCTAssertTrue(waitForCallCount(server, pathPrefix: "/exam/exam_ending", count: 2, timeout: 10),
                       "更新题库 did not re-crawl the fresh paper")
-        let refreshedStatus = app.staticTexts.matching(NSPredicate(format: "label CONTAINS '已爬取'")).firstMatch
-        XCTAssertTrue(refreshedStatus.waitForExistence(timeout: 10), "refresh status never shown")
+        // The status row was removed from 我的 > 题库 — the refresh is done
+        // when the button re-enables after the crawl (it is disabled while
+        // .downloading).
+        let reEnabled = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "isEnabled == true"),
+            object: app.buttons["更新题库"]
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [reEnabled], timeout: 10), .completed,
+                       "更新题库 did not re-enable after refresh")
     }
 
     /// Taps the nav bar's back button, waiting for it to exist first (pop
