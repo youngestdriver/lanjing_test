@@ -22,6 +22,10 @@ final class AppState {
     let api: APIClient
     let cookieCloudSync: CookieCloudSync
     let bankStorage: BankStorage
+    /// Bumped whenever the local bank is deleted (我的 > 删除题库) so every
+    /// PracticeBankViewModel instance (练习 tab and 我的 tab create their own)
+    /// resets and re-crawls on its next appearance.
+    private(set) var bankResetVersion = 0
 
     init(api: APIClient = APIClient(), bankStorage: BankStorage = FileManagerBankStorage()) {
         self.api = api
@@ -81,5 +85,14 @@ final class AppState {
         api.logout()
         notice = nil
         route = .login
+    }
+
+    /// Wipe the local question bank (我的 > 题库 > 删除题库). Also clears the
+    /// crawl log (it lives in the bank dir); re-entering the practice tab
+    /// re-crawls everything from scratch.
+    func deleteBank() {
+        try? bankStorage.removeAll()
+        bankResetVersion += 1
+        notice = "题库已删除，重新进入练习页会重新爬取全部试卷"
     }
 }

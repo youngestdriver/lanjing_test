@@ -60,14 +60,20 @@ struct ExamListResponse: Decodable {
 struct QuestionDTO: Decodable {
     let _id: String
     let question: String
+    /// Shared material stem for comb (资料分析) questions — present only when
+    /// the question was fetched with its combId.
+    let parent_info: String?
     let answer1: String?
     let answer2: String?
     let answer3: String?
     let answer4: String?
-    let key1: String?
-    let key2: String?
-    let key3: String?
-    let key4: String?
+    /// Correctness flags. The upstream emits the correct key as a string
+    /// ("1") but incorrect keys sometimes as numbers (0) — StringValue
+    /// decodes either form.
+    let key1: StringValue?
+    let key2: StringValue?
+    let key3: StringValue?
+    let key4: StringValue?
     /// Previously submitted answer keys, e.g. "key3," (the trailing comma is
     /// part of the upstream format and must be tolerated when decoding).
     let test_ans: String?

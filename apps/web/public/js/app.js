@@ -770,6 +770,9 @@ function renderQuestion(direction=0){
   const markPending=S.markSyncState[q._id]?.status==="pending";
   html+=` <button class="btn-mark${isMarked?' marked':''}" onclick="event.stopPropagation();toggleMark('${q._id}')" ${markPending?'disabled title="正在同步标记"':''}>${markPending?'正在同步…':isMarked?'🔖 已标记':'🔖 标记'}</button>`;
   html+=`</div>`;
+  // Comb (资料分析) questions carry the shared material in parent_info — the
+  // stem renders above the sub-question itself.
+  if(q.parent_info) html+=`<div class="q-stem">${q.parent_info}</div>`;
   html+=`<div class="q-text">${q.question||""}</div>`;
 
   // Options — horizontal row if compact (short answers only), else vertical stack

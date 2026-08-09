@@ -62,6 +62,14 @@ struct PracticeQuizView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 headerRow(session, question)
+                // Comb (资料分析) material stem, rendered above the sub-question.
+                if let stem = question.stem, !stem.isEmpty {
+                    RichHTMLContent(html: stem, fontSize: 15)
+                        .padding(.bottom, 4)
+                        .overlay(alignment: .bottom) {
+                            Divider()
+                        }
+                }
                 RichHTMLContent(html: question.question, fontSize: 17)
                 options(for: question)
                 if session.revealed != nil {

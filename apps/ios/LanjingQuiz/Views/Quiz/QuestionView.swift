@@ -31,6 +31,7 @@ struct QuestionView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 headerRow(question, state)
+                stemContent(question)
                 RichHTMLContent(html: question.text, fontSize: 17)
                 options(for: question)
                 if isAnswered {
@@ -52,6 +53,7 @@ struct QuestionView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     headerRow(question, state)
+                    stemContent(question)
                     RichHTMLContent(html: question.text, fontSize: 17)
                     if isAnswered {
                         ExplainBannerView(
@@ -85,6 +87,18 @@ struct QuestionView: View {
             }
             .padding(.horizontal)
             .padding(.vertical, 12)
+        }
+    }
+
+    /// Comb (资料分析) material stem, rendered above the sub-question itself.
+    @ViewBuilder
+    private func stemContent(_ question: Question) -> some View {
+        if let stem = question.stem, !stem.isEmpty {
+            RichHTMLContent(html: stem, fontSize: 15)
+                .padding(.bottom, 4)
+                .overlay(alignment: .bottom) {
+                    Divider()
+                }
         }
     }
 

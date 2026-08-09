@@ -15,6 +15,7 @@ final class BankModelTests: XCTestCase {
             section: "逻辑填空",
             subCategory: "成语辨析",
             question: question,
+            stem: nil,
             options: options,
             answer: answer,
             analysis: analysis,
@@ -122,5 +123,21 @@ final class BankModelTests: XCTestCase {
         XCTAssertEqual(question.answer?.letters, ["A", "C"])
         XCTAssertTrue(question.isMulti)
         XCTAssertEqual(question.round, 4)
+        // records crawled before stems were stored have no stem key
+        XCTAssertNil(question.stem)
+    }
+
+    func testDecodesCombRecordWithStem() throws {
+        let line = """
+        {"_id":"c1","category":"资料分析","section":"文字资料","subCategory":"其他",\
+        "question":"<p>小题</p>","stem":"<p>共享材料</p>","options":["<p>A</p>","","",""],\
+        "answer":"A","analysis":"","sourceExamName":"【资料分析（一）】机考题库",\
+        "round":1,"collectedAt":"2026-08-07T00:00:00.000Z"}
+        """
+        let question = try JSONDecoder().decode(BankQuestion.self, from: Data(line.utf8))
+        XCTAssertEqual(question.stem, "<p>共享材料</p>")
+        // round-trip preserves the stem
+        let roundTripped = try roundTrip(question)
+        XCTAssertEqual(roundTripped.stem, "<p>共享材料</p>")
     }
 }

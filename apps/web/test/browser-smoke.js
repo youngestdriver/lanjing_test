@@ -147,9 +147,9 @@ async function main() {
     page.on("pageerror", (error) => pageErrors.push(error.message));
 
     const states = [
-      { questionsId: "q1", uuId: "u1", num: 1, section: "综合", state: "unanswered", marked: false },
-      { questionsId: "q2", uuId: "u2", num: 2, section: "综合", state: "error", marked: false },
-      { questionsId: "q3", uuId: "u3", num: 3, section: "综合", state: "unanswered", marked: false },
+      { questionsId: "q1", uuId: "u1", num: "1", section: "综合", combId: null, state: "unanswered", marked: false },
+      { questionsId: "q2", uuId: "u2", num: "2", section: "综合", combId: null, state: "error", marked: false },
+      { questionsId: "q3", uuId: "u3", num: "3", section: "综合", combId: null, state: "unanswered", marked: false },
     ];
     const questions = [
       {

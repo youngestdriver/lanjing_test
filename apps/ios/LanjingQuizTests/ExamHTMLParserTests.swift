@@ -17,7 +17,8 @@ final class ExamHTMLParserTests: XCTestCase {
         let q1 = result.questionStates[0]
         XCTAssertEqual(q1.questionsId, "q1")
         XCTAssertEqual(q1.uuId, "u1")
-        XCTAssertEqual(q1.num, 1)
+        XCTAssertEqual(q1.num, "1")
+        XCTAssertNil(q1.combId)
         XCTAssertEqual(q1.section, "科技常识")
         XCTAssertEqual(q1.state, .right)
         XCTAssertTrue(q1.marked)
@@ -34,6 +35,29 @@ final class ExamHTMLParserTests: XCTestCase {
         let q4 = result.questionStates[3]
         XCTAssertEqual(q4.state, .right)
         XCTAssertEqual(q4.section, "逻辑推理")
+    }
+
+    func testParsesCombSectionsWithSubNumbersAndCombId() {
+        let result = ExamHTMLParser.parse(Fixtures.examStartCombHTML, fallbackExamInfoId: "E2")
+
+        XCTAssertEqual(result.questionStates.count, 3)
+        XCTAssertEqual(result.questionStates[0].questionsId, "c1")
+        XCTAssertEqual(result.questionStates[0].num, "1.1")
+        XCTAssertEqual(result.questionStates[0].combId, "comb_wa")
+        XCTAssertEqual(result.questionStates[0].section, "文字资料(共15题,合计75.0分)")
+
+        XCTAssertEqual(result.questionStates[1].num, "15.5")
+        XCTAssertEqual(result.questionStates[1].combId, "comb_wa")
+
+        // a regular card AFTER the comb section must not inherit its combId
+        XCTAssertEqual(result.questionStates[2].questionsId, "reg1")
+        XCTAssertEqual(result.questionStates[2].num, "16")
+        XCTAssertNil(result.questionStates[2].combId)
+        XCTAssertEqual(result.questionStates[2].section, "言语理解")
+
+        XCTAssertEqual(result.sectionOrder, ["文字资料(共15题,合计75.0分)", "言语理解"])
+        XCTAssertEqual(result.sectionMap["文字资料(共15题,合计75.0分)"]?.total, 2)
+        XCTAssertEqual(result.sectionMap["言语理解"]?.total, 1)
     }
 
     func testSectionMapCounts() {

@@ -14,6 +14,7 @@ final class BankLogicTests: XCTestCase {
             section: "逻辑填空",
             subCategory: subCategory,
             question: "<p>题干</p>",
+            stem: nil,
             options: ["<p>A</p>", "<p>B</p>", "<p>C</p>", "<p>D</p>"],
             answer: answer,
             analysis: nil,
@@ -112,5 +113,58 @@ final class BankLogicTests: XCTestCase {
         let b = BankLogic.shuffled(source, seed: 2)
         XCTAssertNotEqual(a.map(\.id), b.map(\.id))
         XCTAssertEqual(Set(a.map(\.id)), Set(source.map(\.id))) // same members
+    }
+
+    // MARK: - 日志导出
+
+    private func makeLogEntry(
+        step: PracticeUpstreamClient.CrawlLogEntry.Step = .enter,
+        outcome: PracticeUpstreamClient.CrawlLogEntry.Outcome = .success,
+        paperName: String = "【言语理解（二）】机考题库",
+        message: String? = nil
+    ) -> PracticeUpstreamClient.CrawlLogEntry {
+        PracticeUpstreamClient.CrawlLogEntry(
+            timestamp: "2026-08-10T00:10:00Z",
+            paperId: "E1",
+            paperName: paperName,
+            step: step,
+            outcome: outcome,
+            message: message
+        )
+    }
+
+    func testExportLogTextSummarizesAndListsSteps() {
+        let entries = [
+            makeLogEntry(step: .paperList, paperName: "全部试卷", message: "共 12 份试卷"),
+            makeLogEntry(outcome: .success, message: "200 题"),
+            makeLogEntry(step: .save, outcome: .success, message: "200 题"),
+            makeLogEntry(step: .enter, outcome: .failure, message: "登录已过期，请重新登录"),
+            makeLogEntry(step: .skip, outcome: .skipped, message: "已爬取，跳过"),
+        ]
+        let text = BankLogic.exportLogText(entries)
+
+        XCTAssertTrue(text.contains("题库爬取日志（共 5 条）"))
+        XCTAssertTrue(text.contains("成功 3 · 失败 1 · 跳过 1"))
+        XCTAssertTrue(text.contains("【言语理解（二）】机考题库 · 进入试卷 — 成功（200 题）"))
+        XCTAssertTrue(text.contains("【言语理解（二）】机考题库 · 保存题目 — 成功（200 题）"))
+        XCTAssertTrue(text.contains("【言语理解（二）】机考题库 · 进入试卷 — 失败（登录已过期，请重新登录）"))
+        XCTAssertTrue(text.contains("【言语理解（二）】机考题库 · 跳过 — 跳过（已爬取，跳过）"))
+        XCTAssertTrue(text.contains("全部试卷 · 获取试卷列表 — 成功（共 12 份试卷）"))
+        // ISO8601 timestamps are rendered in local display time (UTC → local)
+        let iso = ISO8601DateFormatter().date(from: "2026-08-10T00:10:00Z")!
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        XCTAssertTrue(text.contains("[\(formatter.string(from: iso))]"))
+    }
+
+    func testExportLogTextHandlesEmptyLog() {
+        XCTAssertEqual(BankLogic.exportLogText([]), "题库爬取日志（共 0 条）\n成功 0 · 失败 0 · 跳过 0\n")
+    }
+
+    func testExportFileNameUsesDateTime() throws {
+        // Local time: the filename is user-facing (my device's clock).
+        let date = Calendar.current.date(from: DateComponents(year: 2026, month: 8, day: 10, hour: 14, minute: 30))!
+        XCTAssertEqual(BankLogic.exportFileName(from: date), "爬取日志_20260810_1430.txt")
     }
 }

@@ -124,9 +124,21 @@ final class PracticeUpstreamMappingTests: XCTestCase {
         XCTAssertEqual(question.answer?.letters, ["A"])
         XCTAssertEqual(question.keys, [true, false, false, false])
         XCTAssertEqual(question.analysis, "<p>解析</p>")
+        XCTAssertNil(question.stem) // ordinary questions carry no material
         XCTAssertEqual(question.sourceExamName, "【言语理解（二）】机考题库")
         XCTAssertNil(question.round)
         XCTAssertNil(question.collectedAt)
+    }
+
+    func testBankQuestionMapsCombParentInfoToStem() {
+        let dto = Fixtures.questionDTO(
+            "c1",
+            question: "<p>小题</p>",
+            parentInfo: "<p>共享材料</p>"
+        )
+        let question = PracticeMapping.bankQuestion(dto: dto, section: "文字资料(共15题,合计75.0分)", category: "资料分析", paperName: "p")
+        XCTAssertEqual(question.stem, "<p>共享材料</p>")
+        XCTAssertEqual(question.section, "文字资料")
     }
 
     func testBankQuestionMultiAnswerFromKeyFlags() {

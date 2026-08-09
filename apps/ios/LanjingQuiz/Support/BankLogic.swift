@@ -54,6 +54,45 @@ enum BankLogic {
         return questions.shuffled(using: &generator)
     }
 
+    // MARK: - 日志导出 (crawl-log plain-text export)
+
+    /// Plain-text export of the crawl log for the 我的 > 题库 > 日志导出 row:
+    /// one line per step with its outcome (成功/失败/跳过) and message, newest
+    /// last, plus a summary header.
+    static func exportLogText(_ entries: [PracticeUpstreamClient.CrawlLogEntry]) -> String {
+        let successes = entries.filter { $0.outcome == .success }.count
+        let failures = entries.filter { $0.outcome == .failure }.count
+        let skipped = entries.filter { $0.outcome == .skipped }.count
+        var lines = [
+            "题库爬取日志（共 \(entries.count) 条）",
+            "成功 \(successes) · 失败 \(failures) · 跳过 \(skipped)",
+            "",
+        ]
+        for entry in entries {
+            let paper = entry.paperName.isEmpty ? "-" : entry.paperName
+            let message = entry.message.map { "（\($0)）" } ?? ""
+            lines.append("[\(Self.displayTime(entry.timestamp))] \(paper) · \(entry.step.displayName) — \(entry.outcome.displayName)\(message)")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// ISO8601 timestamp → local "yyyy-MM-dd HH:mm:ss" for the exported log.
+    static func displayTime(_ iso8601: String) -> String {
+        guard let date = ISO8601DateFormatter().date(from: iso8601) else { return iso8601 }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter.string(from: date)
+    }
+
+    /// Date-time named export file, e.g. "爬取日志_20260810_1430.txt".
+    static func exportFileName(from date: Date = Date()) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyyMMdd_HHmm"
+        return "爬取日志_\(formatter.string(from: date)).txt"
+    }
+
     /// SplitMix64 — deterministic, cheap, seedable.
     struct SeededGenerator: RandomNumberGenerator {
         private var state: UInt64

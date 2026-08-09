@@ -47,6 +47,11 @@ struct PracticeBankView: View {
             }
             await vm?.ensureBankReady()
         }
+        // 我的 > 删除题库 wiped the local bank — reset this VM and re-crawl.
+        .onChange(of: appState.bankResetVersion) { _, _ in
+            vm?.bankWasDeleted()
+            Task { await vm?.ensureBankReady() }
+        }
     }
 
     private var loadingView: some View {

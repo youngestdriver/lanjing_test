@@ -50,6 +50,9 @@ struct BankQuestion: Identifiable, Equatable, Codable, Sendable {
     let section: String // coarser group, e.g. 逻辑填空 (kept for metadata display)
     let subCategory: String // 题型细分, e.g. 加强支持 — the practice grouping key
     let question: String // HTML, img srcs normalized at construction time
+    /// Shared material for comb (资料分析) questions; nil/absent in records
+    /// crawled before stems were stored.
+    let stem: String?
     let options: [String] // all 4 slots preserved; empty strings = 填空 slots
     let answer: Answer?
     let analysis: String?
@@ -85,7 +88,7 @@ struct BankQuestion: Identifiable, Equatable, Codable, Sendable {
 
     init(
         id: String, category: String, section: String, subCategory: String,
-        question: String, options: [String], answer: Answer?,
+        question: String, stem: String?, options: [String], answer: Answer?,
         analysis: String?, sourceExamName: String?, round: Int?, collectedAt: String?
     ) {
         self.id = id
@@ -93,6 +96,7 @@ struct BankQuestion: Identifiable, Equatable, Codable, Sendable {
         self.section = section
         self.subCategory = subCategory
         self.question = Self.normalizeImgSrcs(question)
+        self.stem = stem.map(Self.normalizeImgSrcs)
         self.options = options
         self.answer = answer
         self.analysis = analysis.map(Self.normalizeImgSrcs)
@@ -107,6 +111,7 @@ struct BankQuestion: Identifiable, Equatable, Codable, Sendable {
         case section
         case subCategory
         case question
+        case stem
         case options
         case answer
         case analysis
@@ -123,6 +128,7 @@ struct BankQuestion: Identifiable, Equatable, Codable, Sendable {
             section: (try? container.decode(String.self, forKey: .section)) ?? "",
             subCategory: (try? container.decode(String.self, forKey: .subCategory)) ?? "",
             question: (try? container.decode(String.self, forKey: .question)) ?? "",
+            stem: try? container.decode(String.self, forKey: .stem),
             options: (try? container.decode([String].self, forKey: .options)) ?? [],
             answer: try? container.decode(Answer.self, forKey: .answer),
             analysis: try? container.decode(String.self, forKey: .analysis),

@@ -298,7 +298,7 @@ POST /api/exams/:id/enter
     {
       "questionsId": "6620dfdfee9c16509b87a928",
       "uuId": "7404753692344238080",
-      "num": 1,
+      "num": "1",
       "section": "科技常识",
       "state": "unanswered",
       "marked": false
@@ -377,7 +377,7 @@ GET /api/exams/:id/questions
     {
       "questionsId": "6620dfdfee9c16509b87a928",
       "uuId": "7404753692344238080",
-      "num": 1,
+      "num": "1",
       "section": "科技常识",
       "state": "unanswered",
       "marked": false
@@ -394,7 +394,7 @@ GET /api/exams/:id/questions
 }
 ```
 
-后端会按每批 50 题调用上游 `/exam/get_question_info/`。
+后端会按每批 50 题调用上游 `/exam/get_question_info/`。资料分析组合题按组合分组请求：同一 `combId` 的小题合并为一个请求并附带 `combId` 参数(普通题请求不带)，用于取回共享的 `parent_info` 材料题干。
 
 增强字段说明：
 
@@ -641,7 +641,7 @@ GET /api/exams/:id/states
     {
       "questionsId": "6620dfdfee9c16509b87a928",
       "uuId": "7404753692344238080",
-      "num": 1,
+      "num": "1",
       "section": "科技常识",
       "state": "right",
       "marked": true
@@ -852,7 +852,7 @@ Content-Type: application/json
 {
   "questionsId": "6620dfdfee9c16509b87a928",
   "uuId": "7404753692344238080",
-  "num": 1,
+  "num": "1",
   "section": "科技常识",
   "state": "unanswered",
   "marked": false
@@ -863,8 +863,9 @@ Content-Type: application/json
 |---|---|---|
 | `questionsId` | string | 题目 ID |
 | `uuId` | string/null | 上游题目详情接口需要的 UUID |
-| `num` | number | 题号 |
+| `num` | string | 题号原始文本；普通题为 `"3"`，资料分析组合题子题为 `"1.1"`/`"15.5"` 式 |
 | `section` | string | 分区标题，单区试卷可能为空字符串 |
+| `combId` | string/null | 资料分析组合题所属组合 ID(来自 HTML 中 `insert-list` 的 `questionsId`)，非组合题为 null |
 | `state` | string | `unanswered`、`right` 或 `error` |
 | `marked` | boolean | 是否已标记 |
 
@@ -897,7 +898,8 @@ Content-Type: application/json
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `_id` | string/number | 题目 ID |
-| `question` | string | 题干 HTML |
+| `question` | string | 问题 HTML |
+| `parent_info` | string | 资料分析组合题的共享材料题干 HTML(仅在请求携带对应 `combId` 时返回)，普通题为空/缺失 |
 | `answer1` 到 `answer4` | string | 选项 HTML |
 | `key1` 到 `key4` | string | `"1"` 表示该选项正确，`"0"` 表示不正确 |
 | `test_ans_right` | string | 上游备用正确答案字母 |

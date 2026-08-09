@@ -28,12 +28,54 @@ enum ExamHTMLParser {
         let examResultsId = knownResultsId ?? extractVar("exam_results_id")
         let examInfoId = extractVar("exam_info_id") ?? fallbackExamInfoId
 
-        // Section titles with their positions (server: sectionMatches)
+        // Section titles with their positions (server: sectionMatches). The
+        // class attr tolerates a trailing space / extra classes (资料分析 comb
+        // sections are emitted as `<div class="card-content-title ">`).
         let sectionBounds: [(title: String, pos: Int)] = {
-            guard let regex = try? NSRegularExpression(pattern: "<div class=\"card-content-title\">([^<]+)</div>") else { return [] }
+            guard let regex = try? NSRegularExpression(pattern: "<div class=\"([^\"]*card-content-title[^\"]*)\">([^<]+)</div>") else { return [] }
             return regex.matches(in: html, range: fullRange).map { match in
-                (title: ns.substring(with: match.range(at: 1)), pos: match.range.location)
+                (title: ns.substring(with: match.range(at: 2)), pos: match.range.location)
             }
+        }()
+
+        // Comb (资料分析) groups: an insert-list div wraps several sub-questions
+        // and carries the combId in its own questionsId attribute — the payload
+        // /exam/get_question_info/ needs per question to fetch the shared
+        // parent_info. Depth-tracking finds where each insert-list div closes,
+        // so only cards actually inside a comb inherit its combId (regular
+        // cards that follow a comb section must not) — server: combBounds.
+        let combBounds: [(combId: String, pos: Int, end: Int)] = {
+            guard let openRegex = try? NSRegularExpression(pattern: "<div class=\"([^\"]*insert-list[^\"]*)\"[^>]*questionsId=\"([^\"]+)\""),
+                  let tagRegex = try? NSRegularExpression(pattern: "<div\\b[^>]*>|</div>")
+            else { return [] }
+            let opens = openRegex.matches(in: html, range: fullRange).map { match in
+                (combId: ns.substring(with: match.range(at: 2)).trimmingCharacters(in: .whitespacesAndNewlines),
+                 pos: match.range.location,
+                 end: match.range.location)
+            }
+            guard !opens.isEmpty else { return [] }
+            var combs = opens
+            let indexByPos = Dictionary(uniqueKeysWithValues: combs.enumerated().map { ($0.element.pos, $0.offset) })
+            var depth = 0
+            var pendingIndex: Int?
+            var pendingDepth = 0
+            for tag in tagRegex.matches(in: html, range: fullRange) {
+                let text = ns.substring(with: tag.range)
+                if text.hasPrefix("</") {
+                    depth -= 1
+                    if let pending = pendingIndex, depth == pendingDepth {
+                        combs[pending].end = tag.range.location + tag.range.length
+                        pendingIndex = nil
+                    }
+                } else {
+                    if let index = indexByPos[tag.range.location] {
+                        pendingIndex = index
+                        pendingDepth = depth
+                    }
+                    depth += 1
+                }
+            }
+            return combs
         }()
 
         // Card chunks = text between consecutive anchors (server: html.split(/<a\s+href="#[^"]*">\s*/), skipping chunk 0)
@@ -61,9 +103,11 @@ enum ExamHTMLParser {
             let uId = firstMatch("uuId=\"([^\"]+)\"", in: chunk, range: chunkRange)
                 .map { chunk.substring(with: $0.range(at: 1)).trimmingCharacters(in: .whitespacesAndNewlines) }
 
-            let num: Int = {
-                guard let match = firstMatch(">\\s*(\\d+)\\s*</span>", in: chunk, range: chunkRange) else { return 0 }
-                return Int(chunk.substring(with: match.range(at: 1))) ?? 0
+            // Raw number text: comb sub-questions use "1.1"…"15.5" style labels,
+            // ordinary questions a plain integer — keep the string as-is.
+            let num: String = {
+                guard let match = firstMatch(">\\s*(\\d+(?:\\.\\d+)?)\\s*</span>", in: chunk, range: chunkRange) else { return "" }
+                return chunk.substring(with: match.range(at: 1)).trimmingCharacters(in: .whitespacesAndNewlines)
             }()
 
             let (state, marked): (QuestionState.State, Bool) = {
@@ -82,7 +126,19 @@ enum ExamHTMLParser {
                 break
             }
 
-            states.append(QuestionState(questionsId: qId, uuId: uId, num: num, section: section, state: state, marked: marked))
+            // The card belongs to the comb whose insert-list div actually
+            // wraps it (regular cards after a comb section are outside every
+            // comb range).
+            var combId: String?
+            for bound in combBounds where cardPos > bound.pos && cardPos < bound.end {
+                combId = bound.combId
+                break
+            }
+
+            states.append(QuestionState(
+                questionsId: qId, uuId: uId, num: num, combId: combId, section: section,
+                state: state, marked: marked
+            ))
         }
 
         let testIds = states.map(\.questionsId)

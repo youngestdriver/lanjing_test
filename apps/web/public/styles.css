@@ -1202,6 +1202,28 @@ button:disabled {
   position: relative;
 }
 
+/* Comb (资料分析) material stem — lighter than the question, separated by a rule */
+.q-stem {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.7;
+  color: var(--text);
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 8px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border, #e3e3e3);
+}
+.q-stem img {
+  max-width: 100%;
+  border-radius: var(--radius-md);
+  margin-top: 12px;
+}
+.q-stem p {
+  margin-bottom: 12px;
+}
+
 .q-text {
   font-size: 20px;
   font-weight: 700;
@@ -1222,6 +1244,7 @@ button:disabled {
 }
 
 /* Strip inline backgrounds from API content (white bg in dark mode) */
+.q-stem *, .q-stem table, .q-stem td, .q-stem th, .q-stem span,
 .q-text *, .q-text table, .q-text td, .q-text th, .q-text span,
 .options .opt-row > div:last-child *,
 .opt-row table, .opt-row td, .opt-row th, .opt-row span,

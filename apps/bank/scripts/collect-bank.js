@@ -17,6 +17,7 @@
 // The password is prompted at runtime and never persisted; enter/submit write
 // real (abandoned) attempt records on the upstream account.
 
+const fs = require("node:fs");
 const path = require("node:path");
 const readline = require("node:readline");
 const { createUpstreamApi } = require("../lib/upstream");
@@ -32,10 +33,12 @@ const USAGE = `用法: node scripts/collect-bank.js [选项]
   --bank-dir <path> 题库输出目录 (默认 apps/bank/data)
   --targets a,b,c   目标分类 (默认 言语理解,数字运算,逻辑推理,资料分析,特有题型)
   --skip-in-progress 跳过进行中的作答 (默认会只读收集用户进行中的卷，不提交)
+  --refresh         目标分类的 jsonl 改名 .bak 并清空续接状态，重新爬取全部试卷
+                    (记录格式升级时用，例如资料分析新增 stem 材料字段)
   -h, --help        显示本帮助`;
 
 function parseArgs(argv) {
-  const opts = { exam: null, maxRounds: 200, idleLimit: 3, roundDelay: 1500, bankDir: null, targets: null, skipInProgress: false };
+  const opts = { exam: null, maxRounds: 200, idleLimit: 3, roundDelay: 1500, bankDir: null, targets: null, skipInProgress: false, refresh: false };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     const value = () => argv[++i];
@@ -47,6 +50,7 @@ function parseArgs(argv) {
       case "--bank-dir": opts.bankDir = value(); break;
       case "--targets": opts.targets = value().split(",").map((s) => s.trim()).filter(Boolean); break;
       case "--skip-in-progress": opts.skipInProgress = true; break;
+      case "--refresh": opts.refresh = true; break;
       case "-h":
       case "--help":
         console.log(USAGE);
@@ -130,6 +134,31 @@ async function ensureLoggedIn(api) {
   console.log("登录成功，开始收集");
 }
 
+// --refresh: the collector dedupes by _id forever, so a record-format change
+// (e.g. 资料分析 gaining the stem material field) can never reach existing
+// records. Rename the target category files to .bak and reset the resume
+// state so every paper is re-entered from scratch; the .bak keeps the old
+// data until the refreshed run completes.
+function applyRefresh(bankDir, targets) {
+  const metaFile = path.join(bankDir, "meta.json");
+  let meta = null;
+  try { meta = JSON.parse(fs.readFileSync(metaFile, "utf8")); } catch {}
+  for (const target of targets) {
+    const file = path.join(bankDir, `${target}.jsonl`);
+    if (!fs.existsSync(file)) continue;
+    fs.renameSync(file, file + ".bak");
+    console.log(`[refresh] ${target}.jsonl → ${target}.jsonl.bak`);
+  }
+  if (meta) {
+    meta.examState = {};
+    meta.counts = {};
+    meta.round = 0;
+    meta.stats = { totalRounds: 0, contentDupes: 0, answerUnknown: 0, consecutiveFailures: 0 };
+    fs.writeFileSync(metaFile, JSON.stringify(meta, null, 2) + "\n", { encoding: "utf8", mode: 0o600 });
+    console.log("[refresh] meta.json 续接状态已清空，将重新进入全部试卷");
+  }
+}
+
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
   // The bank lives in its own top-level directory (apps/bank): data and the
@@ -137,6 +166,10 @@ async function main() {
   // web app's .local state.
   const bankDir = path.resolve(opts.bankDir || path.join(__dirname, "..", "data"));
   const targets = opts.targets || TARGET_CATEGORIES;
+
+  if (opts.refresh) {
+    applyRefresh(bankDir, targets);
+  }
 
   const api = createUpstreamApi({ sessionFile: path.join(bankDir, "session_cookies.txt") });
 

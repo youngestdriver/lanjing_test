@@ -5,6 +5,9 @@ import Foundation
 struct Question: Identifiable, Equatable {
     let id: String
     let text: String
+    /// Shared material stem for comb (资料分析) questions (dto.parent_info);
+    /// nil for ordinary questions.
+    let stem: String?
     let answers: [String]
     let keys: [Bool]
     let testAns: String
@@ -14,12 +17,13 @@ struct Question: Identifiable, Equatable {
     init(dto: QuestionDTO) {
         self.id = dto._id
         self.text = dto.question
+        self.stem = dto.parent_info
         var options: [String] = []
         var flags: [Bool] = []
         for (answer, key) in [(dto.answer1, dto.key1), (dto.answer2, dto.key2), (dto.answer3, dto.key3), (dto.answer4, dto.key4)] {
             if let answer, !answer.isEmpty {
                 options.append(answer)
-                flags.append(key == "1")
+                flags.append(key?.value == "1")
             }
         }
         self.answers = options
