@@ -155,30 +155,23 @@ test("定义判断: 多定义/单定义", () => {
 
 // ---------- 资料分析 ----------
 
-test("资料分析: 综合分析优先于增长率", () => {
-  const record = rec("资料分析", "比重问题",
-    "能够从上述资料中推出的是", "2019年同比增长了10%");
-  assert.equal(classify(record), "综合分析");
-});
-
-test("资料分析: 增长率 vs 增长量 (percent vs units)", () => {
-  const q = (stem, analysis = "") => rec("资料分析", "统计表", stem, analysis);
-  assert.equal(classify(q("2021年出口额同比增长约？", "同比增长率")), "增长率问题");
-  assert.equal(classify(q("2021年出口额同比增长约？", "增长了1200亿元")), "增长量问题");
-});
-
-test("资料分析: 比重/平均数/倍数/基期现期/简单计算", () => {
-  const q = (stem, analysis = "") => rec("资料分析", "文字资料", stem, analysis);
-  assert.equal(classify(q("2021年进口额占进出口总额的比重为")), "比重问题");
-  assert.equal(classify(q("2021年人均收入为多少元", "平均")), "平均数问题");
-  assert.equal(classify(q("2021年出口额是进口额的多少倍")), "倍数与比值问题");
-  assert.equal(classify(q("2020年基期量为多少", "上年同期")), "基期与现期问题");
-  assert.equal(classify(q("2018年三季度景气指数最高的行业是")), "简单计算");
-});
-
-test("资料分析: 长篇阅读 section 独立成类", () => {
-  assert.equal(classify(rec("资料分析", "长篇阅读（仅中国石油和国家管网考）", "以下这段文字最适合放在原文中的哪个位置")), "长篇阅读");
-  assert.equal(classify(rec("资料分析", "长篇阅读（仅中国石油和国家管网考）", "根据本文，《诗经》中记载的制衣过程不包括", "A项根据文章第④段")), "长篇阅读");
+test("资料分析: HTML 既定 section 即子类 (不自行分类)", () => {
+  // The platform's answer card already splits 资料分析 into these sections;
+  // the classifier must echo them verbatim instead of re-classifying.
+  const sections = [
+    "文字资料", "统计表", "统计图", "简单计算", "比重问题", "平均数问题",
+    "倍数与比值相关", "综合分析", "基期与现期", "长篇阅读（仅中国石油和国家管网考）",
+  ];
+  for (const section of sections) {
+    // A question that would rule-match 增长率/增长量 still takes the section.
+    assert.equal(
+      classify(rec("资料分析", section, "能够从上述资料中推出的是", "2019年同比增长了10%")),
+      section,
+      section
+    );
+  }
+  // empty section → 其他 (same as 特有题型)
+  assert.equal(classify(rec("资料分析", "", "题干")), "其他");
 });
 
 // ---------- 特有题型 ----------
@@ -266,7 +259,6 @@ test("reclassifyBank rewrite is idempotent and backs up once", () => {
 test("unknown category or section falls back to 其他", () => {
   assert.equal(classify(rec("未知分类", "未知section", "题干")), "其他");
   assert.equal(classify(rec("言语理解", "不存在的section", "题干")), "其他");
-  assert.equal(classify(rec("资料分析", "综合", "无法判定的题干")), "其他");
 });
 
 // ---------- full-bank dry run (dev machine only) ----------

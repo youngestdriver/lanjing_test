@@ -139,6 +139,8 @@ final class PracticeUpstreamMappingTests: XCTestCase {
         let question = PracticeMapping.bankQuestion(dto: dto, section: "文字资料(共15题,合计75.0分)", category: "资料分析", paperName: "p")
         XCTAssertEqual(question.stem, "<p>共享材料</p>")
         XCTAssertEqual(question.section, "文字资料")
+        // 资料分析: the HTML section IS the sub-category (no rule re-classification).
+        XCTAssertEqual(question.subCategory, "文字资料")
     }
 
     func testBankQuestionMultiAnswerFromKeyFlags() {

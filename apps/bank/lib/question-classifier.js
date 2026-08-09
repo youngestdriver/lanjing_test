@@ -10,6 +10,11 @@
 // itself ("可判定本题为现期比重问题", "优先考虑属性规律…对称",
 // "数列…再考虑递推数列"), which is exactly what these rules key on.
 // Verified against the full bank: ~1.1% of records fall to 其他.
+//
+// 资料分析 is NOT run through the rules: the platform's own answer card
+// already splits it into 文字资料/统计表/统计图/简单计算/比重问题/平均数问题/
+// 倍数与比值相关/综合分析/基期与现期/长篇阅读…, so the HTML section is the
+// sub-category (same convention as 特有题型).
 
 const fs = require("node:fs");
 const path = require("node:path");
@@ -117,21 +122,6 @@ const FALLBACKS = {
 
 const DEFAULT_FALLBACK = "其他";
 
-// 资料分析 rules apply to every section except 长篇阅读, which keeps its
-// own class (it is 言语-type reading attached to a 资料分析 paper).
-const DATA_ANALYSIS_RULES = [
-  { name: "综合分析", patterns: [/能够.{0,8}推出|不能.{0,8}推出|可从.{0,6}推出|说法.{0,8}(正确|错误)|正确的有|错误的有|正确的是|错误的是|可以推出|下列说法|推断出/] },
-  // 增长量 carries a unit amount; 增长率 carries a percent or 同比/环比
-  // wording — "增长了1200亿元" must land in 增长量, "同比增长了10%" in 增长率.
-  { name: "增长量问题", patterns: [/增长量|增长(了)?.{0,10}(亿元|万元|万吨|亿|万|人)|增加.{0,10}(亿元|万元|万吨|亿|万|人)|比.*(多|增加|减少|少).{0,10}(亿元|万|亿|人)|同比增加|增加了|多多少|个百分点|比.{0,8}(多|少)/] },
-  { name: "增长率问题", patterns: [/增长率|增速|增幅|同比|环比|比上月|较上月|涨跌|降幅|上升.{0,4}%|下降.{0,4}%|增长.{0,4}%|同比增速|增速比|与.*相比.{0,12}增长/] },
-  { name: "比重问题", patterns: [/比重|占比|占.*的|所占|利润率|资产负债率|率(是|为|约)/] },
-  { name: "平均数问题", patterns: [/平均|每|人均|月均|日均|年均|单价|元每|每平方|单位.*(产量|成本)/] },
-  { name: "倍数与比值问题", patterns: [/倍|比值|比例|之比|是.*的/] },
-  { name: "基期与现期问题", patterns: [/基期|现期|上年同期|上一年|去年|约为|约多少|大约|累计|招了|为多少|（ ）(亿|万)|达到/] },
-  { name: "简单计算", patterns: [/最多|最少|最高|最低|最大|最小|排序|下降最多|上升最少|高于|低于|差额|相差约|有几个月|共有|从图中|从表/] },
-];
-
 // ---------- HTML stripping ----------
 
 /**
@@ -156,7 +146,6 @@ function stripHtml(html) {
 // ---------- Classification ----------
 
 function rulesFor(category, section) {
-  if (category === "资料分析" && !section.startsWith("长篇阅读")) return DATA_ANALYSIS_RULES;
   return SECTION_RULES[`${category}|${section}`] || null;
 }
 
@@ -164,11 +153,10 @@ function rulesFor(category, section) {
 function classify(record) {
   const category = String(record.category ?? "");
   const section = String(record.section ?? "");
-  // 特有题型: the section itself is the sub-category (user's explicit choice).
-  if (category === "特有题型") return section || DEFAULT_FALLBACK;
-  // 资料分析's 长篇阅读 section is 言语-type reading attached to a data
-  // paper — it keeps its own class instead of the type rules.
-  if (category === "资料分析" && section.startsWith("长篇阅读")) return "长篇阅读";
+  // 特有题型 / 资料分析: the HTML-defined section IS the sub-category. The
+  // platform already splits 资料分析 into 文字资料/统计表/统计图/简单计算/
+  // 比重问题/… on its answer card, so the rule engine must not re-classify it.
+  if (category === "特有题型" || category === "资料分析") return section || DEFAULT_FALLBACK;
   const text = `${stripHtml(record.question)} ${stripHtml(record.analysis)}`;
   const list = rulesFor(category, section);
   if (!list) return DEFAULT_FALLBACK;
@@ -239,7 +227,6 @@ module.exports = {
   TARGET_CATEGORIES,
   SECTION_RULES,
   FALLBACKS,
-  DATA_ANALYSIS_RULES,
   stripHtml,
   classify,
   classifyBank,
