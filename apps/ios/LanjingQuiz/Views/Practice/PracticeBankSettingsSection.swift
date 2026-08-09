@@ -9,7 +9,6 @@ import UIKit
 struct PracticeBankSettingsSection: View {
     @Environment(AppState.self) private var appState
     @State private var vm: PracticeBankViewModel?
-    @State private var status: String?
     @State private var exportURL: URL?
     @State private var logStatus: String?
     @State private var confirmDelete = false
@@ -33,11 +32,6 @@ struct PracticeBankSettingsSection: View {
                 confirmDelete = true
             }
             .disabled(isCrawling)
-            if let status {
-                Text(status)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
         } header: {
             Text("题库")
         }
@@ -70,12 +64,7 @@ struct PracticeBankSettingsSection: View {
             if vm == nil {
                 vm = PracticeBankViewModel(appState: appState)
             }
-            // Sync the status row with the on-disk bank (an existing crawl is
-            // not re-run — the practice tab owns crawling).
-            vm?.loadBankStatus()
-            refreshStatus()
         }
-        .onChange(of: vm?.phase) { _, _ in refreshStatus() }
         .sheet(isPresented: Binding(
             get: { exportURL != nil },
             set: { if !$0 { exportURL = nil } }
@@ -91,7 +80,6 @@ struct PracticeBankSettingsSection: View {
     private func deleteBank() {
         vm?.bankWasDeleted()
         appState.deleteBank()
-        refreshStatus()
     }
 
     /// Write the crawl log (every paper's step outcomes) to a date-time named
@@ -124,30 +112,6 @@ struct PracticeBankSettingsSection: View {
     private var crawlProgress: PracticeUpstreamClient.CrawlProgress? {
         if case .downloading(let progress) = vm?.phase { return progress }
         return nil
-    }
-
-    private func refreshStatus() {
-        guard let vm else { return }
-        switch vm.phase {
-        case .ready:
-            if let meta = vm.meta {
-                status = "已爬取 · 版本 round \(meta.round ?? 0) · \(meta.totalCount) 题"
-            } else {
-                status = "已爬取"
-            }
-        case .failed(let message):
-            status = "爬取失败：\(message)"
-        case .downloading:
-            status = nil
-        case .idle:
-            if let meta = vm.meta {
-                status = "已爬取 · 版本 round \(meta.round ?? 0) · \(meta.totalCount) 题"
-            } else {
-                status = "尚未爬取（首次进入练习页自动爬取）"
-            }
-        case .needsLogin:
-            status = "需要登录后爬取"
-        }
     }
 }
 

@@ -30,14 +30,6 @@ struct PracticeQuizView: View {
         }
         .navigationTitle("\(vm.session?.subCategory ?? subCategory)")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("退出") {
-                    vm.endSession()
-                    dismiss()
-                }
-            }
-        }
         .task {
             // Always rebuild the session on entry: a stale session from a
             // previous (system-back) exit must never be reused.

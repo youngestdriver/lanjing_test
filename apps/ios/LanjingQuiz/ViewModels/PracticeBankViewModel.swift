@@ -28,7 +28,6 @@ final class PracticeBankViewModel {
     var phase: Phase = .idle
     var meta: BankMeta?
     var subcategories: [(name: String, count: Int)] = []
-    var isShuffleEnabled = false
     var session: PracticeSession?
 
     init(appState: AppState, storage: BankStorage? = nil, facade: PracticeUpstreamClient? = nil) {
@@ -46,17 +45,6 @@ final class PracticeBankViewModel {
         meta = nil
         subcategories = []
         session = nil
-    }
-
-    /// Read-only bank status for the 我的 > 题库 row: load meta from disk when
-    /// present, never crawl (the practice tab owns crawling). Idle + nil meta
-    /// means the bank is genuinely empty or still being crawled elsewhere.
-    func loadBankStatus() {
-        guard phase == .idle else { return }
-        if storage.isPopulated(), let meta = storage.loadMeta() {
-            self.meta = meta
-            phase = .ready
-        }
     }
 
     /// Entry point from the practice tab's .task: use the local bank when
@@ -119,15 +107,35 @@ final class PracticeBankViewModel {
     }
 
     /// Local-only session start (no network): parse the category file, filter
-    /// by 题型细分, optionally shuffle.
+    /// by 题型细分, optionally shuffle (comb stems stay grouped — see
+    /// BankLogic.shuffledKeepingGroups).
     func startSession(category: String, subCategory: String) {
         guard let text = storage.loadCategoryText(category) else {
             phase = .failed("本地题库缺少 \(category).jsonl，请在 我的 > 更新题库 重新爬取")
             return
         }
         let questions = BankLogic.parseJSONL(text).filter { $0.subCategory == subCategory }
-        let ordered = isShuffleEnabled ? BankLogic.shuffled(questions, seed: UInt64.random(in: .min ... .max)) : questions
+        let ordered = shuffleEnabled(category: category)
+            ? BankLogic.shuffledKeepingGroups(questions, seed: UInt64.random(in: .min ... .max))
+            : questions
         session = PracticeSession(category: category, subCategory: subCategory, questions: ordered)
+    }
+
+    // MARK: - Shuffle preference (per-category, persisted independently)
+
+    /// Each 大类 (言语理解/数字运算/…) remembers its own 随机顺序 switch — the
+    /// setting applies to every 题型细分 inside it, and toggling one category
+    /// never affects another (UserDefaults key "practice.shuffle.<category>").
+    func shuffleEnabled(category: String) -> Bool {
+        UserDefaults.standard.object(forKey: Self.shuffleKey(category: category)) as? Bool ?? false
+    }
+
+    func setShuffleEnabled(_ enabled: Bool, category: String) {
+        UserDefaults.standard.set(enabled, forKey: Self.shuffleKey(category: category))
+    }
+
+    private static func shuffleKey(category: String) -> String {
+        "practice.shuffle.\(category)"
     }
 
     /// Clears the finished session (the quiz view dismisses itself via

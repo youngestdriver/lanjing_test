@@ -133,26 +133,22 @@ final class QuestionClassifierTests: XCTestCase {
 
     // MARK: - 资料分析
 
-    func test资料分析综合分析优先于增长率() {
-        XCTAssertEqual(rec("资料分析", "比重问题", "能够从上述资料中推出的是", "2019年同比增长了10%"), "综合分析")
-    }
-
-    func test资料分析增长率与增长量() {
-        XCTAssertEqual(rec("资料分析", "统计表", "2021年出口额同比增长约？", "同比增长率"), "增长率问题")
-        XCTAssertEqual(rec("资料分析", "统计表", "2021年出口额同比增长约？", "增长了1200亿元"), "增长量问题")
-    }
-
-    func test资料分析比重平均数倍数基期现期简单计算() {
-        XCTAssertEqual(rec("资料分析", "文字资料", "2021年进口额占进出口总额的比重为"), "比重问题")
-        XCTAssertEqual(rec("资料分析", "文字资料", "2021年人均收入为多少元", "平均"), "平均数问题")
-        XCTAssertEqual(rec("资料分析", "文字资料", "2021年出口额是进口额的多少倍"), "倍数与比值问题")
-        XCTAssertEqual(rec("资料分析", "文字资料", "2020年基期量为多少", "上年同期"), "基期与现期问题")
-        XCTAssertEqual(rec("资料分析", "文字资料", "2018年三季度景气指数最高的行业是"), "简单计算")
-    }
-
-    func test资料分析长篇阅读独立成类() {
-        XCTAssertEqual(rec("资料分析", "长篇阅读（仅中国石油和国家管网考）", "以下这段文字最适合放在原文中的哪个位置"), "长篇阅读")
-        XCTAssertEqual(rec("资料分析", "长篇阅读（仅中国石油和国家管网考）", "根据本文，《诗经》中记载的制衣过程不包括", "A项根据文章第④段"), "长篇阅读")
+    func test资料分析HTML既定section即子类() {
+        // The platform's answer card already splits 资料分析 into these
+        // sections; the classifier echoes them verbatim instead of re-classifying.
+        for section in [
+            "文字资料", "统计表", "统计图", "简单计算", "比重问题", "平均数问题",
+            "倍数与比值相关", "综合分析", "基期与现期", "长篇阅读（仅中国石油和国家管网考）",
+        ] {
+            // A question that would rule-match 增长率 still takes the section.
+            XCTAssertEqual(
+                rec("资料分析", section, "能够从上述资料中推出的是", "2019年同比增长了10%"),
+                section,
+                section
+            )
+        }
+        // empty section → 其他 (same as 特有题型)
+        XCTAssertEqual(rec("资料分析", "", "题干"), "其他")
     }
 
     // MARK: - 特有题型
@@ -170,6 +166,5 @@ final class QuestionClassifierTests: XCTestCase {
     func testUnknownCategoryOrSectionFallsBackTo其他() {
         XCTAssertEqual(rec("未知分类", "未知section", "题干"), "其他")
         XCTAssertEqual(rec("言语理解", "不存在的section", "题干"), "其他")
-        XCTAssertEqual(rec("资料分析", "综合", "无法判定的题干"), "其他")
     }
 }

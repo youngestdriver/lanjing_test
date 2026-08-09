@@ -6,7 +6,8 @@ final class BankLogicTests: XCTestCase {
     private func makeQuestion(
         _ id: String,
         subCategory: String = "类",
-        answer: BankQuestion.Answer? = BankQuestion.Answer(letters: ["A"])
+        answer: BankQuestion.Answer? = BankQuestion.Answer(letters: ["A"]),
+        stem: String? = nil
     ) -> BankQuestion {
         BankQuestion(
             id: id,
@@ -14,7 +15,7 @@ final class BankLogicTests: XCTestCase {
             section: "逻辑填空",
             subCategory: subCategory,
             question: "<p>题干</p>",
-            stem: nil,
+            stem: stem,
             options: ["<p>A</p>", "<p>B</p>", "<p>C</p>", "<p>D</p>"],
             answer: answer,
             analysis: nil,
@@ -113,6 +114,65 @@ final class BankLogicTests: XCTestCase {
         let b = BankLogic.shuffled(source, seed: 2)
         XCTAssertNotEqual(a.map(\.id), b.map(\.id))
         XCTAssertEqual(Set(a.map(\.id)), Set(source.map(\.id))) // same members
+    }
+
+    // MARK: - group-preserving shuffle (资料分析 comb 大序号)
+
+    func testShuffledKeepingGroupsKeepsSameStemAdjacent() {
+        let source = [
+            makeQuestion("n1", stem: nil),
+            makeQuestion("a1", stem: "<p>材料A</p>"),
+            makeQuestion("a2", stem: "<p>材料A</p>"),
+            makeQuestion("n2", stem: nil),
+            makeQuestion("b1", stem: "<p>材料B</p>"),
+            makeQuestion("a3", stem: "<p>材料A</p>"),
+        ]
+        let shuffled = BankLogic.shuffledKeepingGroups(source, seed: 7)
+        XCTAssertEqual(Set(shuffled.map(\.id)), Set(source.map(\.id))) // same members
+        // 大序号 group members must stay adjacent (both orders allowed).
+        let positions = Dictionary(uniqueKeysWithValues: shuffled.enumerated().map { ($1.id, $0) })
+        for group in [["a1", "a2", "a3"], ["b1"]] {
+            let indexes = group.map { positions[$0]! }.sorted()
+            XCTAssertEqual(indexes, Array(indexes[0]..<(indexes[0] + group.count)), "\(group) split apart")
+        }
+    }
+
+    func testShuffledKeepingGroupsPreservesIntraGroupOrder() {
+        let source = [
+            makeQuestion("a1", stem: "<p>材料A</p>"),
+            makeQuestion("a2", stem: "<p>材料A</p>"),
+            makeQuestion("b1", stem: "<p>材料B</p>"),
+            makeQuestion("a3", stem: "<p>材料A</p>"),
+            makeQuestion("b2", stem: "<p>材料B</p>"),
+        ]
+        for seed: UInt64 in [1, 2, 3, 7, 42] {
+            let shuffled = BankLogic.shuffledKeepingGroups(source, seed: seed)
+            let aIds = shuffled.filter { $0.stem == "<p>材料A</p>" }.map(\.id)
+            let bIds = shuffled.filter { $0.stem == "<p>材料B</p>" }.map(\.id)
+            XCTAssertEqual(aIds, ["a1", "a2", "a3"])
+            XCTAssertEqual(bIds, ["b1", "b2"])
+        }
+    }
+
+    func testShuffledKeepingGroupsIsDeterministicForSameSeed() {
+        let source = [
+            makeQuestion("n1"),
+            makeQuestion("a1", stem: "<p>材料A</p>"),
+            makeQuestion("a2", stem: "<p>材料A</p>"),
+            makeQuestion("n2"),
+            makeQuestion("b1", stem: "<p>材料B</p>"),
+            makeQuestion("a3", stem: "<p>材料A</p>"),
+        ]
+        let a = BankLogic.shuffledKeepingGroups(source, seed: 42)
+        let b = BankLogic.shuffledKeepingGroups(source, seed: 42)
+        XCTAssertEqual(a.map(\.id), b.map(\.id))
+    }
+
+    func testShuffledKeepingGroupsWithoutStemsIsAPlainShuffle() {
+        let source = questions(Array(0..<20).map { "q\($0)" }, subCategory: "类")
+        let shuffled = BankLogic.shuffledKeepingGroups(source, seed: 9)
+        XCTAssertEqual(Set(shuffled.map(\.id)), Set(source.map(\.id)))
+        XCTAssertNotEqual(shuffled.map(\.id), source.map(\.id)) // actually permuted
     }
 
     // MARK: - 日志导出
