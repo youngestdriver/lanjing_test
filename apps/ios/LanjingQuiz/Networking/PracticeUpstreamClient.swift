@@ -68,7 +68,7 @@ enum PracticeMapping: Sendable {
     ///   - section cleaned, subCategory derived by the rule engine.
     static func bankQuestion(dto: QuestionDTO, section: String, category: String, paperName: String) -> BankQuestion {
         let correctKeys = [(dto.key1, "A"), (dto.key2, "B"), (dto.key3, "C"), (dto.key4, "D")]
-            .compactMap { $0.0 == "1" ? $0.1 : nil }
+            .compactMap { $0.0?.value == "1" ? $0.1 : nil }
         let answer: BankQuestion.Answer?
         if correctKeys.count > 1 {
             answer = BankQuestion.Answer(letters: correctKeys)
@@ -91,6 +91,7 @@ enum PracticeMapping: Sendable {
                 analysis: dto.analysis
             ),
             question: dto.question,
+            stem: dto.parent_info,
             options: [dto.answer1 ?? "", dto.answer2 ?? "", dto.answer3 ?? "", dto.answer4 ?? ""],
             answer: answer,
             analysis: dto.analysis,
@@ -162,6 +163,50 @@ final class PracticeUpstreamClient {
         let paperName: String
     }
 
+    /// One crawl-log event: which step of which paper succeeded or failed,
+    /// persisted to the bank dir (crawl_log.jsonl) and exported via
+    /// 我的 > 题库 > 日志导出.
+    struct CrawlLogEntry: Codable, Sendable, Equatable {
+        enum Step: String, Codable, Sendable {
+            case paperList   // 获取试卷列表
+            case enter       // 进入试卷 / 抓取题目
+            case save        // 保存题目到本机
+            case endAttempt  // 结束作答（尽力而为）
+            case skip        // 已爬取，跳过
+
+            var displayName: String {
+                switch self {
+                case .paperList: "获取试卷列表"
+                case .enter: "进入试卷"
+                case .save: "保存题目"
+                case .endAttempt: "结束作答"
+                case .skip: "跳过"
+                }
+            }
+        }
+
+        enum Outcome: String, Codable, Sendable {
+            case success, failure, skipped
+
+            var displayName: String {
+                switch self {
+                case .success: "成功"
+                case .failure: "失败"
+                case .skipped: "跳过"
+                }
+            }
+        }
+
+        let timestamp: String // ISO8601
+        let paperId: String?
+        let paperName: String
+        let step: Step
+        let outcome: Outcome
+        let message: String?
+
+        static func now() -> String { ISO8601DateFormatter().string(from: Date()) }
+    }
+
     /// Crawl every 机考题库 paper into the local bank — the iOS port of the
     /// collector's runCollection. Two modes:
     ///
@@ -179,40 +224,83 @@ final class PracticeUpstreamClient {
     /// best-effort-ended after fetching; wfs=0 papers are read-only, never
     /// ended, and no answer is ever submitted.
     func crawlAllPapers(storage: BankStorage, refresh: Bool = false, progress: @escaping (CrawlProgress) -> Void) async throws {
-        let papers = try await paperList()
+        // Best-effort crawl logging — a log-write failure never breaks the crawl.
+        let log = { (entry: CrawlLogEntry) in try? storage.appendCrawlLog([entry]) }
+
+        let papers: [Exam]
+        do {
+            papers = try await paperList()
+            log(CrawlLogEntry(timestamp: CrawlLogEntry.now(), paperId: nil, paperName: "全部试卷", step: .paperList, outcome: .success, message: "共 \(papers.count) 份试卷"))
+        } catch {
+            log(CrawlLogEntry(timestamp: CrawlLogEntry.now(), paperId: nil, paperName: "全部试卷", step: .paperList, outcome: .failure, message: Self.errorDescription(error)))
+            throw error
+        }
+
         let previousRound = storage.loadMeta()?.round ?? 0
         var meta = refresh ? nil : storage.loadMeta()
         var counts = meta?.counts ?? [:]
         var seenIds = refresh ? [] : Self.loadSeenIds(storage: storage)
         var byCategory: [String: [BankQuestion]] = [:] // refresh mode only
         var papersDone: [String: Bool] = [:]
+        var consecutiveFailures = 0
+        var failedPapers: [String] = [] // refresh mode: any failure aborts the commit
 
         for (index, paper) in papers.enumerated() {
             let paperId = String(paper.id)
-            if !refresh, meta?.papers?[paperId] == true { continue }
+            if !refresh, meta?.papers?[paperId] == true {
+                log(CrawlLogEntry(timestamp: CrawlLogEntry.now(), paperId: paperId, paperName: paper.name, step: .skip, outcome: .skipped, message: "已爬取，跳过"))
+                continue
+            }
 
-            let records = try await enterPaper(paper)
+            let records: [BankQuestion]
+            do {
+                records = try await enterPaper(paper)
+                consecutiveFailures = 0
+                log(CrawlLogEntry(timestamp: CrawlLogEntry.now(), paperId: paperId, paperName: paper.name, step: .enter, outcome: .success, message: "\(records.count) 题"))
+            } catch {
+                let message = Self.errorDescription(error)
+                log(CrawlLogEntry(timestamp: CrawlLogEntry.now(), paperId: paperId, paperName: paper.name, step: .enter, outcome: .failure, message: message))
+                failedPapers.append(paper.name)
+                consecutiveFailures += 1
+                // refresh: keep crawling so the log shows every failed paper,
+                // then abort the commit at the end. incremental: stop after 3
+                // consecutive failures (already-committed papers stay saved).
+                if !refresh && consecutiveFailures >= 3 {
+                    throw error
+                }
+                progress(CrawlProgress(index: index + 1, total: papers.count, paperName: paper.name))
+                continue
+            }
+
             var newRecords: [BankQuestion] = []
             for record in records where seenIds.insert(record.id).inserted {
                 newRecords.append(record)
             }
 
-            if refresh {
-                for record in newRecords {
-                    byCategory[record.category, default: []].append(record)
+            do {
+                if refresh {
+                    for record in newRecords {
+                        byCategory[record.category, default: []].append(record)
+                    }
+                } else {
+                    var grouped: [String: [BankQuestion]] = [:]
+                    for record in newRecords {
+                        grouped[record.category, default: []].append(record)
+                    }
+                    for (category, categoryRecords) in grouped {
+                        try storage.appendRecords(categoryRecords, for: category)
+                        counts[category, default: 0] += categoryRecords.count
+                    }
                 }
-            } else {
-                var grouped: [String: [BankQuestion]] = [:]
-                for record in newRecords {
-                    grouped[record.category, default: []].append(record)
-                }
-                for (category, categoryRecords) in grouped {
-                    try storage.appendRecords(categoryRecords, for: category)
-                    counts[category, default: 0] += categoryRecords.count
-                }
+                log(CrawlLogEntry(timestamp: CrawlLogEntry.now(), paperId: paperId, paperName: paper.name, step: .save, outcome: .success, message: "\(newRecords.count) 题"))
+            } catch {
+                log(CrawlLogEntry(timestamp: CrawlLogEntry.now(), paperId: paperId, paperName: paper.name, step: .save, outcome: .failure, message: Self.errorDescription(error)))
+                throw error
             }
+
             papersDone[paperId] = true
             endAttempt(paper: paper)
+            log(CrawlLogEntry(timestamp: CrawlLogEntry.now(), paperId: paperId, paperName: paper.name, step: .endAttempt, outcome: .success, message: "已发起结束请求"))
 
             if !refresh {
                 meta = BankMeta(
@@ -226,6 +314,12 @@ final class PracticeUpstreamClient {
                 try storage.saveMeta(meta!)
             }
             progress(CrawlProgress(index: index + 1, total: papers.count, paperName: paper.name))
+        }
+
+        // refresh mode commits atomically — any failed paper means no commit,
+        // the log records exactly which papers/steps failed.
+        if !failedPapers.isEmpty {
+            throw APIError.upstream("\(failedPapers.count) 份试卷爬取失败：\(failedPapers.joined(separator: "、"))")
         }
 
         let finalCounts: [String: Int]
@@ -253,6 +347,15 @@ final class PracticeUpstreamClient {
         } else {
             try storage.saveMeta(finalMeta)
         }
+    }
+
+    /// Human-readable error text for the crawl log. APIError carries a
+    /// user-facing message; anything else falls back to localizedDescription.
+    private static func errorDescription(_ error: Error) -> String {
+        if let apiError = error as? APIError {
+            return apiError.message
+        }
+        return error.localizedDescription
     }
 
     /// All stored record ids across the target categories (dedupe set).

@@ -279,15 +279,39 @@ function createUpstreamApi(opts = {}) {
   }
 
   // ---- fetch questions ----
-  async function fetchAllQuestions(examResultsId, examInfoId, testIds, uuid) {
+  // Comb (资料分析) questions must be requested with their combId so the
+  // upstream returns the shared parent_info; units never mix combIds (each
+  // comb's sub-questions go in one request with that combId), regular
+  // questions stay in plain batches of up to 50.
+  async function fetchAllQuestions(examResultsId, examInfoId, testIds, uuid, states = []) {
+    const combByTestId = new Map();
+    for (const state of states) {
+      if (state.combId && !combByTestId.has(state.questionsId)) {
+        combByTestId.set(state.questionsId, state.combId);
+      }
+    }
     const BATCH = 50;
+    const units = [];
+    let unit = { testIds: [], combId: null };
+    for (const testId of testIds) {
+      const combId = combByTestId.get(testId) || null;
+      if (unit.testIds.length && (unit.combId !== combId || unit.testIds.length >= BATCH)) {
+        units.push(unit);
+        unit = { testIds: [], combId: null };
+      }
+      unit.testIds.push(testId);
+      unit.combId = combId;
+    }
+    if (unit.testIds.length) units.push(unit);
+
     const all = [];
-    for (let i = 0; i < testIds.length; i += BATCH) {
-      const batch = testIds.slice(i, i + BATCH);
+    for (const { testIds: batch, combId } of units) {
       const uuids = Array(batch.length).fill(uuid).join(",");
+      const form = { examResultsId, examInfoId, testIds: batch.join(","), uuids };
+      if (combId) form.combId = combId;
       const result = await proxyRequest("/exam/get_question_info/", {
         method: "POST",
-        form: { examResultsId, examInfoId, testIds: batch.join(","), uuids },
+        form,
       });
       const data = requireUpstreamResult(result, "Loading questions", { allowBusinessFailure: true });
       if (!Array.isArray(data)) throw new ApiError(502, "Upstream returned an invalid question batch");
@@ -295,7 +319,9 @@ function createUpstreamApi(opts = {}) {
         const map = { key1: "A", key2: "B", key3: "C", key4: "D" };
         const correctKeys = [];
         for (const [k, v] of Object.entries(map)) {
-          if (q[k] === "1") correctKeys.push(v);
+          // The upstream emits the correct key as "1" but incorrect keys
+          // sometimes as the number 0 — compare loosely.
+          if (String(q[k]) === "1") correctKeys.push(v);
         }
         q._isMulti = correctKeys.length > 1;
         q._answers = correctKeys;
@@ -424,7 +450,7 @@ function createUpstreamApi(opts = {}) {
         const cached = examCache[examInfoId];
         if (!cached) throw new ApiError(400, "Exam not entered yet");
 
-        const questions = await fetchAllQuestions(cached.examResultsId, cached.examInfoId, cached.testIds, cached.uuid);
+        const questions = await fetchAllQuestions(cached.examResultsId, cached.examInfoId, cached.testIds, cached.uuid, cached.questionStates);
         return { questions, states: cached.questionStates, sections: cached.sectionMap };
       });
     },

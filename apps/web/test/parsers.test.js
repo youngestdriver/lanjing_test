@@ -62,10 +62,10 @@ test("parseExamHtml extracts IDs, states, marks, and sections", () => {
   assert.equal(result.uuid, "u1");
   assert.deepEqual(result.testIds, ["q1", "q2", "q3", "q4"]);
   assert.deepEqual(result.questionStates, [
-    { questionsId: "q1", uuId: "u1", num: 1, section: "科技常识", state: "right", marked: true },
-    { questionsId: "q2", uuId: "u2", num: 2, section: "科技常识", state: "error", marked: false },
-    { questionsId: "q3", uuId: "u3", num: 3, section: "逻辑推理", state: "unanswered", marked: false },
-    { questionsId: "q4", uuId: "u4", num: 4, section: "逻辑推理", state: "right", marked: false },
+    { questionsId: "q1", uuId: "u1", num: "1", section: "科技常识", combId: null, state: "right", marked: true },
+    { questionsId: "q2", uuId: "u2", num: "2", section: "科技常识", combId: null, state: "error", marked: false },
+    { questionsId: "q3", uuId: "u3", num: "3", section: "逻辑推理", combId: null, state: "unanswered", marked: false },
+    { questionsId: "q4", uuId: "u4", num: "4", section: "逻辑推理", combId: null, state: "right", marked: false },
   ]);
   assert.deepEqual(result.sectionMap, {
     "科技常识": { total: 2, right: 1, error: 1, unanswered: 0 },
@@ -97,6 +97,47 @@ test("parseExamHtml groups questions without a section", () => {
   assert.equal(result.questionStates[0].section, "");
   assert.deepEqual(result.sectionMap, {
     "(无分类)": { total: 1, right: 0, error: 0, unanswered: 1 },
+  });
+});
+
+test("parseExamHtml handles comb (资料分析) sections: combId, sub-numbers, trailing-space class", () => {
+  const html = `
+    <script>var exam_results_id = '87396523'; var exam_info_id = '1439672';</script>
+    <div class="card-content-title ">文字资料(共15题,合计75.0分)</div>
+    <div class="box-list ">
+      <div class="insert-list inline-insert-list " questionsId="comb_wa ">
+        <a href="#c1">
+          <div class="box insert-box question_cbox s1 practice-mode-2 ">
+            <span class="iconBox" questionsId="q_c1" uuId="u1" num="questions_q_c1">1.1</span>
+          </div>
+        </a>
+        <a href="#c2">
+          <div class="box insert-box question_cbox s1 practice-mode-2 ">
+            <span class="iconBox" questionsId="q_c2" uuId="u1" num="questions_q_c2">15.5</span>
+          </div>
+        </a>
+      </div>
+    </div>
+    <div class="card-content-title">言语理解</div>
+    <a href="#regular">
+      <div class="question_cbox" questionsId="q_reg" uuId="u2"><span>16</span></div>
+    </a>
+  `;
+  const result = parseExamHtml(html, "1439672");
+
+  assert.equal(result.questionStates.length, 3);
+  assert.deepEqual(
+    result.questionStates.map((s) => ({ id: s.questionsId, num: s.num, section: s.section, combId: s.combId })),
+    [
+      { id: "q_c1", num: "1.1", section: "文字资料(共15题,合计75.0分)", combId: "comb_wa" },
+      { id: "q_c2", num: "15.5", section: "文字资料(共15题,合计75.0分)", combId: "comb_wa" },
+      // a regular card AFTER the comb section must not inherit its combId
+      { id: "q_reg", num: "16", section: "言语理解", combId: null },
+    ],
+  );
+  assert.deepEqual(result.sectionMap, {
+    "文字资料(共15题,合计75.0分)": { total: 2, right: 0, error: 0, unanswered: 2 },
+    "言语理解": { total: 1, right: 0, error: 0, unanswered: 1 },
   });
 });
 

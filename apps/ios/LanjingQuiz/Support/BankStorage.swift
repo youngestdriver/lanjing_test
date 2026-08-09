@@ -18,6 +18,30 @@ protocol BankStorage: Sendable {
     /// later resume skips completed papers.
     func saveMeta(_ meta: BankMeta) throws
     func removeAll() throws
+    /// Crawl log (crawl_log.jsonl): every paper's steps with outcomes, used by
+    /// 我的 > 题库 > 日志导出. Append-only; loadCrawlLog returns [] when the
+    /// file does not exist. Default implementations are no-ops so fakes stay
+    /// minimal.
+    func loadCrawlLog() -> [PracticeUpstreamClient.CrawlLogEntry]
+    func appendCrawlLog(_ entries: [PracticeUpstreamClient.CrawlLogEntry]) throws
+}
+
+extension BankStorage {
+    func loadCrawlLog() -> [PracticeUpstreamClient.CrawlLogEntry] { [] }
+    func appendCrawlLog(_ entries: [PracticeUpstreamClient.CrawlLogEntry]) throws {}
+}
+
+/// A single record that could not be encoded — the id names the exact
+/// question so the crawl log can point at it.
+enum BankSaveError: LocalizedError, Equatable {
+    case recordEncodeFailed(id: String, reason: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .recordEncodeFailed(let id, let reason):
+            "题目 \(id) 保存失败：\(reason)"
+        }
+    }
 }
 
 /// FileManager-backed storage: Application Support/LanjingQuiz/bank/.
@@ -43,6 +67,38 @@ struct FileManagerBankStorage: BankStorage, Sendable {
     }
 
     private var metaURL: URL { directory.appending(path: "meta.json") }
+
+    private var crawlLogURL: URL { directory.appending(path: "crawl_log.jsonl") }
+
+    func loadCrawlLog() -> [PracticeUpstreamClient.CrawlLogEntry] {
+        guard let data = try? Data(contentsOf: crawlLogURL), let text = String(data: data, encoding: .utf8) else {
+            return []
+        }
+        let decoder = JSONDecoder()
+        return text
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .compactMap { line in
+                guard let data = String(line).data(using: .utf8) else { return nil }
+                return try? decoder.decode(PracticeUpstreamClient.CrawlLogEntry.self, from: data)
+            }
+    }
+
+    func appendCrawlLog(_ entries: [PracticeUpstreamClient.CrawlLogEntry]) throws {
+        guard !entries.isEmpty else { return }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let encoder = JSONEncoder()
+        var lines = ""
+        for entry in entries {
+            if let json = String(data: try encoder.encode(entry), encoding: .utf8), !json.isEmpty {
+                lines += json + "\n"
+            }
+        }
+        var existing = Data()
+        if FileManager.default.fileExists(atPath: crawlLogURL.path) {
+            existing = try Data(contentsOf: crawlLogURL)
+        }
+        try (existing + Data(lines.utf8)).write(to: crawlLogURL, options: .atomic)
+    }
 
     func isPopulated() -> Bool {
         guard let meta = loadMeta() else { return false }
@@ -76,9 +132,18 @@ struct FileManagerBankStorage: BankStorage, Sendable {
         let encoder = JSONEncoder()
         var lines = ""
         for record in records {
-            if let json = String(data: try encoder.encode(record), encoding: .utf8), !json.isEmpty {
-                lines += json + "\n"
+            let json: String
+            do {
+                guard let encoded = String(data: try encoder.encode(record), encoding: .utf8), !encoded.isEmpty else {
+                    throw BankSaveError.recordEncodeFailed(id: record.id, reason: "编码结果为空")
+                }
+                json = encoded
+            } catch let error as BankSaveError {
+                throw error
+            } catch {
+                throw BankSaveError.recordEncodeFailed(id: record.id, reason: String(describing: error))
             }
+            lines += json + "\n"
         }
         let url = fileURL(for: category)
         var existing = Data()

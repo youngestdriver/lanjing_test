@@ -247,26 +247,141 @@ final class APIClient: NSObject, URLSessionDelegate {
     /// returning the raw DTOs (the exam flow maps them to `Question`; the
     /// practice flow maps them to `BankQuestion` and must keep all 4 option
     /// slots, which `Question.init(dto:)` drops).
+    ///
+    /// Comb (资料分析) questions are requested with their combId so the upstream
+    /// returns the shared parent_info; units never mix combIds (each comb's
+    /// sub-questions go in one request with that combId).
     func fetchQuestionDTOs(_ session: ExamSession) async throws -> [QuestionDTO] {
         var all: [QuestionDTO] = []
         let testIds = session.testIds
         let uuid = session.uuid
-        for batchStart in stride(from: 0, to: testIds.count, by: 50) {
-            let batch = Array(testIds[batchStart..<min(batchStart + 50, testIds.count)])
-            let uuids = Array(repeating: uuid ?? "null", count: batch.count).joined(separator: ",")
-            let form = [
+        var combByTestId: [String: String] = [:]
+        for state in session.questionStates {
+            if let combId = state.combId, combByTestId[state.questionsId] == nil {
+                combByTestId[state.questionsId] = combId
+            }
+        }
+        let batchSize = 50
+        var units: [(testIds: [String], combId: String?)] = []
+        var unit: ([String], String?) = ([], nil)
+        for testId in testIds {
+            let combId = combByTestId[testId]
+            if !unit.0.isEmpty && (unit.1 != combId || unit.0.count >= batchSize) {
+                units.append(unit)
+                unit = ([], nil)
+            }
+            unit.0.append(testId)
+            unit.1 = combId
+        }
+        if !unit.0.isEmpty { units.append(unit) }
+        let batchCount = units.count
+        for (unitIndex, batchUnit) in units.enumerated() {
+            let uuids = Array(repeating: uuid ?? "null", count: batchUnit.testIds.count).joined(separator: ",")
+            var form = [
                 "examResultsId": session.examResultsId,
                 "examInfoId": session.examInfoId,
-                "testIds": batch.joined(separator: ","),
+                "testIds": batchUnit.testIds.joined(separator: ","),
                 "uuids": uuids,
             ]
-            let response = try await request("/exam/get_question_info/", method: "POST", form: form)
-            guard let dtos = try? decode([QuestionDTO].self, from: response.text) else {
-                throw APIError.invalidResponse
+            if let combId = batchUnit.combId {
+                form["combId"] = combId
             }
-            all.append(contentsOf: dtos)
+            // The upstream intermittently answers this endpoint with a broken
+            // body (observed on 资料分析 papers); the collector retries the
+            // same read, so do we. Session expiry is never retried.
+            let attempts = 3
+            var lastError: Error = APIError.invalidResponse
+            var fetched = false
+            for attempt in 1...attempts {
+                do {
+                    let response = try await request("/exam/get_question_info/", method: "POST", form: form)
+                    guard let dtos = try? decode([QuestionDTO].self, from: response.text) else {
+                        throw APIError.invalidBatch(Self.describeBatchFailure(
+                            status: response.status,
+                            batchIndex: unitIndex,
+                            batchCount: batchCount,
+                            testIds: batchUnit.testIds,
+                            responseText: response.text
+                        ))
+                    }
+                    all.append(contentsOf: dtos)
+                    fetched = true
+                    break
+                } catch let error as APIError {
+                    if error == .sessionExpired { throw error }
+                    lastError = error
+                } catch {
+                    lastError = error
+                }
+                if attempt < attempts {
+                    try? await Task.sleep(for: .seconds(3))
+                }
+            }
+            if !fetched {
+                // A batch that still failed after retries carries the attempt
+                // count in the message so the log shows it was not a one-off.
+                if case .invalidBatch(let detail)? = lastError as? APIError {
+                    throw APIError.invalidBatch("重试 \(attempts - 1) 次后仍失败；\(detail)")
+                }
+                throw lastError
+            }
         }
         return all
+    }
+
+    /// Detailed failure text for an undecodable question batch: which batch,
+    /// which question ids, and — when the body is still a JSON array — which
+    /// elements fail to decode; otherwise the HTTP status + response head so
+    /// the reason is visible. Fed into the crawl log via APIError.invalidBatch.
+    nonisolated static func describeBatchFailure(
+        status: Int,
+        batchIndex: Int,
+        batchCount: Int,
+        testIds: [String],
+        responseText: String
+    ) -> String {
+        var parts = ["第 \(batchIndex + 1)/\(batchCount) 批（\(testIds.count) 题）响应无法解析，HTTP \(status)"]
+        parts.append("涉及题目：\(testIds.joined(separator: "、"))")
+
+        // The body may still be a JSON array with a few malformed elements —
+        // decode element-by-element to name the exact offenders AND the field
+        // that breaks decoding (missing _id / missing question / wrong type).
+        if let data = responseText.data(using: .utf8),
+           let array = try? JSONSerialization.jsonObject(with: data) as? [Any],
+           !array.isEmpty {
+            let decoder = JSONDecoder()
+            let bad: [String] = array.enumerated().compactMap { index, element in
+                guard let elementData = try? JSONSerialization.data(withJSONObject: element),
+                      (try? decoder.decode(QuestionDTO.self, from: elementData)) != nil
+                else {
+                    let dict = element as? [String: Any]
+                    let id = dict?["_id"] as? String
+                        ?? dict?["test_id"] as? String
+                        ?? "第\(index + 1)个"
+                    let reason: String
+                    if dict?["_id"] == nil || !(dict?["_id"] is String) {
+                        reason = "缺 _id"
+                    } else if dict?["question"] == nil {
+                        reason = "缺 question"
+                    } else if !(dict?["question"] is String) {
+                        reason = "question 非字符串"
+                    } else {
+                        reason = "字段类型不符"
+                    }
+                    return "\(id)（\(reason)）"
+                }
+                return nil
+            }
+            if !bad.isEmpty {
+                parts.append("坏元素：\(bad.joined(separator: "、"))")
+            }
+        }
+
+        let snippet = responseText
+            .replacingOccurrences(of: "\n", with: " ")
+            .prefix(300)
+        parts.append("上游响应：\(snippet)")
+        return parts.joined(separator: "；")
     }
 
     func fetchQuestions(_ session: ExamSession) async throws -> [Question] {

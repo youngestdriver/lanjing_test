@@ -131,6 +131,9 @@ function buildRecord(question, section, category, ctx) {
     category,
     section: cleanSection(section),
     question: question.question || "",
+    // Shared material for comb (资料分析) questions (fetched via combId); ""
+    // for ordinary questions.
+    stem: question.parent_info || "",
     options: [question.answer1 || "", question.answer2 || "", question.answer3 || "", question.answer4 || ""],
     answer,
     analysis: question.analysis || "",

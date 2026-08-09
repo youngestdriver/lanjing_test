@@ -63,6 +63,7 @@ final class BankStorageTests: XCTestCase {
             section: "逻辑填空",
             subCategory: "成语辨析",
             question: "<p>题干</p>",
+            stem: nil,
             options: ["<p>A</p>", "<p>B</p>", "<p>C</p>", "<p>D</p>"],
             answer: BankQuestion.Answer(letters: ["A"]),
             analysis: nil,
@@ -156,5 +157,44 @@ final class BankStorageTests: XCTestCase {
         XCTAssertEqual(fake.savedMeta?.round, 27)
         try fake.removeAll()
         XCTAssertEqual(fake.removedCallCount, 1)
+    }
+
+    // MARK: - Crawl log
+
+    private func logEntry(
+        step: PracticeUpstreamClient.CrawlLogEntry.Step = .enter,
+        outcome: PracticeUpstreamClient.CrawlLogEntry.Outcome = .success,
+        paperName: String = "E1"
+    ) -> PracticeUpstreamClient.CrawlLogEntry {
+        PracticeUpstreamClient.CrawlLogEntry(
+            timestamp: "2026-08-10T00:10:00Z",
+            paperId: "E1",
+            paperName: paperName,
+            step: step,
+            outcome: outcome,
+            message: nil
+        )
+    }
+
+    func testCrawlLogStartsEmpty() {
+        XCTAssertEqual(storage().loadCrawlLog(), [])
+    }
+
+    func testAppendCrawlLogAccumulatesWithoutClobbering() throws {
+        let store = storage()
+        try store.appendCrawlLog([logEntry(outcome: .success)])
+        try store.appendCrawlLog([logEntry(step: .save, outcome: .failure)])
+        XCTAssertEqual(store.loadCrawlLog().map(\.step), [.enter, .save])
+        XCTAssertEqual(store.loadCrawlLog().map(\.outcome), [.success, .failure])
+        // empty batch is a no-op
+        try store.appendCrawlLog([])
+        XCTAssertEqual(store.loadCrawlLog().count, 2)
+    }
+
+    func testRemoveAllDeletesCrawlLog() throws {
+        let store = storage()
+        try store.appendCrawlLog([logEntry()])
+        try store.removeAll()
+        XCTAssertEqual(store.loadCrawlLog(), [])
     }
 }

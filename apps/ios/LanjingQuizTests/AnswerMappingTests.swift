@@ -13,6 +13,34 @@ final class AnswerMappingTests: XCTestCase {
         XCTAssertFalse(question.isCorrectAnswer("B"))
     }
 
+    func testCombQuestionCarriesParentInfoAsStem() {
+        let question = Question(dto: Fixtures.questionDTO(question: "<p>小题</p>", parentInfo: "<p>共享材料</p>"))
+        XCTAssertEqual(question.stem, "<p>共享材料</p>")
+
+        let ordinary = Question(dto: Fixtures.questionDTO())
+        XCTAssertNil(ordinary.stem)
+    }
+
+    /// The upstream emits the correct key as a string ("1") but incorrect keys
+    /// sometimes as numbers (0) — the DTO must decode either form.
+    func testDecodesMixedTypeKeysTolerantly() throws {
+        let json = """
+        {"_id":"m1","question":"<p>题干</p>","answer1":"<p>A</p>","answer2":"<p>B</p>","answer3":"<p>C</p>","answer4":"<p>D</p>","key1":"1","key2":0,"key3":0,"key4":0}
+        """
+        let dto = try JSONDecoder().decode(QuestionDTO.self, from: Data(json.utf8))
+        let question = Question(dto: dto)
+        XCTAssertEqual(question.correctAnswers, ["A"])
+        XCTAssertFalse(question.isMulti)
+
+        let allNumeric = """
+        {"_id":"m2","question":"<p>题干</p>","answer1":"<p>A</p>","answer2":"<p>B</p>","answer3":"<p>C</p>","answer4":"<p>D</p>","key1":0,"key2":0,"key3":1,"key4":"0"}
+        """
+        let dto2 = try JSONDecoder().decode(QuestionDTO.self, from: Data(allNumeric.utf8))
+        let question2 = Question(dto: dto2)
+        XCTAssertEqual(question2.correctAnswers, ["C"])
+        XCTAssertFalse(question2.isMulti)
+    }
+
     func testMultiCorrectAnswers() {
         let question = Question(dto: Fixtures.questionDTO(keys: ["1", "0", "1", "0"]))
         XCTAssertEqual(question.correctAnswers, ["A", "C"])

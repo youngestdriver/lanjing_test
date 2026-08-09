@@ -22,6 +22,9 @@ final class PracticeBankViewModel {
     private let storage: BankStorage
     private let facade: PracticeUpstreamClient
 
+    /// The underlying store, exposed for the 我的 > 题库 > 日志导出 row.
+    var bankStore: BankStorage { storage }
+
     var phase: Phase = .idle
     var meta: BankMeta?
     var subcategories: [(name: String, count: Int)] = []
@@ -35,6 +38,15 @@ final class PracticeBankViewModel {
     }
 
     // MARK: - Bank availability
+
+    /// Reset after the local bank was deleted elsewhere (我的 > 删除题库):
+    /// the next ensureBankReady re-crawls everything from scratch.
+    func bankWasDeleted() {
+        phase = .idle
+        meta = nil
+        subcategories = []
+        session = nil
+    }
 
     /// Entry point from the practice tab's .task: use the local bank when
     /// present, otherwise crawl the whole 机考题库 from upstream. The crawl

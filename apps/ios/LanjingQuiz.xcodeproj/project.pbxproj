@@ -53,6 +53,7 @@
 		A8FAE9D8FCE74EDB730C5A33 /* UpstreamDTOs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 994850B50C48BB1768EAD1FE /* UpstreamDTOs.swift */; };
 		AA7933938A189AB45B00AF10 /* ResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2584DF0E03F4C66B86C082D /* ResultView.swift */; };
 		AFEA235EB9CEC674B6938CEF /* ExamListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA61C913067812855F0BE780 /* ExamListViewModel.swift */; };
+		B43A7FA144F4FD361C45A1F2 /* BatchFailureDiagnosisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06DF772CC79D536723E0BB2B /* BatchFailureDiagnosisTests.swift */; };
 		B65EAB393CCB414D16019BE3 /* BankLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67F512FD68645C1849B92BDF /* BankLogic.swift */; };
 		BDE3C65C32DB85CAA56DD049 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1613A3AFDED5B85859DEFE16 /* LoginView.swift */; };
 		BFCD0D3496DEFA1596CA5A03 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6188CFE56F186CCECDC684FA /* KeychainHelper.swift */; };
@@ -106,6 +107,7 @@
 		0207640E6EAE653501D0A7EF /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		0364F22B8201AF3CC52F19FE /* Formatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatters.swift; sourceTree = "<group>"; };
 		05796CE89C2C81EA0EC1B8D5 /* CookieCloudClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieCloudClient.swift; sourceTree = "<group>"; };
+		06DF772CC79D536723E0BB2B /* BatchFailureDiagnosisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchFailureDiagnosisTests.swift; sourceTree = "<group>"; };
 		076328ABD900D50196B69B82 /* CookieCloudCryptoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieCloudCryptoTests.swift; sourceTree = "<group>"; };
 		1039294FEB0B4CE1352C3CAF /* Fixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fixtures.swift; sourceTree = "<group>"; };
 		145620DF56112CD358D32190 /* SectionStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectionStats.swift; sourceTree = "<group>"; };
@@ -142,7 +144,7 @@
 		5FF5AB4B1C7BCE1D1BA79FA0 /* BankStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankStorageTests.swift; sourceTree = "<group>"; };
 		615EE3D6375CB52ADD9D0984 /* SessionExpiryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionExpiryTests.swift; sourceTree = "<group>"; };
 		6188CFE56F186CCECDC684FA /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
-		6665ACEC7ADB34A675333AB2 /* LanjingQuiz.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LanjingQuiz.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6665ACEC7ADB34A675333AB2 /* LanjingQuiz.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LanjingQuiz.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		67F512FD68645C1849B92BDF /* BankLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankLogic.swift; sourceTree = "<group>"; };
 		6913CBFD4AD1D569021F5032 /* CookieCloudCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieCloudCrypto.swift; sourceTree = "<group>"; };
 		6AE3F3A3F273301A20F38D05 /* PracticeUpstreamClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeUpstreamClient.swift; sourceTree = "<group>"; };
@@ -214,6 +216,7 @@
 				462183F7BDD4B0F97124299F /* BankLogicTests.swift */,
 				DDA0F435FACAC1527BB92A1D /* BankModelTests.swift */,
 				5FF5AB4B1C7BCE1D1BA79FA0 /* BankStorageTests.swift */,
+				06DF772CC79D536723E0BB2B /* BatchFailureDiagnosisTests.swift */,
 				076328ABD900D50196B69B82 /* CookieCloudCryptoTests.swift */,
 				4DB3BE1419753CE217EF72BC /* ExamHTMLParserTests.swift */,
 				1039294FEB0B4CE1352C3CAF /* Fixtures.swift */,
@@ -467,13 +470,16 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					B6BE649ABCCB08E66D46E020 = {
+						DevelopmentTeam = T228646HH5;
 						ProvisioningStyle = Automatic;
 					};
 					D85D4EDF1C35CDFAA0D0DE1E = {
+						DevelopmentTeam = T228646HH5;
 						ProvisioningStyle = Automatic;
 						TestTargetID = F8EC58A49AAF88C8742B1D96;
 					};
 					F8EC58A49AAF88C8742B1D96 = {
+						DevelopmentTeam = "${DEVELOPMENT_TEAM}";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -593,6 +599,7 @@
 				E552E12672F1B6F8C9ABD8AC /* BankLogicTests.swift in Sources */,
 				5589706F3F06E433C36E03C3 /* BankModelTests.swift in Sources */,
 				74A6E99F1CAC6EC9B9D6FEA7 /* BankStorageTests.swift in Sources */,
+				B43A7FA144F4FD361C45A1F2 /* BatchFailureDiagnosisTests.swift in Sources */,
 				909D285B5411413527F97611 /* CookieCloudCryptoTests.swift in Sources */,
 				FF2796CA668A7D9771341E8A /* ExamHTMLParserTests.swift in Sources */,
 				EFDF1B195F2C7100DFFEA962 /* Fixtures.swift in Sources */,
@@ -638,7 +645,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				DEVELOPMENT_TEAM = T228646HH5;
+				DEVELOPMENT_TEAM = "${DEVELOPMENT_TEAM}";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = LanjingQuiz/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.qzh.lanjingquiz;
@@ -663,6 +670,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = T228646HH5;
 				ENABLE_TESTABILITY = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
@@ -678,6 +686,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = T228646HH5;
 				ENABLE_TESTABILITY = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
@@ -692,7 +701,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				DEVELOPMENT_TEAM = T228646HH5;
+				DEVELOPMENT_TEAM = "${DEVELOPMENT_TEAM}";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = LanjingQuiz/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.qzh.lanjingquiz;

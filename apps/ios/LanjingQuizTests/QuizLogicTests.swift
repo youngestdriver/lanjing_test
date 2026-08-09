@@ -30,7 +30,8 @@ final class QuizLogicTests: XCTestCase {
             QuestionState(
                 questionsId: "q\(index)",
                 uuId: nil,
-                num: index + 1,
+                num: String(index + 1),
+                combId: nil,
                 section: "",
                 state: state,
                 marked: false

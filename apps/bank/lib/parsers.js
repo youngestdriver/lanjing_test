@@ -36,11 +36,45 @@ function parseExamHtml(input, examInfoId, knownResultsId) {
   const examResultsId = knownResultsId || extract("exam_results_id");
   const parsedExamInfoId = extract("exam_info_id") || String(examInfoId);
 
-  const sectionMatches = [...html.matchAll(/<div class="card-content-title">([^<]+)<\/div>/g)];
+  // Section titles tolerate a trailing space / extra classes in the class attr
+  // (资料分析 comb sections are emitted as `<div class="card-content-title ">`).
+  const sectionMatches = [...html.matchAll(/<div class="([^"]*card-content-title[^"]*)">([^<]+)<\/div>/g)];
   const sectionBounds = sectionMatches.map((match) => ({
-    title: match[1],
+    title: match[2],
     pos: match.index,
   }));
+
+  // Comb (资料分析) groups: an insert-list div wraps several sub-questions and
+  // carries the combId in its own questionsId attribute — the payload
+  // /exam/get_question_info/ needs per question to fetch the shared parent_info.
+  // Depth-tracking finds where each insert-list div closes, so only cards
+  // actually inside a comb inherit its combId (regular cards that follow a
+  // comb section must not).
+  const combBounds = (() => {
+    const opens = [...html.matchAll(/<div class="([^"]*insert-list[^"]*)"[^>]*questionsId="([^"]+)"/g)];
+    if (!opens.length) return [];
+    const combs = opens.map((match) => ({ combId: match[2].trim(), pos: match.index, end: match.index }));
+    const byPos = new Map(combs.map((comb) => [comb.pos, comb]));
+    let depth = 0;
+    let pending = null;
+    for (const tag of html.matchAll(/<div\b[^>]*>|<\/div>/g)) {
+      if (tag[0].startsWith("</")) {
+        depth -= 1;
+        if (pending && depth === pending.openDepth) {
+          pending.end = tag.index + tag[0].length;
+          pending = null;
+        }
+        continue;
+      }
+      const comb = byPos.get(tag.index);
+      if (comb) {
+        pending = comb;
+        pending.openDepth = depth;
+      }
+      depth += 1;
+    }
+    return combs;
+  })();
 
   const cards = html.split(/<a\s+href="#[^"]*">\s*/);
   const questionStates = [];
@@ -53,7 +87,9 @@ function parseExamHtml(input, examInfoId, knownResultsId) {
     seen.add(questionId);
 
     const uuid = chunk.match(/uuId="([^"]+)"/)?.[1]?.trim() ?? null;
-    const number = Number.parseInt(chunk.match(/>\s*(\d+)\s*<\/span>/)?.[1] ?? "0", 10);
+    // Raw number text: comb sub-questions use "1.1"…"15.5" style labels,
+    // ordinary questions a plain integer — keep the string as-is for display.
+    const num = chunk.match(/>\s*(\d+(?:\.\d+)?)\s*<\/span>/)?.[1]?.trim() ?? "";
     const boxClass = chunk.match(/<div\b[^>]*class=["']([^"']*\bquestion_cbox\b[^"']*)["'][^>]*>/)?.[1] ?? "";
     const boxClasses = new Set(boxClass.trim().split(/\s+/).filter(Boolean));
     const state = boxClasses.has("right")
@@ -71,11 +107,22 @@ function parseExamHtml(input, examInfoId, knownResultsId) {
       }
     }
 
+    // The card belongs to the comb whose insert-list div actually wraps it
+    // (regular cards after a comb section are outside every comb range).
+    let combId = null;
+    for (const comb of combBounds) {
+      if (cardPosition > comb.pos && cardPosition < comb.end) {
+        combId = comb.combId;
+        break;
+      }
+    }
+
     questionStates.push({
       questionsId: questionId,
       uuId: uuid,
-      num: number,
+      num,
       section,
+      combId,
       state,
       marked: boxClasses.has("marked"),
     });

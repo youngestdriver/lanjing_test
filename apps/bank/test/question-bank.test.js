@@ -134,9 +134,16 @@ test("buildRecord produces the bank schema with a cleaned section", () => {
   );
   assert.deepEqual(single, {
     _id: "q1", category: "言语理解", section: "逻辑填空",
-    question: "<p>题干</p>", options: ["<p>A</p>", "", "", ""], answer: "A", analysis: "<p>解析</p>",
+    question: "<p>题干</p>", stem: "", options: ["<p>A</p>", "", "", ""], answer: "A", analysis: "<p>解析</p>",
     sourceExamId: "E1", sourceExamName: "【言语理解（二）】机考题库", round: 1, collectedAt: "2026-08-06T00:00:00.000Z",
   });
+
+  // Comb (资料分析) questions carry the shared material in stem.
+  const comb = buildRecord(
+    { _id: "q5", question: "<p>小题</p>", parent_info: "<p>材料</p>", answer1: "<p>A</p>", answer2: "", answer3: "", answer4: "", _answers: ["A"], test_ans_right: "A", analysis: "" },
+    "文字资料(共15题,合计75.0分)", "资料分析", ctx,
+  );
+  assert.equal(comb.stem, "<p>材料</p>");
 
   const multi = buildRecord({ _id: "q2", _answers: ["A", "C"], test_ans_right: "" }, "综合", "言语理解", ctx);
   assert.deepEqual(multi.answer, ["A", "C"]);
@@ -521,17 +528,19 @@ const localDir = fs.mkdtempSync(path.join(os.tmpdir(), "lanjing-qbank-integratio
 const sessionFile = path.join(localDir, "session_cookies.txt");
 
 // E1: fresh paper (wfs=1). E0: the user's in-progress attempt (wfs=0).
+// E2: fresh 资料分析 paper with comb (insert-list) questions.
 // E9: out-of-scope 常识判断 paper. E8: out-of-scope mock style.
 const EXAM_LIST = {
   success: true,
   bizContent: {
-    total: 4,
+    total: 5,
     styles: [
       { id: "1052372", name: "【机考题库（2027年度）】" },
       { id: "1052373", name: "【中石化模考套餐（2027年度）】" },
     ],
     examInfoModelList: [
       { id: "E1", examName: "【言语理解（二）】机考题库", examStyle: "1052372", practiceMode: 2, examMode: 1, examTime: 90, paperInfoId: "p1", examTimesNum: "1", examTimesRestrict: "1", paid: true, examTimeRestrict: null, wfs: 1, timeLeft: 0 },
+      { id: "E2", examName: "【资料分析（一）】机考题库", examStyle: "1052372", practiceMode: 2, examMode: 1, examTime: 90, paperInfoId: "p2", examTimesNum: "1", examTimesRestrict: "1", paid: true, examTimeRestrict: null, wfs: 1, timeLeft: 0 },
       { id: "E0", examName: "【言语理解（一）】机考题库", examStyle: "1052372", practiceMode: 2, examMode: 1, examTime: 90, paperInfoId: "p0", examTimesNum: "1", examTimesRestrict: "1", paid: true, examTimeRestrict: null, wfs: 0, timeLeft: 0 },
       { id: "E9", examName: "【常识判断（一）】机考题库（往年仅石油、海油、管网考）", examStyle: "1052372", practiceMode: 2, examMode: 1, examTime: 90, paperInfoId: "p9", examTimesNum: "1", examTimesRestrict: "1", paid: true, examTimeRestrict: null, wfs: 1, timeLeft: 0 },
       { id: "E8", examName: "中国石化2027年度校园招聘考试模拟卷（四）", examStyle: "1052373", practiceMode: 0, examMode: 1, examTime: 90, paperInfoId: "p8", examTimesNum: "2", examTimesRestrict: "0", paid: true, examTimeRestrict: null, wfs: 1, timeLeft: 0 },
@@ -562,6 +571,32 @@ const EXAM_START_E0_HTML = `
   <a href="#q6"><div class="question_cbox" questionsId="q6" uuId="u5"><span>2</span></div></a>
 `;
 
+// E2's answer card (资料分析): a comb section (trailing-space class,
+// insert-list wrapper) with q7/q8, followed by a regular section with q9.
+const EXAM_START_E2_HTML = `
+  <script>
+    var exam_results_id = '87380592';
+    var exam_info_id = 'E2';
+  </script>
+  <div class="card-content-title ">文字资料(共15题,合计75.0分)</div>
+  <div class="box-list ">
+    <div class="insert-list inline-insert-list " questionsId="comb_wa ">
+      <a href="#q7">
+        <div class="box insert-box question_cbox s1 practice-mode-2 ">
+          <span class="iconBox" questionsId="q7" uuId="u7" num="questions_q7">1.1</span>
+        </div>
+      </a>
+      <a href="#q8">
+        <div class="box insert-box question_cbox s1 practice-mode-2 ">
+          <span class="iconBox" questionsId="q8" uuId="u7" num="questions_q8">1.2</span>
+        </div>
+      </a>
+    </div>
+  </div>
+  <div class="card-content-title">简单计算</div>
+  <a href="#q9"><div class="question_cbox" questionsId="q9" uuId="u7"><span>3</span></div></a>
+`;
+
 const QUESTIONS_E1 = [
   { _id: "q1", question: "<p>单选</p>", answer1: "<p>A</p>", answer2: "<p>B</p>", answer3: "<p>C</p>", answer4: "<p>D</p>", key1: "1", key2: "0", key3: "0", key4: "0", test_ans: "", test_ans_right: "A", analysis: "<p>解析一</p>" },
   { _id: "q2", question: "<p>多选</p>", answer1: "<p>A</p>", answer2: "<p>B</p>", answer3: "<p>C</p>", answer4: "<p>D</p>", key1: "1", key2: "0", key3: "1", key4: "0", test_ans: "", test_ans_right: "A", analysis: "<p>解析二</p>" },
@@ -571,6 +606,11 @@ const QUESTIONS_E0 = [
   { _id: "q5", question: "<p>进行中卷题目</p>", answer1: "<p>A</p>", answer2: "<p>B</p>", answer3: "<p>C</p>", answer4: "<p>D</p>", key1: "0", key2: "1", key3: "0", key4: "0", test_ans: "key2,", test_ans_right: "B", analysis: "<p>解析五</p>" },
   { _id: "q6", question: "<p>进行中卷题目二</p>", answer1: "<p>A</p>", answer2: "<p>B</p>", answer3: "<p>C</p>", answer4: "<p>D</p>", key1: "1", key2: "0", key3: "0", key4: "0", test_ans: "", test_ans_right: "A", analysis: "" },
 ];
+const QUESTIONS_E2 = [
+  { _id: "q7", question: "<p>材料小题一</p>", parent_info: "<p>共享材料</p>", answer1: "<p>A</p>", answer2: "<p>B</p>", answer3: "<p>C</p>", answer4: "<p>D</p>", key1: "1", key2: "0", key3: "0", key4: "0", test_ans: "", test_ans_right: "A", analysis: "<p>解析七</p>" },
+  { _id: "q8", question: "<p>材料小题二</p>", parent_info: "<p>共享材料</p>", answer1: "<p>A</p>", answer2: "<p>B</p>", answer3: "<p>C</p>", answer4: "<p>D</p>", key1: "0", key2: "1", key3: "0", key4: "0", test_ans: "", test_ans_right: "B", analysis: "<p>解析八</p>" },
+  { _id: "q9", question: "<p>普通题</p>", answer1: "<p>A</p>", answer2: "<p>B</p>", answer3: "<p>C</p>", answer4: "<p>D</p>", key1: "0", key2: "0", key3: "1", key4: "0", test_ans: "", test_ans_right: "C", analysis: "<p>解析九</p>" },
+];
 
 // Practice papers answer exam_ending with JSON success, not a result page.
 const END_JSON = { code: 10000, desc: "成功", englishDesc: "Success", success: true };
@@ -578,6 +618,7 @@ const END_JSON = { code: 10000, desc: "成功", englishDesc: "Success", success:
 let originalFetch;
 let endCalls; // examInfoIds ended via exam_ending
 let enterCalls; // examInfoIds entered via the new-exam flow
+let questionCalls; // /exam/get_question_info/ request bodies
 
 before(async () => {
   // Pre-seed a session so the collector needs no login (the upstream client
@@ -587,6 +628,7 @@ before(async () => {
 
   endCalls = [];
   enterCalls = [];
+  questionCalls = [];
   originalFetch = global.fetch;
   global.fetch = async (url, init = {}) => {
     const u = new URL(url);
@@ -601,6 +643,9 @@ before(async () => {
       case "/exam/enter_exam/1/E1":
         enterCalls.push("E1");
         return json({ success: true });
+      case "/exam/enter_exam/1/E2":
+        enterCalls.push("E2");
+        return json({ success: true });
       case "/exam/faceCheckCondition":
       case "/exam/get_remian_time":
         return json({ success: true });
@@ -610,9 +655,13 @@ before(async () => {
         return new Response("true", { status: 200, headers: { "Content-Type": "application/json" } });
       case "/exam/exam_start/E1":
         return new Response(EXAM_START_E1_HTML, { status: 200, headers: { "Content-Type": "text/html" } });
+      case "/exam/exam_start/E2":
+        return new Response(EXAM_START_E2_HTML, { status: 200, headers: { "Content-Type": "text/html" } });
       case "/exam/exam_start/E0":
         return new Response(EXAM_START_E0_HTML, { status: 200, headers: { "Content-Type": "text/html" } });
       case "/exam/get_question_info/":
+        questionCalls.push(body);
+        if (body.includes("q7") || body.includes("q8")) return json(QUESTIONS_E2);
         return json(body.includes("q5") ? QUESTIONS_E0 : QUESTIONS_E1);
       case "/exam/exam_ending": {
         const infoId = u.searchParams.get("examInfoId");
@@ -638,7 +687,7 @@ test("integration: the collector drives the direct upstream client against stubb
   const summary = await runCollection(api, { bankDir, log: quietLog, roundDelayMs: 1 });
 
   assert.equal(summary.stoppedBy, "exhausted");
-  assert.equal(summary.round, 3);
+  assert.equal(summary.round, 5);
 
   const records = readJsonl(path.join(bankDir, "言语理解.jsonl"));
   assert.equal(records.length, 5); // q1/q2/q4 from E1 + q5/q6 from E0
@@ -652,20 +701,40 @@ test("integration: the collector drives the direct upstream client against stubb
   assert.equal(byId.get("q5").section, "片段阅读");
   assert.equal(byId.get("q5").sourceExamId, "E0");
   assert.equal(byId.get("q1").round, 1);
-  assert.equal(byId.get("q5").round, 3); // in-progress paper collected after E1 drained
+  assert.equal(byId.get("q5").round, 5); // in-progress paper collected after E1/E2 drained
 
-  // E1's fresh attempts ended exactly twice (collect + drain); the user's E0
-  // attempt was never submitted; out-of-scope papers never entered.
-  assert.deepEqual(endCalls, ["E1", "E1"]);
-  assert.deepEqual(enterCalls, ["E1", "E1"]);
+  // E2 (资料分析): comb questions carry the shared material in stem, the
+  // regular one does not.
+  const ziliao = readJsonl(path.join(bankDir, "资料分析.jsonl"));
+  assert.equal(ziliao.length, 3); // q7/q8 (comb) + q9 (regular)
+  const byZiliaoId = new Map(ziliao.map((r) => [r._id, r]));
+  assert.equal(byZiliaoId.get("q7").stem, "<p>共享材料</p>");
+  assert.equal(byZiliaoId.get("q8").stem, "<p>共享材料</p>");
+  assert.equal(byZiliaoId.get("q9").stem, "");
+  assert.equal(byZiliaoId.get("q7").section, "文字资料");
+
+  // Comb questions are requested together with their combId; the regular
+  // batch of the same paper (and every other paper) has no combId. Form
+  // encoding is URLSearchParams, so commas arrive as %2C.
+  const combRequest = questionCalls.find((b) => b.includes("combId="));
+  assert.ok(combRequest, "a comb request with combId is made");
+  assert.ok(combRequest.includes("testIds=q7%2Cq8"), "comb sub-questions share one request");
+  assert.ok(questionCalls.some((b) => b.includes("testIds=q9") && !b.includes("combId")), "regular batch has no combId");
+  assert.ok(questionCalls.every((b) => b.includes("testIds=q1%2Cq2%2Cq4") ? !b.includes("combId") : true), "E1 batches have no combId");
+
+  // E1/E2 fresh attempts ended exactly twice each (collect + drain); the
+  // user's E0 attempt was never submitted; out-of-scope papers never entered.
+  assert.deepEqual(endCalls, ["E1", "E1", "E2", "E2"]);
+  assert.deepEqual(enterCalls, ["E1", "E1", "E2", "E2"]);
 
   const meta = JSON.parse(fs.readFileSync(path.join(bankDir, "meta.json"), "utf8"));
-  assert.equal(meta.round, 3);
+  assert.equal(meta.round, 5);
   assert.equal(meta.examState.E1.status, "drained");
+  assert.equal(meta.examState.E2.status, "drained");
   assert.equal(meta.examState.E0.status, "drained");
   assert.equal(meta.examState.E0.createdByUs, false);
-  assert.deepEqual(meta.counts, { 言语理解: 5 });
-  assert.equal(meta.stats.totalRounds, 3);
+  assert.deepEqual(meta.counts, { 言语理解: 5, 资料分析: 3 });
+  assert.equal(meta.stats.totalRounds, 5);
 
   // the client's saved session was not disturbed by the collection (no login
   // happened; the collector's own session file is untouched)
