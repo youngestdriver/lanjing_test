@@ -143,6 +143,14 @@ private struct InlineHTMLWebView: UIViewRepresentable {
         let foreground = dark ? "#ffffff" : "#3c3c3c"
         let userSelect = allowsTextSelection ? "text" : "none"
         let touchCallout = allowsTextSelection ? "default" : "none"
+        // Upstream content carries inline `color: #3C464F`-style spans designed
+        // for light backgrounds; in dark mode those stay dark-on-dark unless
+        // every element is forced to inherit the body's white text. The
+        // universal rule must NOT override html/body themselves (inheriting
+        // from the viewport's initial black), so their color carries
+        // !important and wins by type specificity.
+        let colorRule = dark ? "* { background-color: transparent !important; color: inherit !important; }"
+                             : "* { background-color: transparent !important; }"
         return """
         <!doctype html>
         <html><head>
@@ -150,7 +158,7 @@ private struct InlineHTMLWebView: UIViewRepresentable {
         <style>
         html, body {
             margin: 0; padding: 0; width: 100%; overflow: hidden;
-            background: transparent; color: \(foreground);
+            background: transparent; color: \(foreground) !important;
             font: \(fontSize)px/1.55 -apple-system, BlinkMacSystemFont, sans-serif;
             overflow-wrap: break-word;
             -webkit-user-select: \(userSelect);
@@ -164,7 +172,7 @@ private struct InlineHTMLWebView: UIViewRepresentable {
             height: auto !important;
             vertical-align: middle;
         }
-        * { background-color: transparent !important; }
+        \(colorRule)
         </style></head>
         <body>\(html)</body>
         <script>

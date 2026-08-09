@@ -48,6 +48,17 @@ final class PracticeBankViewModel {
         session = nil
     }
 
+    /// Read-only bank status for the 我的 > 题库 row: load meta from disk when
+    /// present, never crawl (the practice tab owns crawling). Idle + nil meta
+    /// means the bank is genuinely empty or still being crawled elsewhere.
+    func loadBankStatus() {
+        guard phase == .idle else { return }
+        if storage.isPopulated(), let meta = storage.loadMeta() {
+            self.meta = meta
+            phase = .ready
+        }
+    }
+
     /// Entry point from the practice tab's .task: use the local bank when
     /// present, otherwise crawl the whole 机考题库 from upstream. The crawl
     /// blocks all practice UI while .downloading.

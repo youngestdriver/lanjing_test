@@ -70,6 +70,9 @@ struct PracticeBankSettingsSection: View {
             if vm == nil {
                 vm = PracticeBankViewModel(appState: appState)
             }
+            // Sync the status row with the on-disk bank (an existing crawl is
+            // not re-run — the practice tab owns crawling).
+            vm?.loadBankStatus()
             refreshStatus()
         }
         .onChange(of: vm?.phase) { _, _ in refreshStatus() }

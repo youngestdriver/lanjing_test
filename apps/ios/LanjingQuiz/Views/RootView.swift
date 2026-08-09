@@ -104,13 +104,11 @@ private struct HomeTabView: View {
 private struct ProfileView: View {
     @Environment(AppState.self) private var appState
 
-    private var themeBinding: Binding<Theme> {
+    /// 跟随系统颜色设置 toggle: on → .system, off → last manual light/dark.
+    private var followSystemBinding: Binding<Bool> {
         Binding(
-            get: { appState.theme },
-            set: { newTheme in
-                appState.theme = newTheme
-                newTheme.save()
-            }
+            get: { appState.theme == .system },
+            set: { appState.setFollowsSystem($0) }
         )
     }
 
@@ -132,11 +130,22 @@ private struct ProfileView: View {
                 }
 
                 Section("外观") {
-                    Picker("主题", selection: themeBinding) {
-                        Text("浅色").tag(Theme.light)
-                        Text("深色").tag(Theme.dark)
+                    Toggle("跟随系统颜色设置", isOn: followSystemBinding)
+                    if appState.theme != .system {
+                        Button {
+                            appState.theme = appState.theme == .dark ? .light : .dark
+                            appState.theme.save()
+                        } label: {
+                            HStack {
+                                Text("深色模式")
+                                Spacer()
+                                if appState.theme == .dark {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(DS.accent)
+                                }
+                            }
+                        }
                     }
-                    .pickerStyle(.segmented)
                 }
 
                 Section("答题设置") {
