@@ -35,3 +35,6 @@ Thumbs.db
 /apps/ios/**/xcuserdata/
 
 .od-skills
+
+# Generated static-asset bundle (desktop builds; see scripts/build-public-bundle.js)
+/apps/web/public-bundle.js
