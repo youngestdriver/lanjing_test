@@ -587,13 +587,22 @@ async function main() {
     // The gate is rendered after the (mocked) status round-trip; wait for it
     // before pressing Tab so focus lands on the CTA in the first pass.
     await practiceCta.waitFor({ state: "visible" });
+    // Tab from the practice heading (the app focuses it on tab activation) —
+    // focusing explicitly removes the render/focus race that flakes on slow
+    // runners, while keeping the keyboard-reachability check intact.
+    await page.evaluate(() => document.querySelector("#practiceHeading")?.focus());
     await page.keyboard.press("Tab");
-    // Focus landing is racy on slow runners (the gate renders right as Tab
-    // fires) — wait for the focus to land instead of asserting immediately.
     await page.waitForFunction(() => {
       const element = document.querySelector("[data-practice-start]");
       return element === document.activeElement;
-    }, { timeout: 5000 });
+    }, undefined, { timeout: 5000 }).catch(async (error) => {
+      const active = await page.evaluate(() => ({
+        tag: document.activeElement?.tagName,
+        cls: document.activeElement?.className,
+        text: (document.activeElement?.textContent || "").slice(0, 40),
+      }));
+      throw new Error(`focus did not land on the CTA (active: ${JSON.stringify(active)}): ${error.message}`);
+    });
     const ctaFocusStyle = await practiceCta.evaluate((element) => {
       const style = getComputedStyle(element);
       return { style: style.outlineStyle, width: parseFloat(style.outlineWidth) };
