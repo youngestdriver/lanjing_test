@@ -116,7 +116,9 @@ internal sealed class CookieCloudForm : Form
             if (response.IsSuccessStatusCode && json?["server"] != null)
             {
                 // 配置即生效:触发一次同步(server 单飞,失败静默进 lastError)。
-                _ = _http.PostAsync($"{_baseUrl}/api/cookiecloud/sync", null).ContinueWith(_ => { });
+                var syncRequest = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl}/api/cookiecloud/sync");
+                syncRequest.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+                _ = _http.SendAsync(syncRequest).ContinueWith(_ => { });
                 DialogResult = DialogResult.OK;
                 Close();
             }
