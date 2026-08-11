@@ -67,7 +67,7 @@ internal sealed class CookieCloudForm : Form
         _ = LoadAsync(); // fire-and-forget; errors land in _errorLabel
     }
 
-    private static Label MakeLabel(string text) => new() { Text = text, AutoSize = true, Font = new Font(Font.FontFamily, 9f, FontStyle.Bold) };
+    private Label MakeLabel(string text) => new() { Text = text, AutoSize = true, Font = new Font(Font.FontFamily, 9f, FontStyle.Bold) };
 
     private async Task LoadAsync()
     {
@@ -102,8 +102,8 @@ internal sealed class CookieCloudForm : Form
             var payload = new JsonObject
             {
                 ["enabled"] = _enabledCheck.Checked,
-                ["server"] = _serverBox.Text.Trim(),
-                ["uuid"] = _uuidBox.Text.Trim(),
+                ["server"] = _serverBox.Text?.Trim() ?? "",
+                ["uuid"] = _uuidBox.Text?.Trim() ?? "",
             };
             if (!string.IsNullOrEmpty(_passwordBox.Text))
             {

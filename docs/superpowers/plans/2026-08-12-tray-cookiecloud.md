@@ -102,7 +102,7 @@ internal sealed class CookieCloudForm : Form
         _ = LoadAsync(); // fire-and-forget; errors land in _errorLabel
     }
 
-    private static Label MakeLabel(string text) => new() { Text = text, AutoSize = true, Font = new Font(Font.FontFamily, 9f, FontStyle.Bold) };
+    private Label MakeLabel(string text) => new() { Text = text, AutoSize = true, Font = new Font(Font.FontFamily, 9f, FontStyle.Bold) };
 
     private async Task LoadAsync()
     {
