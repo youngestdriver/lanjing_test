@@ -145,9 +145,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.async {
                 if let error {
                     self?.showFailure("保存 Cookie 服务器配置失败:\(error)")
+                } else {
+                    // 保存成功:触发一次同步(server 单飞,失败静默进 lastError)。
+                    self?.syncCookieCloudNow()
                 }
-                // 保存成功:触发一次同步(server 单飞,失败静默进 lastError)。
-                self?.syncCookieCloudNow()
             }
         }
     }
@@ -230,8 +231,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private static func formatTime(_ iso: String) -> String {
+        // server 的 lastPush/lastPull 带毫秒("2026-08-12T01:23:45.678Z"),
+        // 默认选项不含 .withFractionalSeconds 会解析失败、退回原始 ISO 串。
         let formatter = ISO8601DateFormatter()
-        guard let date = formatter.date(from: iso) else { return iso }
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        // 兜底:非毫秒时间戳(.withFractionalSeconds 会解析失败)回退默认选项,
+        // 避免退回原始 ISO 串。
+        let date = formatter.date(from: iso) ?? ISO8601DateFormatter().date(from: iso)
+        guard let date else { return iso }
         let display = DateFormatter()
         display.dateFormat = "HH:mm"
         return display.string(from: date)

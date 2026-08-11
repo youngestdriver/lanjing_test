@@ -477,3 +477,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 - **类型/接口一致性**:`CookieCloudForm(baseUrl, http)` 构造(Task 1 Step 1 定义、Step 2c 调用参数 `($"http://127.0.0.1:{ServerPort}", _http)` 一致);Swift 的 `CookieCloudConfig` 字段与 GET 响应键名一致;`homeURL.port ?? 3000` 两处使用一致
 - **无占位符**:全部代码完整;Task 2 Step 3 的"密码留空不覆盖语义"标注由 server 既有测试覆盖(不重复)
 - **注意项**:C# 的 `JsonNode.Parse` 对非 JSON 抛异常 → 被外层 catch 捕获(错误文案),可接受;Swift `runModal` 期间 main queue 可派发(模态 runloop),预填在用户输入前到达——若网络慢于用户输入,保存时用旧值覆盖的窗口极小,接受
+- **正式偏离记录(最终审查后)**:
+  1. Task 2 同步触发仅限保存成功分支——brief 原文 `syncCookieCloudNow()` 在 `if let error` 之外(保存失败也会用旧配置发真实同步),已改为 `else` 分支内触发,与 C# 侧一致;
+  2. Task 2 `syncCookieCloudNow()` 增加 `Content-Type: application/json` 请求头——server 对无该头的写请求直接 415 拒收(server.js 第 244-248 行),否则"保存后自动同步"永不生效;
+  3. Task 2 `formatTime` 增加 `.withFractionalSeconds`(server 的 lastPush/lastPull 带毫秒)+ 非毫秒兜底(纯毫秒选项会解析失败非毫秒串,兜底回默认选项)
