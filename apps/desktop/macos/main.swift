@@ -98,7 +98,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let errorLabel = NSTextField(labelWithString: "")
         errorLabel.textColor = .systemRed
 
-        let stack = NSStackView()
+        // NSAlert does not size its accessoryView: an Auto-Layout-only stack
+        // keeps its zero frame and the fields never render. Give the stack an
+        // explicit frame and let it lay its arranged subviews out.
+        let stack = NSStackView(frame: NSRect(x: 0, y: 0, width: 340, height: 210))
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 6
