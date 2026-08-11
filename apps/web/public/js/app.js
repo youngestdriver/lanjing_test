@@ -346,6 +346,8 @@ function activateHomeTab(tab,{historyMode="none",refresh=false}={}){
   else if(historyMode==="replace"&&location.pathname!==path) history.replaceState(null,"",path);
 
   if(selected==="exams"&&(refresh||!S.examListLoaded)) loadExams();
+  // 练习 tab 激活时刷新本地题库状态(未爬取门 / 大类列表 / 我的页题库摘要)
+  if(selected==="practice"&&window.PracticeRefresh) window.PracticeRefresh();
 }
 function openHomeTab(tab,event){
   event?.preventDefault();

@@ -117,6 +117,50 @@ async function verifyOfflineShell(browser) {
   }
 }
 
+async function verifyPracticeOffline(browser) {
+  // Standalone practice scenario (fresh context, full mocks): the local bank
+  // is populated, categories render from /api/practice/status, the JSONL
+  // bank is served per category, and a whole quiz session runs with zero
+  // network calls beyond the initial bank fetch.
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    serviceWorkers: "block",
+  });
+  try {
+    await context.route("**/api/status", (route) => json(route, { loggedIn: true, hasSavedSession: true }));
+    await context.route("**/api/practice/status", (route) => json(route, {
+      loggedIn: true, isPopulated: true,
+      meta: { counts: { 言语理解: 2, 数字运算: 1 }, round: 1, lastRun: "2026-08-11T00:00:00.000Z", papers: 2 },
+      task: { running: false, index: 0, total: 0, paperName: "", error: null, doneAt: "2026-08-11T00:00:00.000Z" },
+    }));
+    const practiceJSONL = [
+      JSON.stringify({ _id: "p1", subCategory: "逻辑填空", question: "<p>第一题题干</p>", options: ["正确选项", "干扰项二", "干扰项三", "干扰项四"], answer: "A", analysis: "因为 A 正确。", stem: "" }),
+      JSON.stringify({ _id: "p2", subCategory: "成语辨析", question: "<p>第二题题干</p>", options: ["甲", "乙", "丙", "丁"], answer: ["A", "C"], analysis: "应同时选择甲和丙。", stem: "" }),
+    ].join("\n");
+    await context.route("**/api/practice/categories/*", (route) => route.fulfill({
+      status: 200,
+      contentType: "application/x-ndjson; charset=utf-8",
+      body: practiceJSONL,
+    }));
+    const page = await context.newPage();
+    await page.goto(BASE_URL + "/practice", { waitUntil: "domcontentloaded" });
+    await page.waitForSelector("[data-practice-category]");
+    const names = await page.$$eval("[data-practice-category]", (els) => els.map((el) => el.textContent.trim()));
+    assert.ok(names.some((name) => name.includes("言语理解")), `categories rendered: ${names.join(",")}`);
+    await page.click('[data-practice-category*="言语理解"]');
+    await page.waitForSelector("[data-practice-subcategory]");
+    await page.click("[data-practice-subcategory]");
+    await page.waitForSelector("[data-practice-question]");
+    await page.click("[data-practice-option]"); // first option is correct (answer A)
+    await page.waitForSelector("[data-practice-result]");
+    const result = await page.$eval("[data-practice-result]", (el) => el.textContent.trim());
+    assert.ok(result.includes("答对"), `reveal shows result: ${result}`);
+    await page.close();
+  } finally {
+    await context.close();
+  }
+}
+
 async function main() {
   const server = spawn(process.execPath, ["server.js"], {
     cwd: WEB_DIR,
@@ -309,6 +353,16 @@ async function main() {
         cookieCloudSyncCalls++;
         return json(route, { applied: false, pushed: false, lastPush: null, lastPull: null, lastError: null });
       }
+      if (url.pathname === "/api/practice/status") {
+        // Main-flow fixture: the bank exists but is not populated yet, so the
+        // practice tab renders the crawl gate. The crawl POST itself is left
+        // unmocked (500) to assert the gate stays put on failure.
+        return json(route, {
+          loggedIn: true, isPopulated: false,
+          meta: { counts: {}, round: 0, lastRun: null, papers: 0 },
+          task: { running: false, index: 0, total: 0, paperName: "", error: null, doneAt: null },
+        });
+      }
       return json(route, { error: `Unhandled fixture route: ${url.pathname}` }, 500);
     });
 
@@ -418,7 +472,10 @@ async function main() {
     assert.equal(examListAttempts, 2);
 
     await page.locator('[data-home-tab="practice"]').click();
-    const practiceCta = page.getByRole("button", { name: "前往考试列表" });
+    const practiceCta = page.getByRole("button", { name: "爬取题库" });
+    // The gate is rendered after the (mocked) status round-trip; wait for it
+    // before pressing Tab so focus lands on the CTA in the first pass.
+    await practiceCta.waitFor({ state: "visible" });
     await page.keyboard.press("Tab");
     assert.equal(await practiceCta.evaluate((element) => element === document.activeElement), true);
     const ctaFocusStyle = await practiceCta.evaluate((element) => {
@@ -428,16 +485,17 @@ async function main() {
     assert.equal(ctaFocusStyle.style, "solid");
     assert.ok(ctaFocusStyle.width >= 3, "practice CTA focus indicator is too thin");
     assert.ok(await elementContrast(practiceCta) >= 4.5, "practice CTA contrast is too low");
+    // The crawl POST is unmocked here (500); the gate must stay put and the
+    // exam list must not be touched by a failed crawl attempt.
     await practiceCta.click();
-    await page.locator('[data-home-view="exams"].active').waitFor();
-    await expectPath(page, "/");
-    assert.equal(await page.evaluate(() => document.activeElement?.id), "examListHeading");
-    assert.equal(await page.locator("#homeRouteStatus").textContent(), "已打开考试列表");
-    assert.equal(examListAttempts, 3);
+    await page.locator("[data-practice-start]").waitFor();
+    await expectPath(page, "/practice");
+    assert.equal(await page.locator("#homeRouteStatus").textContent(), "已打开练习");
+    assert.equal(examListAttempts, 2, "a crawl attempt must not touch the exam list");
     await page.evaluate(() => document.activeElement?.blur());
     assert.deepEqual(
       await page.locator(".app-tab.active").evaluateAll((links) => links.map((link) => link.dataset.homeTab)),
-      ["exams"],
+      ["practice"],
     );
 
     await page.setViewportSize({ width: 390, height: 844 });
@@ -674,6 +732,7 @@ async function main() {
 
     assert.equal(submitAttempts, 3);
     assert.deepEqual(pageErrors, []);
+    await verifyPracticeOffline(browser);
     await verifyOfflineShell(browser);
 
     console.log(JSON.stringify({
