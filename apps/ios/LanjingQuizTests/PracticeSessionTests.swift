@@ -107,7 +107,8 @@ final class PracticeSessionTests: XCTestCase {
 
     func testStoreLoadReturnsNilWhenAbsent() async {
         let store = store()
-        XCTAssertNil(await store.load())
+        let loaded = await store.load()
+        XCTAssertNil(loaded)
     }
 
     func testStoreSaveLoadRoundTrip() async throws {
@@ -121,9 +122,11 @@ final class PracticeSessionTests: XCTestCase {
     func testStoreClearRemovesFile() async throws {
         let store = store()
         try await store.save(makeSession())
-        XCTAssertNotNil(await store.load())
+        let saved = await store.load()
+        XCTAssertNotNil(saved)
         try await store.clear()
-        XCTAssertNil(await store.load())
+        let cleared = await store.load()
+        XCTAssertNil(cleared)
     }
 
     // MARK: - BankLogic.resumeCandidate (A.3)

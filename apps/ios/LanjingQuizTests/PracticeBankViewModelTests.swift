@@ -99,8 +99,9 @@ final class PracticeBankViewModelTests: XCTestCase {
         XCTAssertEqual(session.answeredCount, 1)
         // The mutation was persisted (fresh-start save + tap save).
         await store.awaitSaveCount(2)
-        XCTAssertEqual(await store.stored?.answers[0].selected, ["A"])
-        XCTAssertEqual(await store.stored?.index, 0)
+        let stored = await store.stored
+        XCTAssertEqual(stored?.answers[0].selected, ["A"])
+        XCTAssertEqual(stored?.index, 0)
     }
 
     func testTapOptionSingleCorrect() async throws {
@@ -116,7 +117,8 @@ final class PracticeBankViewModelTests: XCTestCase {
         XCTAssertEqual(session.rightCount, 1)
         XCTAssertEqual(session.wrongCount, 0)
         await store.awaitSaveCount(2)
-        XCTAssertEqual(await store.stored?.answers[0].correct, true)
+        let stored = await store.stored
+        XCTAssertEqual(stored?.answers[0].correct, true)
     }
 
     func testTapOptionUngradableNoVerdict() async throws {
@@ -212,7 +214,8 @@ final class PracticeBankViewModelTests: XCTestCase {
         XCTAssertEqual(session.wrongCount, 1) // q1
         // Finished run: file cleared, in-memory session kept for the summary.
         await store.awaitClearCount(1)
-        XCTAssertNil(await store.stored)
+        let cleared = await store.stored
+        XCTAssertNil(cleared)
     }
 
     func testJumpToMovesIndexAndRestoresState() async throws {
@@ -244,8 +247,10 @@ final class PracticeBankViewModelTests: XCTestCase {
 
         // Persisted: fresh-start save + tap + next + jump + jump = 5.
         await store.awaitSaveCount(5)
-        XCTAssertEqual(await store.saveCount, 5)
-        XCTAssertEqual(await store.stored?.index, 2)
+        let saveCount = await store.saveCount
+        let stored = await store.stored
+        XCTAssertEqual(saveCount, 5)
+        XCTAssertEqual(stored?.index, 2)
     }
 
     // MARK: - resume / persist / clear
@@ -268,7 +273,8 @@ final class PracticeBankViewModelTests: XCTestCase {
         XCTAssertEqual(vm.session?.index, 1)
         XCTAssertEqual(vm.session?.wrongCount, 1)
         // A resumed run is not re-persisted (only the seed save happened).
-        XCTAssertEqual(await store.saveCount, 1)
+        let saveCount = await store.saveCount
+        XCTAssertEqual(saveCount, 1)
     }
 
     func testResumeOrStartFreshOnDifferentIdOrder() async throws {
@@ -290,7 +296,8 @@ final class PracticeBankViewModelTests: XCTestCase {
         XCTAssertEqual(vm.session?.questions.map(\.id), original.map(\.id))
         // Fresh run persisted once (on top of the seed save).
         await store.awaitSaveCount(2)
-        XCTAssertEqual(await store.saveCount, 2)
+        let saveCount = await store.saveCount
+        XCTAssertEqual(saveCount, 2)
     }
 
     func testResumeOrStartMissingCategoryFails() async {
@@ -334,7 +341,8 @@ final class PracticeBankViewModelTests: XCTestCase {
         XCTAssertNil(vm.session)
         XCTAssertFalse(vm.resumedFromDisk)
         await store.awaitClearCount(1)
-        XCTAssertNil(await store.stored)
+        let cleared = await store.stored
+        XCTAssertNil(cleared)
     }
 
     func testBankDeletedClearsSessionAndSave() async throws {
@@ -343,13 +351,15 @@ final class PracticeBankViewModelTests: XCTestCase {
         let store = FakePracticeSessionStore()
         let vm = makeVM(storage: storage, sessionStore: store)
         await vm.resumeOrStart(category: "言语理解", subCategory: "成语辨析")
-        XCTAssertNotNil(await store.stored)
+        let saved = await store.stored
+        XCTAssertNotNil(saved)
 
         vm.bankWasDeleted()
         XCTAssertNil(vm.session)
         XCTAssertFalse(vm.resumedFromDisk)
         XCTAssertEqual(vm.phase, .idle)
         await store.awaitClearCount(1)
-        XCTAssertNil(await store.stored)
+        let cleared = await store.stored
+        XCTAssertNil(cleared)
     }
 }
