@@ -48,13 +48,6 @@ struct PracticeQuizView: View {
             // mid-run and re-entering continues where it left off (问题 3).
             await vm.resumeOrStart(category: category, subCategory: subCategory)
         }
-        .toolbar {
-            if !(vm.session?.isFinished ?? true) {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("答题卡") { showAnswerCard = true }
-                }
-            }
-        }
         .sheet(isPresented: $showAnswerCard) {
             PracticeAnswerCardView(vm: vm)
         }
@@ -165,6 +158,12 @@ struct PracticeQuizView: View {
                     .clipShape(Capsule())
             }
             Spacer()
+            // 答题卡 entry lives in the content area (not the nav bar): a
+            // nav-bar toolbar button can be unreliable to hit when the tab
+            // bar is hidden, and the content button is always on-screen.
+            Button("答题卡") { showAnswerCard = true }
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(DS.blue)
             Text("答对 \(session.rightCount) · 答错 \(session.wrongCount)")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.secondary)
