@@ -38,7 +38,9 @@ final class MockUpstreamServer: @unchecked Sendable {
     }
 
     private var listener: NWListener?
-    private let queue = DispatchQueue(label: "MockUpstreamServer")
+    /// Explicit QoS so the test thread's blocking waits on this server are
+    /// not priority inversions (callbacks fire on this queue).
+    private let queue = DispatchQueue(label: "MockUpstreamServer", qos: .userInitiated)
 
     /// Bound loopback port; valid after start() returns.
     private(set) var port: UInt16 = 0
@@ -70,28 +72,63 @@ final class MockUpstreamServer: @unchecked Sendable {
     func stop() {
         listener?.cancel()
         listener = nil
+        receivers.forEach { $0.cancel() }
     }
 
     // MARK: - Connection handling
 
+    /// Active per-connection receive loops. All callbacks fire on the serial
+    /// `queue`, so this is only touched from that queue (plus stop() at teardown).
+    private var receivers: [ConnectionReceiver] = []
+
     private func handle(_ connection: NWConnection) {
         connection.start(queue: queue)
-        var buffer = Data()
+        let receiver = ConnectionReceiver(connection: connection, server: self)
+        receivers.append(receiver)
+        receiver.start()
+    }
 
-        func receiveMore() {
+    private func receiverFinished(_ receiver: ConnectionReceiver) {
+        receivers.removeAll { $0 === receiver }
+    }
+
+    /// Per-connection receive loop. All NWConnection callbacks fire on the
+    /// server's serial `queue`, so buffer state is confined to it; the
+    /// @unchecked Sendable box keeps the @Sendable completion closures legal.
+    /// The server retains the receiver for the connection's lifetime, and the
+    /// receiver drops itself (via receiverFinished) when the connection ends.
+    private final class ConnectionReceiver: @unchecked Sendable {
+        private let connection: NWConnection
+        private weak var server: MockUpstreamServer?
+        private var buffer = Data()
+
+        init(connection: NWConnection, server: MockUpstreamServer) {
+            self.connection = connection
+            self.server = server
+        }
+
+        func start() {
+            receiveMore()
+        }
+
+        func cancel() {
+            connection.cancel()
+        }
+
+        private func receiveMore() {
             connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { [weak self] data, _, isComplete, error in
                 guard let self else { return }
                 if let data { buffer.append(data) }
-                if let request = Self.parseRequest(buffer) {
-                    self.respond(connection, to: request)
+                if let request = MockUpstreamServer.parseRequest(buffer) {
+                    server?.respond(connection, to: request)
                 } else if isComplete || error != nil {
                     connection.cancel()
+                    server?.receiverFinished(self)
                 } else {
                     receiveMore()
                 }
             }
         }
-        receiveMore()
     }
 
     /// Parse "METHOD PATH HTTP/1.1\r\n…headers…\r\n\r\n[body]" once the
