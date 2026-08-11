@@ -60,8 +60,13 @@ const stub = http.createServer((req, res) => {
   }
   if (req.method === "POST" && url.pathname === "/exam/get_question_info/") {
     res.writeHead(200, { "Content-Type": "application/json" });
+    // The upstream marks the correct option with a "1" flag on its keyN
+    // (key1="1" → A); questionAnswer picks which key carries the flag.
+    const flags = stubState.questionAnswer === "2"
+      ? { key1: "0", key2: "1", key3: "0", key4: "0" }
+      : { key1: "1", key2: "0", key3: "0", key4: "0" };
     return res.end(JSON.stringify([{
-      _id: "q1", key1: stubState.questionAnswer, key2: "0", key3: "0", key4: "0",
+      _id: "q1", ...flags,
       question: stubState.questionText, answer1: "选项A", answer2: "选项B", answer3: "选项C", answer4: "选项D",
       analysis: "解析", parent_info: "", test_ans_right: "",
     }]));

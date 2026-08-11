@@ -1040,16 +1040,6 @@ async function fetchAllQuestions(examResultsId, examInfoId, testIds, uuid, state
         // sometimes as the number 0 — compare loosely.
         if (String(q[k]) === "1") correctKeys.push(v);
       }
-      // Some payloads encode the answer POSITION as the keyN value instead
-      // (key1: "2" → B). Consulted only when no "1" flag is present — real
-      // upstream payloads carry only "1"/"0", so this is inert there.
-      if (!correctKeys.length) {
-        const indexLetter = ["", "A", "B", "C", "D"];
-        for (const key of Object.keys(map)) {
-          const value = String(q[key] ?? "");
-          if (/^[1-4]$/.test(value)) { correctKeys.push(indexLetter[Number(value)]); break; }
-        }
-      }
       q._isMulti = correctKeys.length > 1;
       q._answers = correctKeys;
       q._answer = correctKeys[0] || q.test_ans_right || "?";
