@@ -144,19 +144,9 @@ final class PracticeFlowUITests: XCTestCase {
                       "wrongly-tapped option was not marked (问题 2)")
         XCTAssertFalse(app.buttons["option-A-wrong"].exists, "unselected correct row must not be marked")
 
-        // 问题 5: the answer card sheet opens, all dots render, tapping a dot
-        // jumps the header (and closes the sheet).
-        let answerCardButton = app.buttons["答题卡"]
-        XCTAssertTrue(answerCardButton.waitForExistence(timeout: 5), "答题卡 button missing")
-        answerCardButton.tap()
-        // The card is an overlay (not a sheet — sheet + hidden tab bar is an
-        // iOS 17 bug), anchored by its accessibilityIdentifier.
-        let card = app.otherElements["practice-answer-card"]
-        XCTAssertTrue(card.waitForExistence(timeout: 5), "answer card never appeared")
-        // The dot grid lives in the card's ScrollView — scoping there keeps
-        // the numeric dot buttons unambiguous (the stats bar above the grid
-        // also carries numeric labels like "1"/"2").
-        let dots = card.scrollViews.firstMatch
+        // 问题 5: the answer card overlay opens, all dots render, tapping a
+        // dot jumps the header (and closes the card).
+        let dots = openAnswerCard(app)
         for dot in ["1", "2", "3"] {
             XCTAssertTrue(dots.buttons[dot].waitForExistence(timeout: 5), "answer card dot \(dot) missing")
         }
@@ -164,16 +154,15 @@ final class PracticeFlowUITests: XCTestCase {
 
         let header3 = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 3/'")).firstMatch
         XCTAssertTrue(header3.waitForExistence(timeout: 5), "jump to question 3 did not move the header")
-        XCTAssertTrue(waitForDisappearance(card, timeout: 5), "answer card did not dismiss")
+        XCTAssertTrue(waitForDisappearance(dots, timeout: 5), "answer card did not dismiss")
         // 问题 4 stays fixed after a jump.
         XCTAssertTrue(waitForDisappearance(profileTab, timeout: 5), "tab bar reappeared after jump")
 
-        answerCardButton.tap()
-        XCTAssertTrue(card.waitForExistence(timeout: 5), "answer card never reappeared")
-        dots.buttons["2"].tap()
+        let dots2 = openAnswerCard(app)
+        dots2.buttons["2"].tap()
         let header2 = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 2/'")).firstMatch
         XCTAssertTrue(header2.waitForExistence(timeout: 5), "jump to question 2 did not move the header")
-        XCTAssertTrue(waitForDisappearance(card, timeout: 5), "answer card did not dismiss")
+        XCTAssertTrue(waitForDisappearance(dots2, timeout: 5), "answer card did not dismiss")
 
         // Finish the run to leave a clean persisted state.
         answerCurrentQuestion(app, letter: "A", advance: "下一题")
@@ -223,15 +212,11 @@ final class PracticeFlowUITests: XCTestCase {
 
         // Long → short (the user's exact complaint): jump back to q4 via the
         // answer card — the short 题干 must shrink, not keep the long height.
-        let answerCardButton = app.buttons["答题卡"]
-        XCTAssertTrue(answerCardButton.waitForExistence(timeout: 5), "答题卡 button missing")
-        answerCardButton.tap()
-        let card = app.otherElements["practice-answer-card"]
-        XCTAssertTrue(card.waitForExistence(timeout: 5), "answer card never appeared")
-        card.scrollViews.firstMatch.buttons["1"].tap()
+        let dots = openAnswerCard(app)
+        dots.buttons["1"].tap()
         let header1 = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 1/'")).firstMatch
         XCTAssertTrue(header1.waitForExistence(timeout: 5), "jump back to question 1 did not move the header")
-        XCTAssertTrue(waitForDisappearance(card, timeout: 5), "answer card did not dismiss")
+        XCTAssertTrue(waitForDisappearance(dots, timeout: 5), "answer card did not dismiss")
         XCTAssertTrue(waitForElement(questionWebView, shorterThan: 200, timeout: 10),
                       "short question kept the previous long height (问题 1)")
         XCTAssertLessThan(questionWebView.frame.height, longHeight * 0.6,
@@ -350,6 +335,23 @@ final class PracticeFlowUITests: XCTestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.25))
         }
         return !element.exists
+    }
+
+    /// Opens the answer-card overlay and returns its dot grid (the ScrollView
+    /// carrying the "1".."n" buttons). The card is an overlay, not a sheet —
+    /// sheet + hidden tab bar is an iOS 17 bug. On failure the accessibility
+    /// tree is dumped so the CI log shows whether the overlay failed to
+    /// render or the query itself was wrong.
+    private func openAnswerCard(_ app: XCUIApplication) -> XCUIElement {
+        let button = app.buttons["答题卡"]
+        XCTAssertTrue(button.waitForExistence(timeout: 5), "答题卡 button missing")
+        button.tap()
+        let dots = app.scrollViews["practice-answer-card-grid"]
+        if !dots.waitForExistence(timeout: 5) {
+            print("ANSWER CARD UI TREE:\n\(app.debugDescription)")
+            XCTAssertTrue(dots.exists, "answer card grid never appeared")
+        }
+        return dots
     }
 
     /// Taps the nav bar's back button, waiting for it to exist first (pop

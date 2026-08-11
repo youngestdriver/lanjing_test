@@ -90,6 +90,7 @@ struct PracticeAnswerCardView: View {
                     proxy.scrollTo(newIndex, anchor: .center)
                 }
             }
+            .accessibilityIdentifier("practice-answer-card-grid")
         }
     }
 
