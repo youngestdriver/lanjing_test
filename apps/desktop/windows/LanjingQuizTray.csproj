@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>LanjingQuiz</AssemblyName>
+    <RootNamespace>LanjingQuiz</RootNamespace>
+    <!-- Overridden by CI: -p:Version=0.0.10 -p:ServerExePath=<path> -->
+    <Version>0.0.0</Version>
+    <ServerExePath Condition="'$(ServerExePath)' == ''">artifacts\LanjingQuiz-server.exe</ServerExePath>
+  </PropertyGroup>
+  <ItemGroup Condition="Exists('$(ServerExePath)')">
+    <EmbeddedResource Include="$(ServerExePath)" LogicalName="server.exe" />
+  </ItemGroup>
+  <ItemGroup Condition="Exists('app.ico')">
+    <EmbeddedResource Include="app.ico" LogicalName="app.ico" />
+  </ItemGroup>
+</Project>
