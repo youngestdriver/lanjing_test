@@ -123,6 +123,32 @@ async function login() {
   assert.equal(response.status, 200);
 }
 
+// SSE 连接不会自然结束:收到首个完整帧(空行分隔)即销毁连接返回。
+function openEventsStream() {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const req = http.request({ hostname: "127.0.0.1", port, path: "/api/practice/events", method: "GET" }, (res) => {
+      let text = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => {
+        text += chunk;
+        if (text.includes("\n\n")) {
+          settled = true;
+          req.destroy();
+          resolve({ status: res.statusCode, headers: res.headers, text });
+        }
+      });
+      res.on("end", () => {
+        if (!settled) { settled = true; resolve({ status: res.statusCode, headers: res.headers, text }); }
+      });
+    });
+    req.on("error", (error) => {
+      if (!settled) { settled = true; reject(error); }
+    });
+    req.end();
+  });
+}
+
 async function waitForTaskDone() {
   for (let i = 0; i < 100; i += 1) {
     const status = JSON.parse((await request("/api/practice/status")).text);
@@ -156,6 +182,18 @@ test("unauthenticated practice mutations return 401; reads are open", async () =
   const status = JSON.parse((await request("/api/practice/status")).text);
   assert.equal(status.loggedIn, false);
   assert.equal(status.isPopulated, false);
+});
+
+test("GET /api/practice/events opens an SSE stream with a state first frame", async () => {
+  // 无登录即可连接(events 属 auth 豁免读);首帧必为 state 快照,任务状态
+  // 只影响帧内字段,不影响 type。
+  const stream = await openEventsStream();
+  assert.equal(stream.status, 200);
+  assert.match(stream.headers["content-type"] || "", /^text\/event-stream/);
+  const frame = stream.text.split("\n\n")[0];
+  assert.ok(frame.startsWith("data: "), "first frame is an SSE data frame");
+  const data = JSON.parse(frame.replace(/^data: /, ""));
+  assert.equal(data.type, "state");
 });
 
 test("full crawl flow: login → crawl → populated bank → categories/log", async () => {

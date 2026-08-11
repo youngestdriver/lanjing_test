@@ -60,14 +60,20 @@ function loadMeta(bankDir) {
 }
 
 function loadCrawlLog(bankDir) {
+  let text;
   try {
-    return fs.readFileSync(path.join(bankDir, "crawl_log.jsonl"), "utf8")
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => JSON.parse(line));
+    text = fs.readFileSync(path.join(bankDir, "crawl_log.jsonl"), "utf8");
   } catch {
     return [];
   }
+  const entries = [];
+  for (const line of text.split("\n")) {
+    if (!line) continue;
+    try {
+      entries.push(JSON.parse(line));
+    } catch { /* 单行损坏(如崩溃撕裂的尾行)只跳过该行,不丢整份日志 */ }
+  }
+  return entries;
 }
 
 async function crawlAllPapers(api, { bankDir, targets = bank.TARGET_CATEGORIES, refresh = false, onProgress = () => {} }) {
@@ -193,11 +199,16 @@ async function crawlAllPapers(api, { bankDir, targets = bank.TARGET_CATEGORIES, 
     counts: finalCounts,
   };
   if (refresh) {
-    // Atomic commit: every category file first (empty files for empty
-    // categories), meta LAST — the old bank survives any failure before this.
+    // Atomic commit: stage every category file as *.jsonl.tmp first (empty
+    // files for empty categories), then rename each into place, meta LAST —
+    // the old bank survives any failure before the renames, and a crash mid-
+    // commit can only ever see the full old bank or the full new bank.
     for (const target of targets) {
       const lines = (byCategory[target] || []).map((record) => JSON.stringify(record)).join("\n");
-      fs.writeFileSync(path.join(bankDir, `${target}.jsonl`), lines + (lines ? "\n" : ""), { encoding: "utf8", mode: 0o600 });
+      fs.writeFileSync(path.join(bankDir, `${target}.jsonl.tmp`), lines + (lines ? "\n" : ""), { encoding: "utf8", mode: 0o600 });
+    }
+    for (const target of targets) {
+      fs.renameSync(path.join(bankDir, `${target}.jsonl.tmp`), path.join(bankDir, `${target}.jsonl`));
     }
   }
   bank.saveMeta(bankDir, finalMeta);

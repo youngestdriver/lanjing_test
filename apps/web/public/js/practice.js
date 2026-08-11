@@ -9,7 +9,6 @@ const Practice = (() => {
   const CATEGORY_ORDER = ["言语理解", "数字运算", "逻辑推理", "资料分析", "特有题型"];
   let view = "start"; // start | crawl | categories | subcategories | quiz
   let category = null;
-  let subCategory = null;
   let groups = [];            // [{name, questions}]
   let questions = [];
   let index = 0;
@@ -42,7 +41,6 @@ const Practice = (() => {
   function render() {
     const el = root();
     if (!el) return;
-    const apiUrl = (path) => path; // local same-origin
     if (view === "start" || view === "crawl") {
       renderBankGate(el);
     } else if (view === "categories") {
@@ -142,7 +140,6 @@ const Practice = (() => {
 
   function startSession(groupIndex) {
     const group = groups[groupIndex];
-    subCategory = group.name;
     questions = shuffleEnabled() ? PracticeCore.shuffledKeepingGroups(group.questions, BigInt(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER))) : group.questions;
     index = 0;
     selected = new Set();
@@ -166,14 +163,15 @@ const Practice = (() => {
     const isMulti = Array.isArray(question.answer) && question.answer.length > 1;
     const stemHtml = question.stem ? `<div class="q-stem">${question.stem}</div>` : "";
     const optionRows = ["A", "B", "C", "D"].map((letter, i) => {
-      const optionText = question.options[i] || "";
+      const optionText = (question.options || [])[i] || "";
       const cls = [];
       if (revealed) {
-        const isCorrect = (question.answer == null || question.answer === "" || question.answer === [] )
-          ? false : (Array.isArray(question.answer) ? question.answer.includes(letter) : question.answer === letter);
+        // 无标准答案(correct===null)的题不判对错:选中项仅高亮,不标红。
+        const hasAnswer = !(question.answer == null || question.answer === "");
+        const isCorrect = hasAnswer && (Array.isArray(question.answer) ? question.answer.includes(letter) : question.answer === letter);
         const isSelected = selected.has(letter);
         if (isCorrect) cls.push("correct");
-        else if (isSelected) cls.push("wrong");
+        else if (isSelected && hasAnswer) cls.push("wrong");
         if (isSelected) cls.push("selected");
       } else if (selected.has(letter)) {
         cls.push("selected");
@@ -254,7 +252,8 @@ const Practice = (() => {
 
   function startCrawl() {
     api("/api/practice/crawl", { method: "POST" }).then((result) => {
-      if (result.error) return;
+      // 409 = 任务仍在跑(可能是别的窗口发起的):续订 SSE 进度,不静默退出。
+      if (result.error && result.status !== 409) return;
       view = "crawl";
       render();
       openEvents();
@@ -263,7 +262,8 @@ const Practice = (() => {
 
   function updateBank() {
     api("/api/practice/update", { method: "POST" }).then((result) => {
-      if (result.error) return;
+      // 409 = 任务仍在跑(可能是别的窗口发起的):续订 SSE 进度,不静默退出。
+      if (result.error && result.status !== 409) return;
       view = "crawl";
       render();
       openEvents();

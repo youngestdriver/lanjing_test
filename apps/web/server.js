@@ -299,14 +299,17 @@ function requireUpstreamResponse(response, operation) {
 // /api/practice reads (status/categories/events/log) are local data — no
 // login needed (mirrors iOS: practice works offline once crawled). Crawls
 // and deletes mutate an upstream session and require login.
-const PRACTICE_AUTH_EXEMPT_PREFIXES = [
+// status/events/log are exact-match (a future sub-route must opt in
+// explicitly); only categories keeps a prefix match for its /:name routes.
+const PRACTICE_AUTH_EXEMPT = new Set([
   "/api/practice/status",
-  "/api/practice/categories",
   "/api/practice/events",
   "/api/practice/log",
-];
+]);
+const PRACTICE_AUTH_EXEMPT_PREFIXES = ["/api/practice/categories"];
 app.use((req, res, next) => {
   if (["/api/login", "/api/status", "/api/logout", "/api/settings", "/api/cookiecloud", "/api/cookiecloud/sync"].includes(req.path)
+    || PRACTICE_AUTH_EXEMPT.has(req.path)
     || PRACTICE_AUTH_EXEMPT_PREFIXES.some((prefix) => req.path.startsWith(prefix))
     || !req.path.startsWith("/api/")) return next();
   if (!cookieJar.includes("sessionId=")) return res.status(401).json({ error: "Not logged in" });
@@ -668,8 +671,13 @@ app.get("/api/practice/events", (req, res) => {
   req.on("close", unsubscribe);
 });
 
-// POST /api/practice/delete — wipe the local bank (login required)
+// POST /api/practice/delete — wipe the local bank (login required).
+// Deleting mid-crawl would leave a half-written bank behind, so refuse while
+// a crawl/refresh task is running.
 app.post("/api/practice/delete", (req, res) => {
+  if (practiceCrawl.currentTaskState().running) {
+    return res.status(409).json({ error: "爬取进行中,请先等待完成" });
+  }
   try { fs.rmSync(PRACTICE_DIR, { recursive: true, force: true }); } catch {}
   res.json({ success: true });
 });
