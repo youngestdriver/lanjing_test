@@ -36,11 +36,8 @@ struct PracticeQuizView: View {
         .navigationBarTitleDisplayMode(.inline)
         // 问题 4: the quiz page is pushed within the tab's NavigationStack —
         // hide the tab bar so practice (and its summary) is full screen; the
-        // tab bar returns automatically when popped back. Presenting the
-        // answer-card sheet while the tab bar is hidden fails to present on
-        // iOS 17 (presentation coordinator vs hidden tab bar), so the tab bar
-        // is made visible while the sheet is up (invisible behind the sheet).
-        .toolbar(showAnswerCard ? .visible : .hidden, for: .tabBar)
+        // tab bar returns automatically when popped back.
+        .toolbar(.hidden, for: .tabBar)
         .task {
             // Resume a persisted run of this subcategory when it matches the
             // current bank (question-ID order check), otherwise start fresh.
@@ -48,9 +45,16 @@ struct PracticeQuizView: View {
             // mid-run and re-entering continues where it left off (问题 3).
             await vm.resumeOrStart(category: category, subCategory: subCategory)
         }
-        .sheet(isPresented: $showAnswerCard) {
-            PracticeAnswerCardView(vm: vm)
+        // 答题卡 is an overlay, NOT a sheet: presenting a sheet from a view
+        // with a hidden tab bar silently fails on iOS 17 (known bug), so the
+        // card overlays the full-screen page instead.
+        .overlay {
+            if showAnswerCard {
+                PracticeAnswerCardView(vm: vm, onClose: { showAnswerCard = false })
+                    .zIndex(5)
+            }
         }
+        .animation(.easeInOut(duration: 0.25), value: showAnswerCard)
     }
 
     private var loadingPlaceholder: some View {

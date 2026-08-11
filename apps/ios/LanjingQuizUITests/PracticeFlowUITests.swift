@@ -149,12 +149,14 @@ final class PracticeFlowUITests: XCTestCase {
         let answerCardButton = app.buttons["答题卡"]
         XCTAssertTrue(answerCardButton.waitForExistence(timeout: 5), "答题卡 button missing")
         answerCardButton.tap()
-        let sheet = app.sheets.firstMatch
-        XCTAssertTrue(sheet.waitForExistence(timeout: 5), "answer card sheet never appeared")
-        // The dot grid lives in the sheet's ScrollView — scoping there keeps
+        // The card is an overlay (not a sheet — sheet + hidden tab bar is an
+        // iOS 17 bug), anchored by its accessibilityIdentifier.
+        let card = app.otherElements["practice-answer-card"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5), "answer card never appeared")
+        // The dot grid lives in the card's ScrollView — scoping there keeps
         // the numeric dot buttons unambiguous (the stats bar above the grid
         // also carries numeric labels like "1"/"2").
-        let dots = sheet.scrollViews.firstMatch
+        let dots = card.scrollViews.firstMatch
         for dot in ["1", "2", "3"] {
             XCTAssertTrue(dots.buttons[dot].waitForExistence(timeout: 5), "answer card dot \(dot) missing")
         }
@@ -162,16 +164,16 @@ final class PracticeFlowUITests: XCTestCase {
 
         let header3 = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 3/'")).firstMatch
         XCTAssertTrue(header3.waitForExistence(timeout: 5), "jump to question 3 did not move the header")
-        XCTAssertTrue(waitForDisappearance(sheet, timeout: 5), "answer card sheet did not dismiss")
+        XCTAssertTrue(waitForDisappearance(card, timeout: 5), "answer card did not dismiss")
         // 问题 4 stays fixed after a jump.
         XCTAssertTrue(waitForDisappearance(profileTab, timeout: 5), "tab bar reappeared after jump")
 
         answerCardButton.tap()
-        XCTAssertTrue(sheet.waitForExistence(timeout: 5), "answer card sheet never reappeared")
+        XCTAssertTrue(card.waitForExistence(timeout: 5), "answer card never reappeared")
         dots.buttons["2"].tap()
         let header2 = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 2/'")).firstMatch
         XCTAssertTrue(header2.waitForExistence(timeout: 5), "jump to question 2 did not move the header")
-        XCTAssertTrue(waitForDisappearance(sheet, timeout: 5), "answer card sheet did not dismiss")
+        XCTAssertTrue(waitForDisappearance(card, timeout: 5), "answer card did not dismiss")
 
         // Finish the run to leave a clean persisted state.
         answerCurrentQuestion(app, letter: "A", advance: "下一题")
@@ -224,12 +226,12 @@ final class PracticeFlowUITests: XCTestCase {
         let answerCardButton = app.buttons["答题卡"]
         XCTAssertTrue(answerCardButton.waitForExistence(timeout: 5), "答题卡 button missing")
         answerCardButton.tap()
-        let sheet = app.sheets.firstMatch
-        XCTAssertTrue(sheet.waitForExistence(timeout: 5), "answer card sheet never appeared")
-        sheet.scrollViews.firstMatch.buttons["1"].tap()
+        let card = app.otherElements["practice-answer-card"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5), "answer card never appeared")
+        card.scrollViews.firstMatch.buttons["1"].tap()
         let header1 = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 1/'")).firstMatch
         XCTAssertTrue(header1.waitForExistence(timeout: 5), "jump back to question 1 did not move the header")
-        XCTAssertTrue(waitForDisappearance(sheet, timeout: 5), "answer card sheet did not dismiss")
+        XCTAssertTrue(waitForDisappearance(card, timeout: 5), "answer card did not dismiss")
         XCTAssertTrue(waitForElement(questionWebView, shorterThan: 200, timeout: 10),
                       "short question kept the previous long height (问题 1)")
         XCTAssertLessThan(questionWebView.frame.height, longHeight * 0.6,
