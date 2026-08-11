@@ -107,13 +107,13 @@ jobs:
           cd apps/web
           out="$RUNNER_TEMP/servers"
           mkdir -p "$out"
-          for target in bun-windows-x64:bun-windows-arm64:bun-darwin-arm64:bun-darwin-x64:bun-linux-x64:bun-linux-arm64; do
-            t="${target%%:*}"; suffix="${target##*:}"
-            name="$suffix"
-            bun build --compile --target="$t" ./desktop-entry.js --outfile "$out/$name"
+          # 空格分隔才迭代 6 次(冒号分隔会被 bash 当成单次迭代)。
+          for target in bun-windows-x64 bun-windows-arm64 bun-darwin-arm64 bun-darwin-x64 bun-linux-x64 bun-linux-arm64; do
+            bun build --compile --target="$target" ./desktop-entry.js --outfile "$out/$target"
           done
-          mv "$out/bun-windows-x64" "$out/LanjingQuiz-server.exe"
-          mv "$out/bun-windows-arm64" "$out/LanjingQuiz-server-arm64.exe"
+          # bun 对 windows target 自动追加 .exe 后缀(本地实测确认)
+          mv "$out/bun-windows-x64.exe" "$out/LanjingQuiz-server.exe"
+          mv "$out/bun-windows-arm64.exe" "$out/LanjingQuiz-server-arm64.exe"
           mv "$out/bun-darwin-arm64" "$out/server-darwin-arm64"
           mv "$out/bun-darwin-x64" "$out/server-darwin-x64"
           mv "$out/bun-linux-x64" "$out/LanjingQuiz-linux-x64"
@@ -203,9 +203,10 @@ jobs:
             if curl -fsS http://127.0.0.1:3000/api/status | grep -q '"loggedIn":false'; then ok=1; break; fi
             sleep 1
           done
-          [ -n "$ok" ] || { echo "smoke failed"; exit 1; }
-          taskkill //F //IM LanjingQuiz.exe //T
+          # 断言前先清理,失败路径不残留进程(干扰同 runner 的后续 job)
+          taskkill //F //IM LanjingQuiz.exe //T 2>/dev/null || true
           taskkill //F //IM LanjingQuiz-server.exe //T 2>/dev/null || true
+          [ -n "$ok" ] || { echo "smoke failed"; exit 1; }
 
       - name: Package deliverables
         shell: bash
@@ -489,6 +490,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # web-desktop-services 的 4 个内部中间产物只作打包输入,不上 release 附件
+          rm -f "${{ runner.temp }}"/assets/LanjingQuiz-server.exe \
+                "${{ runner.temp }}"/assets/LanjingQuiz-server-arm64.exe \
+                "${{ runner.temp }}"/assets/server-darwin-arm64 \
+                "${{ runner.temp }}"/assets/server-darwin-x64
           assets=()
           for f in "${{ runner.temp }}"/assets/*; do
             [ -f "$f" ] && assets+=("$f")
