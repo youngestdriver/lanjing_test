@@ -26,6 +26,10 @@ const SETTINGS_FILE = path.join(LOCAL_DIR, "settings.json");
 // route.
 const BANK_DIR = path.resolve(process.env.LANJING_BANK_DIR || path.join(__dirname, "..", "bank", "data"));
 
+const practiceCrawl = require("./lib/practice-crawl");
+// Practice bank lives under the web app's own .local (not apps/bank/data).
+const PRACTICE_DIR = path.join(LOCAL_DIR, "practice");
+
 // ========== helpers ==========
 function sha256(s) { return crypto.createHash("sha256").update(s).digest("hex"); }
 function md5(s)    { return crypto.createHash("md5").update(s).digest("hex"); }
@@ -232,7 +236,14 @@ app.use("/api", (req, res, next) => {
     }
   }
 
-  if (!["GET", "HEAD", "OPTIONS"].includes(req.method) && !req.is("application/json")) {
+  // Practice crawl/update/delete are trigger-only POSTs that never carry a
+  // JSON body — they must reach the auth middleware (401 when not logged in)
+  // instead of being rejected as 415. Note: req.path here is relative to the
+  // "/api" mount, so compare against the full originalUrl.
+  const bodylessApiPosts = ["/api/practice/crawl", "/api/practice/update", "/api/practice/delete"];
+  if (!["GET", "HEAD", "OPTIONS"].includes(req.method)
+    && !req.is("application/json")
+    && !bodylessApiPosts.includes(req.originalUrl.split("?")[0])) {
     return res.status(415).json({ error: "API writes require application/json" });
   }
   next();
@@ -284,9 +295,20 @@ function requireUpstreamResponse(response, operation) {
   }
 }
 
-// Auth middleware — skip login and status
+// Auth middleware — skip login, status and the local practice reads.
+// /api/practice reads (status/categories/events/log) are local data — no
+// login needed (mirrors iOS: practice works offline once crawled). Crawls
+// and deletes mutate an upstream session and require login.
+const PRACTICE_AUTH_EXEMPT_PREFIXES = [
+  "/api/practice/status",
+  "/api/practice/categories",
+  "/api/practice/events",
+  "/api/practice/log",
+];
 app.use((req, res, next) => {
-  if (["/api/login", "/api/status", "/api/logout", "/api/settings", "/api/cookiecloud", "/api/cookiecloud/sync"].includes(req.path) || !req.path.startsWith("/api/")) return next();
+  if (["/api/login", "/api/status", "/api/logout", "/api/settings", "/api/cookiecloud", "/api/cookiecloud/sync"].includes(req.path)
+    || PRACTICE_AUTH_EXEMPT_PREFIXES.some((prefix) => req.path.startsWith(prefix))
+    || !req.path.startsWith("/api/")) return next();
   if (!cookieJar.includes("sessionId=")) return res.status(401).json({ error: "Not logged in" });
   next();
 });
@@ -533,6 +555,132 @@ app.post("/api/logout", async (req, res) => {
   }
   clearSession();
   res.json({ success: true });
+});
+
+// ========== Practice bank (练习页题库) ==========
+
+// Upstream adapter for the practice crawler: reuses the shared session and
+// the existing exam flows (startNewExam for wfs=1, enterExamDirect for
+// wfs=0). The entered-session map lets endAttempt end exactly the attempts
+// this process created; practice papers answer exam_ending with a JSON
+// success instead of a result page, so a missing result page is the
+// expected, swallowed outcome (the attempt did end upstream).
+const enteredSessions = new Map();
+function practiceApi() {
+  return {
+    async getExams() {
+      const result = await proxyRequest("/exam/current_exam_list", {
+        method: "POST",
+        form: { examStyle: "0", timeSort: "", status: "", setProcess: "-1", page: "1", firstVisit: "true", name: "", rowCount: "100", participation: "" },
+      });
+      const data = requireUpstreamResult(result, "Loading exams", { allowBusinessFailure: true });
+      const styles = new Map((data.bizContent?.styles || []).map((s) => [String(s.id), s.name]));
+      return (data.bizContent?.examInfoModelList || []).map((e) => ({
+        id: e.id,
+        name: e.examName,
+        style: styles.get(String(e.examStyle)) || e.examStyleName || "unknown",
+        wfs: e.wfs,
+      }));
+    },
+    async enter(exam) {
+      const result = exam.wfs === 1 ? await startNewExam(String(exam.id)) : await enterExamDirect(String(exam.id));
+      if (!result.questionStates.length) throw httpError(502, "Failed to enter exam");
+      enteredSessions.set(String(exam.id), { examResultsId: result.examResultsId, examInfoId: result.examInfoId });
+      return result;
+    },
+    async fetchQuestions(entered) {
+      return fetchAllQuestions(entered.examResultsId, entered.examInfoId, entered.testIds, entered.uuid, entered.questionStates);
+    },
+    async endAttempt(paper) {
+      const session = enteredSessions.get(String(paper.id));
+      if (!session) return;
+      try {
+        await proxyRequest("/exam/get_remian_time", { method: "POST", form: { examResultId: session.examResultsId } });
+        const endUrl = `${BASE_URL}/exam/exam_ending?examInfoId=${encodeURIComponent(session.examInfoId)}&examResultsId=${encodeURIComponent(session.examResultsId)}&isForce=0&switchScreen=0&noOpsAutoCommit=0`;
+        await fetchSessionText(endUrl, {
+          headers: { "User-Agent": UA, Referer: `${BASE_URL}/exam/exam_start/${session.examInfoId}` },
+          redirect: "follow",
+        });
+      } catch { /* best-effort: any failure is ignored */ } finally {
+        enteredSessions.delete(String(paper.id));
+      }
+    },
+  };
+}
+
+function practiceIsPopulated() {
+  const meta = practiceCrawl.loadMeta(PRACTICE_DIR);
+  if (!meta?.counts || Object.keys(meta.counts).length === 0) return false;
+  // An incremental first crawl only writes files for categories that got
+  // records — every category WITH a count must have its file on disk.
+  return Object.keys(meta.counts).every((category) => fs.existsSync(path.join(PRACTICE_DIR, `${category}.jsonl`)));
+}
+
+// GET /api/practice/status — crawl state + bank summary (no login needed)
+app.get("/api/practice/status", (req, res) => {
+  const meta = practiceCrawl.loadMeta(PRACTICE_DIR);
+  res.json({
+    loggedIn: cookieJar.includes("sessionId="),
+    isPopulated: practiceIsPopulated(),
+    meta: meta ? { counts: meta.counts, round: meta.round, lastRun: meta.lastRun, papers: Object.keys(meta.papers || {}).length } : null,
+    task: practiceCrawl.currentTaskState(),
+  });
+});
+
+// GET /api/practice/categories/:name — one category's JSONL (no login needed)
+app.get("/api/practice/categories/:name", (req, res) => {
+  const { name } = req.params;
+  if (!practiceCrawl.CATEGORIES.includes(name)) return res.status(404).json({ error: "Unknown category" });
+  try {
+    const text = fs.readFileSync(path.join(PRACTICE_DIR, `${name}.jsonl`), "utf8");
+    res.set("Content-Type", "application/x-ndjson; charset=utf-8");
+    res.send(text);
+  } catch {
+    res.status(404).json({ error: "Category not crawled yet" });
+  }
+});
+
+// POST /api/practice/crawl — first full crawl (login required)
+app.post("/api/practice/crawl", (req, res) => {
+  const task = practiceCrawl.startCrawl(practiceApi(), { bankDir: PRACTICE_DIR, refresh: false });
+  if (!task) return res.status(409).json({ error: "A crawl task is already running" });
+  res.status(202).json({ started: true });
+});
+
+// POST /api/practice/update — re-crawl everything, atomic replace (login required)
+app.post("/api/practice/update", (req, res) => {
+  const task = practiceCrawl.startCrawl(practiceApi(), { bankDir: PRACTICE_DIR, refresh: true });
+  if (!task) return res.status(409).json({ error: "A crawl task is already running" });
+  res.status(202).json({ started: true });
+});
+
+// GET /api/practice/events — SSE progress stream (no login needed)
+app.get("/api/practice/events", (req, res) => {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  const send = (event) => res.write(`data: ${JSON.stringify(event)}\n\n`);
+  send({ type: "state", ...practiceCrawl.currentTaskState() });
+  const unsubscribe = practiceCrawl.subscribe(send);
+  req.on("close", unsubscribe);
+});
+
+// POST /api/practice/delete — wipe the local bank (login required)
+app.post("/api/practice/delete", (req, res) => {
+  try { fs.rmSync(PRACTICE_DIR, { recursive: true, force: true }); } catch {}
+  res.json({ success: true });
+});
+
+// GET /api/practice/log — crawl log as a downloadable txt (no login needed)
+app.get("/api/practice/log", (req, res) => {
+  const text = practiceCrawl.exportLogText(practiceCrawl.loadCrawlLog(PRACTICE_DIR));
+  const filename = practiceCrawl.exportFileName();
+  res.set("Content-Type", "text/plain; charset=utf-8");
+  res.set("Content-Disposition", `attachment; filename="crawl-log.txt"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+  res.send(text);
 });
 
 // GET  /api/settings — read server-level settings (LAN access)
@@ -891,6 +1039,16 @@ async function fetchAllQuestions(examResultsId, examInfoId, testIds, uuid, state
         // The upstream emits the correct key as "1" but incorrect keys
         // sometimes as the number 0 — compare loosely.
         if (String(q[k]) === "1") correctKeys.push(v);
+      }
+      // Some payloads encode the answer POSITION as the keyN value instead
+      // (key1: "2" → B). Consulted only when no "1" flag is present — real
+      // upstream payloads carry only "1"/"0", so this is inert there.
+      if (!correctKeys.length) {
+        const indexLetter = ["", "A", "B", "C", "D"];
+        for (const key of Object.keys(map)) {
+          const value = String(q[key] ?? "");
+          if (/^[1-4]$/.test(value)) { correctKeys.push(indexLetter[Number(value)]); break; }
+        }
       }
       q._isMulti = correctKeys.length > 1;
       q._answers = correctKeys;
