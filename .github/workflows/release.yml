@@ -110,6 +110,12 @@ jobs:
       - name: Install web dependencies
         run: npm ci --prefix apps/web
 
+      # public/ 不随 bun 编译产物走(编译产物里的 __dirname 指向编译机源码
+      # 路径,用户机器上读不到)——先把它生成成 JS 模块打进二进制,server.js
+      # 打包模式下从内存提供静态资源。
+      - name: Generate static-asset bundle
+        run: node scripts/build-public-bundle.js
+
       - name: Compile server binaries (all targets)
         run: |
           cd apps/web

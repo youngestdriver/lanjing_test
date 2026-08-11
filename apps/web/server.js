@@ -249,7 +249,40 @@ app.use("/api", (req, res, next) => {
   next();
 });
 app.use(express.json({ limit: "100kb" }));
-app.use(express.static(path.join(__dirname, "public")));
+
+// ---- static assets ----
+// Desktop executables carry public/ inside the binary as a generated module
+// (scripts/build-public-bundle.js → public-bundle.js, bundled by bun build
+// --compile). A compiled binary's __dirname points at the BUILD machine's
+// source path, so file-system reads fail on user machines (404 → sendFile
+// ENOENT → "Internal server error"). When the bundle module is present
+// (desktop builds) serve from memory; plain checkouts keep the file system.
+let bundledPublic = null;
+try { bundledPublic = require("./public-bundle"); } catch {}
+const PUBLIC_MIME = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".webmanifest": "application/manifest+json",
+  ".ico": "image/x-icon",
+};
+if (bundledPublic) {
+  const files = bundledPublic.files;
+  app.use((req, res, next) => {
+    if (req.method !== "GET" && req.method !== "HEAD") return next();
+    const urlPath = decodeURIComponent(req.path).replace(/^\/+/, "");
+    const content = urlPath ? files[urlPath] : files["index.html"];
+    if (!content) return next();
+    const ext = require("node:path").extname(urlPath || "index.html");
+    res.set("Content-Type", PUBLIC_MIME[ext] || "application/octet-stream");
+    res.send(content);
+  });
+} else {
+  app.use(express.static(path.join(__dirname, "public")));
+}
 
 // Question bank download endpoint for the iOS client. Mounted before the SPA
 // fallback below; express.static falls through on missing files, so pin
@@ -318,6 +351,10 @@ app.use((req, res, next) => {
 
 // SPA fallback — serve index.html for all non-API routes
 app.get(/^(?!\/api(?:\/|$)).*/, (req, res) => {
+  if (bundledPublic) {
+    res.set("Content-Type", "text/html; charset=utf-8");
+    return res.send(bundledPublic.files["index.html"]);
+  }
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
