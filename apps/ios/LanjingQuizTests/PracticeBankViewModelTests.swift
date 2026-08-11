@@ -351,6 +351,7 @@ final class PracticeBankViewModelTests: XCTestCase {
         let store = FakePracticeSessionStore()
         let vm = makeVM(storage: storage, sessionStore: store)
         await vm.resumeOrStart(category: "言语理解", subCategory: "成语辨析")
+        await store.awaitSaveCount(1)
         let saved = await store.stored
         XCTAssertNotNil(saved)
 

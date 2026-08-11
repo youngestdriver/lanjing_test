@@ -36,8 +36,11 @@ struct PracticeQuizView: View {
         .navigationBarTitleDisplayMode(.inline)
         // 问题 4: the quiz page is pushed within the tab's NavigationStack —
         // hide the tab bar so practice (and its summary) is full screen; the
-        // tab bar returns automatically when popped back.
-        .toolbar(.hidden, for: .tabBar)
+        // tab bar returns automatically when popped back. Presenting the
+        // answer-card sheet while the tab bar is hidden fails to present on
+        // iOS 17 (presentation coordinator vs hidden tab bar), so the tab bar
+        // is made visible while the sheet is up (invisible behind the sheet).
+        .toolbar(showAnswerCard ? .visible : .hidden, for: .tabBar)
         .task {
             // Resume a persisted run of this subcategory when it matches the
             // current bank (question-ID order check), otherwise start fresh.
