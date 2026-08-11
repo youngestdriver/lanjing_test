@@ -587,22 +587,17 @@ async function main() {
     // The gate is rendered after the (mocked) status round-trip; wait for it
     // before pressing Tab so focus lands on the CTA in the first pass.
     await practiceCta.waitFor({ state: "visible" });
-    // Tab from the practice heading (the app focuses it on tab activation) —
-    // focusing explicitly removes the render/focus race that flakes on slow
-    // runners, while keeping the keyboard-reachability check intact.
-    await page.evaluate(() => document.querySelector("#practiceHeading")?.focus());
-    await page.keyboard.press("Tab");
-    await page.waitForFunction(() => {
-      const element = document.querySelector("[data-practice-start]");
-      return element === document.activeElement;
-    }, undefined, { timeout: 5000 }).catch(async (error) => {
-      const active = await page.evaluate(() => ({
-        tag: document.activeElement?.tagName,
-        cls: document.activeElement?.className,
-        text: (document.activeElement?.textContent || "").slice(0, 40),
-      }));
-      throw new Error(`focus did not land on the CTA (active: ${JSON.stringify(active)}): ${error.message}`);
-    });
+    // Reach the CTA with pure keyboard navigation (Tab from body, like a
+    // keyboard user). Scripted focus() before Tab suppresses :focus-visible
+    // on some Chrome versions, and the async gate render races single-Tab
+    // presses on slow runners — a Tab loop covers both.
+    await page.evaluate(() => document.activeElement?.blur());
+    let reachedByTab = false;
+    for (let i = 0; i < 20 && !reachedByTab; i += 1) {
+      await page.keyboard.press("Tab");
+      reachedByTab = await practiceCta.evaluate((element) => element === document.activeElement);
+    }
+    assert.ok(reachedByTab, "practice CTA is reachable by Tab");
     const ctaFocusStyle = await practiceCta.evaluate((element) => {
       const style = getComputedStyle(element);
       return { style: style.outlineStyle, width: parseFloat(style.outlineWidth) };
