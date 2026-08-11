@@ -34,7 +34,7 @@ struct PracticeOptionRowView: View {
     /// nil while pending or after a 无答案 reveal (correct == nil) — the row
     /// then falls back to the selected/unselected styling below.
     private var resultMark: QuizLogic.OptionResult? {
-        guard isAnswered, let correct = answer?.correct else { return nil }
+        guard isAnswered, answer?.correct != nil else { return nil }
         return BankLogic.optionResult(isAnswered: true, isSelected: isSelected, isCorrect: isCorrect)
     }
 

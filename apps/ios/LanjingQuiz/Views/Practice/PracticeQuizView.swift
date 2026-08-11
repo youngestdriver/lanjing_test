@@ -93,7 +93,7 @@ struct PracticeQuizView: View {
                     }
                     RichHTMLContent(html: question.question, fontSize: 17)
                         .id(question.id)
-                    options(for: session, question: question)
+                    options(for: session, question)
                     if let answer = session.currentAnswer, answer.revealed {
                         ExplainBannerView(
                             correct: answer.correct,
