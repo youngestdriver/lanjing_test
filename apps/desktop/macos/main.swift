@@ -117,7 +117,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 预填(异步 GET;runModal 的模态 runloop 会派发 main queue,字段在
         // 用户输入前填充好)。
         fetchCookieCloudConfig { [weak self] config in
-            guard let config else { return }
+            // 闭包已在 main 队列(见 fetchCookieCloudConfig);GET 失败时与 C# 侧
+            // 行为对齐:红字报错、清掉“读取中…”状态,避免静默卡在“读取中…”。
+            guard let config else {
+                errorLabel.stringValue = "读取配置失败:无法连接本地服务"
+                statusLabel.stringValue = ""
+                return
+            }
             enabledCheck.state = config.enabled ? .on : .off
             serverField.stringValue = config.server
             uuidField.stringValue = config.uuid

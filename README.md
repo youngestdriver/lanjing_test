@@ -316,6 +316,8 @@ workflow 本身始终运行（而不是在事件级用 `paths` 过滤）：GitHu
 | macOS | `LanjingQuiz-macOS.dmg`（Universal） | 菜单栏图标（打开浏览器 / 退出） |
 | Linux | `LanjingQuiz-linux-x64` / `LanjingQuiz-linux-arm64` | 单文件，`chmod +x` 后运行，终端 Ctrl+C 停止 |
 
+托盘/菜单栏图标提供：打开浏览器、设置 Cookie 服务器（CookieCloud 配置，保存后自动同步）、退出。
+
 首次使用：启动后自动打开浏览器；数据保存在本机（Windows `%LOCALAPPDATA%\LanjingQuiz\data`、macOS `~/Library/Application Support/LanjingQuiz`、Linux 程序旁 `.local`）。服务端口固定 3000,被占用时启动失败(Windows 托盘会提示)。未签名提示：macOS 首次打开需右键“打开”；Windows SmartScreen 选“更多信息 → 仍要运行”。
 
 > [!WARNING]
