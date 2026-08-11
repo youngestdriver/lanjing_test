@@ -9,6 +9,7 @@ X64="${2:?x64 binary required}"
 OUT="${3:?out dir required}"
 APP="$OUT/LanjingQuiz.app"
 VERSION="${LANJING_APP_VERSION:-0.0.1}"
+VERSION="${VERSION#v}" # strip leading v (matches Windows -p:Version handling)
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -17,10 +18,16 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 lipo -create "$ARM" "$X64" -output "$APP/Contents/Resources/LanjingQuiz-server"
 chmod +x "$APP/Contents/Resources/LanjingQuiz-server"
 
-# Launcher
-swiftc -O "$ROOT/apps/desktop/macos/main.swift" \
-  -o "$APP/Contents/MacOS/LanjingQuiz" \
-  -framework AppKit -framework Foundation
+# Launcher: compile both archs (each targeting macOS 12.0 to match
+# Info.plist's LSMinimumSystemVersion) and lipo into a universal binary.
+TMPB="$(mktemp -d)"
+trap 'rm -rf "$TMPB"' EXIT
+swiftc -O -target arm64-apple-macosx12.0 "$ROOT/apps/desktop/macos/main.swift" \
+  -o "$TMPB/launcher-arm64" -framework AppKit -framework Foundation
+swiftc -O -target x86_64-apple-macosx12.0 "$ROOT/apps/desktop/macos/main.swift" \
+  -o "$TMPB/launcher-x64" -framework AppKit -framework Foundation
+lipo -create "$TMPB/launcher-arm64" "$TMPB/launcher-x64" \
+  -output "$APP/Contents/MacOS/LanjingQuiz"
 
 # Icon + metadata
 cp "$ROOT/assets/desktop/status-icon.png" "$APP/Contents/Resources/status-icon.png"

@@ -77,7 +77,14 @@ internal static class Program
             _server.EnableRaisingEvents = true;
             _server.Exited += (_, _) =>
             {
-                _tray?.ShowBalloonTip(3000, "蓝鲸助手", "服务已停止,可重新打开浏览器访问或退出。", ToolTipIcon.Info);
+                try
+                {
+                    if (!_tray.IsDisposed)
+                    {
+                        _tray.ShowBalloonTip(3000, "蓝鲸助手", "服务已停止,可重新打开浏览器访问或退出。", ToolTipIcon.Info);
+                    }
+                }
+                catch { /* app is exiting; ignore */ }
             };
         }
     }

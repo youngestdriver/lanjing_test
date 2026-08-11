@@ -316,7 +316,7 @@ workflow 本身始终运行（而不是在事件级用 `paths` 过滤）：GitHu
 | macOS | `LanjingQuiz-macOS.dmg`（Universal） | 菜单栏图标（打开浏览器 / 退出） |
 | Linux | `LanjingQuiz-linux-x64` / `LanjingQuiz-linux-arm64` | 单文件，`chmod +x` 后运行，终端 Ctrl+C 停止 |
 
-首次使用：启动后自动打开浏览器；数据保存在本机（Windows `%LOCALAPPDATA%\LanjingQuiz\data`、macOS `~/Library/Application Support/LanjingQuiz`、Linux 程序旁 `.local`）。未签名提示：macOS 首次打开需右键“打开”；Windows SmartScreen 选“更多信息 → 仍要运行”。
+首次使用：启动后自动打开浏览器；数据保存在本机（Windows `%LOCALAPPDATA%\LanjingQuiz\data`、macOS `~/Library/Application Support/LanjingQuiz`、Linux 程序旁 `.local`）。服务端口固定 3000,被占用时启动失败(Windows 托盘会提示)。未签名提示：macOS 首次打开需右键“打开”；Windows SmartScreen 选“更多信息 → 仍要运行”。
 
 > [!WARNING]
 > 局域网访问：服务默认监听所有网卡，同一局域网设备可用 `http://<本机IP>:3000` 访问，可在「我的 > 局域网访问」关闭。该服务共享同一份会话，没有多用户隔离/TLS/限流，只适合可信局域网，请勿暴露到公网。
