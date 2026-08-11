@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let menu = NSMenu()
         menu.addItem(withTitle: "打开浏览器", action: #selector(openBrowser), keyEquivalent: "")
+        menu.addItem(withTitle: "设置 Cookie 服务器…", action: #selector(showCookieCloudDialog), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "退出", action: #selector(quitApp), keyEquivalent: "q")
         item.menu = menu
@@ -76,6 +77,158 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openBrowser() {
         NSWorkspace.shared.open(homeURL)
+    }
+
+    @objc private func showCookieCloudDialog() {
+        let alert = NSAlert()
+        alert.messageText = "Cookie 服务器"
+        alert.informativeText = "配置 CookieCloud 以在设备间共享登录会话"
+        alert.addButton(withTitle: "保存")
+        alert.addButton(withTitle: "取消")
+
+        let enabledCheck = NSButton(checkboxWithTitle: "启用同步", target: nil, action: nil)
+        let serverField = NSTextField(string: "")
+        serverField.placeholderString = "https://cc.example.com"
+        let uuidField = NSTextField(string: "")
+        uuidField.placeholderString = "扩展设置中的 UUID"
+        let passwordField = NSSecureTextField(string: "")
+        passwordField.placeholderString = "留空不修改"
+        let statusLabel = NSTextField(labelWithString: "读取中…")
+        statusLabel.textColor = .secondaryLabelColor
+        let errorLabel = NSTextField(labelWithString: "")
+        errorLabel.textColor = .systemRed
+
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 6
+        for (label, field) in [("服务器地址", serverField), ("UUID", uuidField), ("密码", passwordField)] {
+            let caption = NSTextField(labelWithString: label)
+            caption.font = .systemFont(ofSize: 11, weight: .medium)
+            stack.addArrangedSubview(caption)
+            field.widthAnchor.constraint(equalToConstant: 320).isActive = true
+            stack.addArrangedSubview(field)
+        }
+        stack.addArrangedSubview(enabledCheck)
+        stack.addArrangedSubview(statusLabel)
+        stack.addArrangedSubview(errorLabel)
+        alert.accessoryView = stack
+
+        // 预填(异步 GET;runModal 的模态 runloop 会派发 main queue,字段在
+        // 用户输入前填充好)。
+        fetchCookieCloudConfig { [weak self] config in
+            guard let config else { return }
+            enabledCheck.state = config.enabled ? .on : .off
+            serverField.stringValue = config.server
+            uuidField.stringValue = config.uuid
+            passwordField.placeholderString = config.hasPassword ? "已保存,留空不修改" : "未设置"
+            statusLabel.stringValue = self?.buildStatus(config) ?? ""
+        }
+
+        if alert.runModal() != .alertFirstButtonReturn { return }
+
+        var payload: [String: Any] = [
+            "enabled": enabledCheck.state == .on,
+            "server": serverField.stringValue.trimmingCharacters(in: .whitespaces),
+            "uuid": uuidField.stringValue.trimmingCharacters(in: .whitespaces),
+        ]
+        if !passwordField.stringValue.isEmpty {
+            payload["password"] = passwordField.stringValue
+        }
+        saveCookieCloudConfig(payload) { [weak self] error in
+            DispatchQueue.main.async {
+                if let error {
+                    self?.showFailure("保存 Cookie 服务器配置失败:\(error)")
+                }
+                // 保存成功:触发一次同步(server 单飞,失败静默进 lastError)。
+                self?.syncCookieCloudNow()
+            }
+        }
+    }
+
+    private struct CookieCloudConfig {
+        let enabled: Bool
+        let server: String
+        let uuid: String
+        let hasPassword: Bool
+        let lastPush: String?
+        let lastPull: String?
+        let lastError: String?
+    }
+
+    private func fetchCookieCloudConfig(completion: @escaping (CookieCloudConfig?) -> Void) {
+        let url = URL(string: "http://127.0.0.1:\(homeURL.port ?? 3000)/api/cookiecloud")!
+        URLSession.shared.dataTask(with: url) { data, _, _ in
+            guard let data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+            let config = CookieCloudConfig(
+                enabled: json["enabled"] as? Bool ?? false,
+                server: json["server"] as? String ?? "",
+                uuid: json["uuid"] as? String ?? "",
+                hasPassword: json["hasPassword"] as? Bool ?? false,
+                lastPush: json["lastPush"] as? String,
+                lastPull: json["lastPull"] as? String,
+                lastError: json["lastError"] as? String)
+            DispatchQueue.main.async { completion(config) }
+        }.resume()
+    }
+
+    private func saveCookieCloudConfig(_ payload: [String: Any], completion: @escaping (String?) -> Void) {
+        let url = URL(string: "http://127.0.0.1:\(homeURL.port ?? 3000)/api/cookiecloud")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+        URLSession.shared.dataTask(with: request) { data, response, _ in
+            guard let http = response as? HTTPURLResponse,
+                  (200..<300).contains(http.statusCode),
+                  let data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  json["server"] != nil else {
+                let message: String
+                if let data,
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let error = json["error"] as? String {
+                    message = error
+                } else {
+                    message = "无法连接本地服务"
+                }
+                DispatchQueue.main.async { completion(message) }
+                return
+            }
+            DispatchQueue.main.async { completion(nil) }
+        }.resume()
+    }
+
+    private func syncCookieCloudNow() {
+        let url = URL(string: "http://127.0.0.1:\(homeURL.port ?? 3000)/api/cookiecloud/sync")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        // 服务端对所有写请求要求 application/json(否则 415 直接拒收),同
+        // saveCookieCloudConfig;不带 body 的 POST 也必须带此头。
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        URLSession.shared.dataTask(with: request) { _, _, _ in }.resume()
+    }
+
+    private func buildStatus(_ config: CookieCloudConfig) -> String {
+        if let lastError = config.lastError, !lastError.isEmpty {
+            return "上次同步失败:\(lastError)"
+        }
+        var parts: [String] = []
+        if let lastPull = config.lastPull, !lastPull.isEmpty { parts.append("上次拉取 \(Self.formatTime(lastPull))") }
+        if let lastPush = config.lastPush, !lastPush.isEmpty { parts.append("上次推送 \(Self.formatTime(lastPush))") }
+        return parts.isEmpty ? "尚未同步" : parts.joined(separator: " · ")
+    }
+
+    private static func formatTime(_ iso: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        guard let date = formatter.date(from: iso) else { return iso }
+        let display = DateFormatter()
+        display.dateFormat = "HH:mm"
+        return display.string(from: date)
     }
 
     @objc private func quitApp() {
