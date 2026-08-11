@@ -308,7 +308,19 @@ workflow 本身始终运行（而不是在事件级用 `paths` 过滤）：GitHu
 
 [`release.yml`](.github/workflows/release.yml) 在**每次 push 到 `main` 时自动发布**（版本号自动取最新 tag 的 patch +1），也可手动触发（Actions 页 → Release → Run workflow，或 `gh workflow run release.yml -f version=v0.1.0`），生成产物并创建带附件的 GitHub Release：
 
-- **Web 免安装包**：`apps/web` 生产依赖打包（`npm ci --omit=dev`）+ 双击启动脚本（macOS `启动.command` / Windows `启动.bat`）+ 使用说明，版本号留空自动取最新 tag 的 patch +1；
+**桌面发布产物**：每次发布提供免安装桌面版（无需安装 Node.js）。
+
+| 平台 | 产物 | 说明 |
+|---|---|---|
+| Windows | `LanjingQuiz-windows-x64.exe` / `LanjingQuiz-windows-arm64.exe` | 单文件，托盘图标（打开浏览器 / 退出） |
+| macOS | `LanjingQuiz-macOS.dmg`（Universal） | 菜单栏图标（打开浏览器 / 退出） |
+| Linux | `LanjingQuiz-linux-x64` / `LanjingQuiz-linux-arm64` | 单文件，`chmod +x` 后运行，终端 Ctrl+C 停止 |
+
+首次使用：启动后自动打开浏览器；数据保存在本机（Windows `%LOCALAPPDATA%\LanjingQuiz\data`、macOS `~/Library/Application Support/LanjingQuiz`、Linux 程序旁 `.local`）。服务端口固定 3000,被占用时启动失败(Windows 托盘会提示)。未签名提示：macOS 首次打开需右键“打开”；Windows SmartScreen 选“更多信息 → 仍要运行”。
+
+> [!WARNING]
+> 局域网访问：服务默认监听所有网卡，同一局域网设备可用 `http://<本机IP>:3000` 访问，可在「我的 > 局域网访问」关闭。该服务共享同一份会话，没有多用户隔离/TLS/限流，只适合可信局域网，请勿暴露到公网。
+
 - **iOS 未签名 ipa**：始终构建（`CODE_SIGNING_ALLOWED=NO`），附安装说明——配合 Sideloadly/AltStore 用免费 Apple ID 签名后装真机（7 天续签一次）；
 - **iOS 签名 ipa（ADHOC）**：仅当配置了签名 secrets（`IOS_CERT_BASE64`、`IOS_CERT_PASSWORD`、`IOS_PROVISIONING_BASE64`、`DEVELOPMENT_TEAM`）时才会构建并签名，否则自动跳过；
 - **题库快照**：默认关闭的保留位（`include_bank` 输入，仅手动运行时可用）——题库数据因版权问题被 gitignore，不在 CI 工作区；如需附带，可在私有仓库纳入数据，或本地打包后 `gh release upload <tag> 题库导出-*.zip`。

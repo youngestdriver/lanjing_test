@@ -1104,6 +1104,10 @@ function startServer(port = PORT) {
       console.log(`CookieCloud sync: enabled (${settings.cookieCloud.server})`);
       syncNow();
     }
+    if (process.env.LANJING_OPEN_BROWSER === "1" && !process.env.LANJING_OPEN_BROWSER_DISABLE) {
+      const { openBrowser } = require("./lib/open-browser");
+      openBrowser(`http://127.0.0.1:${server.address().port}`);
+    }
   });
   return server;
 }
