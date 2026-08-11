@@ -131,6 +131,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusLabel.stringValue = self?.buildStatus(config) ?? ""
         }
 
+        // A menu-bar app (LSUIElement) is not active by default: without
+        // activation the alert's text fields never receive keyboard input
+        // (fields look editable but typing does nothing). Activate first and
+        // put the first field in focus so the user can type immediately.
+        NSApp.activate(ignoringOtherApps: true)
+        alert.window.makeFirstResponder(serverField)
+
         if alert.runModal() != .alertFirstButtonReturn { return }
 
         var payload: [String: Any] = [
