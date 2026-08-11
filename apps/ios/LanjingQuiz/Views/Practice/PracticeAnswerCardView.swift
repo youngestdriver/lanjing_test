@@ -35,7 +35,9 @@ struct PracticeAnswerCardView: View {
             .padding(.horizontal, 8)
             .padding(.bottom, 8)
         }
-        .accessibilityIdentifier("practice-answer-card")
+        // NOTE: no accessibilityIdentifier on this ZStack — SwiftUI propagates
+        // a container's identifier to EVERY descendant, overwriting the grid's
+        // own "practice-answer-card-grid" (UI tests scope on that ScrollView).
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
