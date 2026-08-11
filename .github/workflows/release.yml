@@ -1,6 +1,6 @@
 name: Release
 
-# Auto-publishes a release on every push to main (web 免安装包 + 未签名 ipa,
+# Auto-publishes a release on every push to main (桌面版安装包 + 未签名 ipa,
 # version auto-bumped to the next patch). Can also be triggered manually from
 # the Actions tab ("Release" → Run workflow) or:
 #   gh workflow run release.yml -f version=v0.1.0
@@ -18,8 +18,8 @@ name: Release
 #                  when they are missing). The unsigned ipa is always built.
 #
 # Artifacts:
-#   1. Web 免安装包 — zip of apps/web with production-only dependencies
-#      (npm ci --omit=dev), one-click start scripts and usage notes.
+#   1. 桌面版 — Windows 托盘单文件 / macOS .app+dmg / Linux 单文件;内嵌 Bun
+#      交叉编译的桌面服务二进制(apps/web/desktop-entry.js),免安装免依赖。
 #   2. iOS 未签名 ipa — always built (CODE_SIGNING_ALLOWED=NO); installable
 #      on real devices only after re-signing with a free Apple ID via
 #      Sideloadly/AltStore (instructions attached in the release).
@@ -89,95 +89,210 @@ jobs:
           fi
           echo "Release version: $(grep '^version=' "$GITHUB_OUTPUT" | cut -d= -f2)"
 
-  web-package:
-    name: Web 免安装包
+  # Web 桌面版服务二进制:一个 job 交叉编译全部平台(Bun 单文件,内嵌
+  # express + public 资源;入口 desktop-entry.js 为裸脚本)。
+  web-desktop-services:
+    name: Web 桌面服务二进制
     needs: version
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: apps/web/package-lock.json
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
 
-      - name: Assemble staging copy (no tests/tools/dev artifacts)
+      - name: Compile server binaries (all targets)
         run: |
-          stage="$RUNNER_TEMP/lanjing-web-${{ needs.version.outputs.version }}"
-          mkdir -p "$stage"
-          tar -C apps/web -cf - \
-            --exclude=node_modules --exclude=test --exclude=tools \
-            --exclude=.local --exclude=build \
-            . | tar -C "$stage" -xf -
+          cd apps/web
+          out="$RUNNER_TEMP/servers"
+          mkdir -p "$out"
+          for target in bun-windows-x64:bun-windows-arm64:bun-darwin-arm64:bun-darwin-x64:bun-linux-x64:bun-linux-arm64; do
+            t="${target%%:*}"; suffix="${target##*:}"
+            name="$suffix"
+            bun build --compile --target="$t" ./desktop-entry.js --outfile "$out/$name"
+          done
+          mv "$out/bun-windows-x64" "$out/LanjingQuiz-server.exe"
+          mv "$out/bun-windows-arm64" "$out/LanjingQuiz-server-arm64.exe"
+          mv "$out/bun-darwin-arm64" "$out/server-darwin-arm64"
+          mv "$out/bun-darwin-x64" "$out/server-darwin-x64"
+          mv "$out/bun-linux-x64" "$out/LanjingQuiz-linux-x64"
+          mv "$out/bun-linux-arm64" "$out/LanjingQuiz-linux-arm64"
+          ls -lh "$out"
 
-      - name: Install production dependencies only
-        run: npm ci --omit=dev --prefix "$RUNNER_TEMP/lanjing-web-${{ needs.version.outputs.version }}"
-
-      - name: Write one-click start scripts and usage notes
+      # 冒烟:curl 的 JSON 响应在 shell stdout(不在 smoke.log,那是服务日志),
+      # 直接管道给 grep 断言(Step 3 的修正形态)。
+      - name: Smoke test (linux-x64, same arch as runner)
         run: |
-          stage="$RUNNER_TEMP/lanjing-web-${{ needs.version.outputs.version }}"
-          cat > "$stage/启动.command" <<'EOF'
-          #!/bin/bash
-          cd "$(dirname "$0")/app" || exit 1
-          if ! command -v node >/dev/null 2>&1; then
-            echo "未检测到 Node.js(需要 22 或更高): https://nodejs.org"
-            read -r -p "按回车退出"; exit 1
-          fi
-          echo "蓝鲸助手已启动: http://127.0.0.1:3000 (局域网: http://<本机IP>:3000)"
-          echo "按 Ctrl+C 停止"
-          node server.js
-          read -r -p "服务已退出,按回车关闭窗口"
-          EOF
-          chmod +x "$stage/启动.command"
+          chmod +x "$RUNNER_TEMP/servers/LanjingQuiz-linux-x64"
+          LANJING_LOCAL_DIR="$RUNNER_TEMP/smoke-data" PORT=4399 \
+            "$RUNNER_TEMP/servers/LanjingQuiz-linux-x64" > "$RUNNER_TEMP/smoke.log" 2>&1 &
+          pid=$!
+          ok=""
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:4399/api/status | grep -q '"loggedIn":false'; then ok=1; break; fi
+            sleep 0.5
+          done
+          kill "$pid" 2>/dev/null || true
+          [ -n "$ok" ] || { echo "smoke failed"; cat "$RUNNER_TEMP/smoke.log"; exit 1; }
 
-          cat > "$stage/启动.bat" <<'EOF'
-          @echo off
-          cd /d "%~dp0app"
-          where node >nul 2>nul
-          if errorlevel 1 (
-            echo 未检测到 Node.js(需要 22 或更高): https://nodejs.org
-            pause
-            exit /b 1
-          )
-          echo 蓝鲸助手已启动: http://127.0.0.1:3000
-          echo 按 Ctrl+C 停止
-          node server.js
-          pause
-          EOF
-
-          cat > "$stage/使用说明.txt" <<'EOF'
-          蓝鲸助手 Web 免安装包 v${{ needs.version.outputs.version }}
-          ============================================
-          运行: 双击 启动.command(macOS)或 启动.bat(Windows)。
-          前置: 本机需安装 Node.js 22 或更高版本(https://nodejs.org)。
-
-          浏览器打开 http://127.0.0.1:3000 使用;首次登录后会话保存在本地。
-
-          局域网访问: 服务默认监听所有网卡,同一局域网设备可用 http://<本机IP>:3000
-          访问,也可在「我的 > 局域网访问」关闭。⚠️ 该服务共享同一份会话,没有多用户
-          隔离/TLS/限流,只适合可信局域网,请勿暴露到公网。
-
-          iOS 练习页题库(可选): 把题库数据放到本目录 bank/data/ 下(meta.json 与
-          各分类 .jsonl),iOS 客户端即可从 /bank 下载;不放则练习页题库相关功能不可用,
-          其余功能不受影响。
-
-          停止: 在终端按 Ctrl+C。
-          EOF
-
-      - name: Package zip
-        run: |
-          cd "$RUNNER_TEMP"
-          zip -r -q "lanjing-web-${{ needs.version.outputs.version }}.zip" \
-            "lanjing-web-${{ needs.version.outputs.version }}"
-
-      - name: Upload artifact
+      - name: Upload server binaries
         uses: actions/upload-artifact@v4
         with:
-          name: web-zip
-          path: "${{ runner.temp }}/lanjing-web-${{ needs.version.outputs.version }}.zip"
+          name: web-servers
+          path: "${{ runner.temp }}/servers"
+          if-no-files-found: error
+
+  # Windows 托盘单文件。~100MB 单文件自解压 + 内嵌服务 exe 首次抽取较慢,
+  # 冒烟轮询放宽到 120 × 1s = 120s(任务契约:30s 预算偏紧)。
+  web-desktop-windows:
+    name: Web 桌面 Windows (托盘单文件)
+    needs: [version, web-desktop-services]
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Download server binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: web-servers
+          path: "${{ runner.temp }}/servers"
+
+      - name: Copy icon and server exe into the project
+        shell: bash
+        run: |
+          cp assets/desktop/icon.ico apps/desktop/windows/app.ico
+          mkdir -p apps/desktop/windows/artifacts
+          cp "$RUNNER_TEMP/servers/LanjingQuiz-server.exe" apps/desktop/windows/artifacts/
+          cp "$RUNNER_TEMP/servers/LanjingQuiz-server-arm64.exe" apps/desktop/windows/artifacts/
+
+      # -p:Version 需要纯数字版本(带 v 会编译失败/解析回退 0.0.0 → 服务缓存
+      # 永不更新):先取 needs.version.outputs.version 再去掉 v 前缀。
+      - name: Publish win-x64 single file
+        shell: bash
+        run: |
+          ver="${{ needs.version.outputs.version }}"; ver="${ver#v}"
+          cd apps/desktop/windows
+          dotnet publish LanjingQuizTray.csproj -c Release -r win-x64 --self-contained \
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:Version="$ver" \
+            -p:ServerExePath=artifacts/LanjingQuiz-server.exe \
+            -o out/win-x64
+
+      - name: Publish win-arm64 single file
+        shell: bash
+        run: |
+          ver="${{ needs.version.outputs.version }}"; ver="${ver#v}"
+          cd apps/desktop/windows
+          dotnet publish LanjingQuizTray.csproj -c Release -r win-arm64 --self-contained \
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:Version="$ver" \
+            -p:ServerExePath=artifacts/LanjingQuiz-server-arm64.exe \
+            -o out/win-arm64
+
+      - name: Smoke test (x64)
+        shell: bash
+        run: |
+          cd apps/desktop/windows/out/win-x64
+          cp LanjingQuiz.exe "$RUNNER_TEMP/LanjingQuiz.exe"
+          (cd "$RUNNER_TEMP" && ./LanjingQuiz.exe) &
+          ok=""
+          for i in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:3000/api/status | grep -q '"loggedIn":false'; then ok=1; break; fi
+            sleep 1
+          done
+          [ -n "$ok" ] || { echo "smoke failed"; exit 1; }
+          taskkill //F //IM LanjingQuiz.exe //T
+          taskkill //F //IM LanjingQuiz-server.exe //T 2>/dev/null || true
+
+      - name: Package deliverables
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/deliver"
+          cp apps/desktop/windows/out/win-x64/LanjingQuiz.exe "$RUNNER_TEMP/deliver/LanjingQuiz-windows-x64.exe"
+          cp apps/desktop/windows/out/win-arm64/LanjingQuiz.exe "$RUNNER_TEMP/deliver/LanjingQuiz-windows-arm64.exe"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-desktop-windows
+          path: "${{ runner.temp }}/deliver"
+          if-no-files-found: error
+
+  # macOS:.app + dmg,服务二进制来自 web-desktop-services 的交叉编译产物。
+  web-desktop-macos:
+    name: Web 桌面 macOS (.app + dmg)
+    needs: [version, web-desktop-services]
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Download server binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: web-servers
+          path: "${{ runner.temp }}/servers"
+
+      - name: Assemble .app and dmg
+        env:
+          LANJING_APP_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          bash scripts/assemble-macos-app.sh \
+            "$RUNNER_TEMP/servers/server-darwin-arm64" \
+            "$RUNNER_TEMP/servers/server-darwin-x64" \
+            "$RUNNER_TEMP/deliver"
+
+      - name: Smoke test (server binary, no GUI)
+        run: |
+          LANJING_LOCAL_DIR="$RUNNER_TEMP/smoke-data" PORT=4398 \
+            "$RUNNER_TEMP/deliver/LanjingQuiz.app/Contents/Resources/LanjingQuiz-server" \
+            > "$RUNNER_TEMP/smoke.log" 2>&1 &
+          pid=$!
+          ok=""
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:4398/api/status | grep -q '"loggedIn":false'; then ok=1; break; fi
+            sleep 0.5
+          done
+          kill "$pid" 2>/dev/null || true
+          [ -n "$ok" ] || { echo "smoke failed"; cat "$RUNNER_TEMP/smoke.log"; exit 1; }
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-desktop-macos
+          path: "${{ runner.temp }}/deliver"
+          if-no-files-found: error
+
+  web-desktop-linux:
+    name: Web 桌面 Linux (单文件)
+    needs: [version, web-desktop-services]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Download server binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: web-servers
+          path: "${{ runner.temp }}/servers"
+
+      - name: Package deliverables
+        run: |
+          mkdir -p "$RUNNER_TEMP/deliver"
+          chmod +x "$RUNNER_TEMP/servers/LanjingQuiz-linux-x64" "$RUNNER_TEMP/servers/LanjingQuiz-linux-arm64"
+          cp "$RUNNER_TEMP/servers/LanjingQuiz-linux-x64" "$RUNNER_TEMP/deliver/"
+          cp "$RUNNER_TEMP/servers/LanjingQuiz-linux-arm64" "$RUNNER_TEMP/deliver/"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-desktop-linux
+          path: "${{ runner.temp }}/deliver"
           if-no-files-found: error
 
   # Always built: unsigned Release ipa. Not directly installable — the
@@ -358,7 +473,7 @@ jobs:
 
   release:
     name: 创建 Release
-    needs: [version, web-package, ios-unsigned, ios-ipa, bank-snapshot]
+    needs: [version, web-desktop-services, web-desktop-windows, web-desktop-macos, web-desktop-linux, ios-unsigned, ios-ipa, bank-snapshot]
     if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     permissions:
@@ -379,7 +494,7 @@ jobs:
             [ -f "$f" ] && assets+=("$f")
           done
           if [ "${#assets[@]}" -eq 0 ]; then
-            echo "::warning::没有可发布的产物(web 包总是存在;ipa 需要签名密钥)"
+            echo "::warning::没有可发布的产物(桌面版产物总是存在;签名 ipa 需要签名密钥)"
           fi
           gh release create "${{ needs.version.outputs.version }}" \
             "${assets[@]}" \
