@@ -588,7 +588,12 @@ async function main() {
     // before pressing Tab so focus lands on the CTA in the first pass.
     await practiceCta.waitFor({ state: "visible" });
     await page.keyboard.press("Tab");
-    assert.equal(await practiceCta.evaluate((element) => element === document.activeElement), true);
+    // Focus landing is racy on slow runners (the gate renders right as Tab
+    // fires) — wait for the focus to land instead of asserting immediately.
+    await page.waitForFunction(() => {
+      const element = document.querySelector("[data-practice-start]");
+      return element === document.activeElement;
+    }, { timeout: 5000 });
     const ctaFocusStyle = await practiceCta.evaluate((element) => {
       const style = getComputedStyle(element);
       return { style: style.outlineStyle, width: parseFloat(style.outlineWidth) };
