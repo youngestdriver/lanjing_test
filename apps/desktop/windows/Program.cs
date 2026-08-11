@@ -12,6 +12,7 @@ internal static class Program
     private static string? _serverPath;
     private static Process? _server;
     private static NotifyIcon? _tray;
+    private static readonly HttpClient _http = new();
 
     [STAThread]
     private static void Main()
@@ -98,6 +99,7 @@ internal static class Program
         };
         var menu = new ContextMenuStrip();
         menu.Items.Add("打开浏览器", null, (_, _) => OpenBrowser());
+        menu.Items.Add("设置 Cookie 服务器…", null, (_, _) => ShowCookieCloudDialog());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("退出", null, (_, _) => Exit());
         _tray.ContextMenuStrip = menu;
@@ -118,6 +120,12 @@ internal static class Program
         {
             // Best-effort: the service may not be up yet.
         }
+    }
+
+    private static void ShowCookieCloudDialog()
+    {
+        using var form = new CookieCloudForm($"http://127.0.0.1:{ServerPort}", _http);
+        form.ShowDialog();
     }
 
     private static void Exit()
