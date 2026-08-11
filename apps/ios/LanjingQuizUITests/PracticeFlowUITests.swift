@@ -3,7 +3,8 @@ import XCTest
 /// Exercises the practice flow end-to-end against an in-process mock
 /// upstream (LANJING_BASE_URL launch env): login → 练习 → auto-crawl of the
 /// whole 机考题库 → 分类 (counts from the local bank) → 题型 → 答题 → 完成,
-/// then asserts the crawl best-effort-ended the fresh attempt exactly once.
+/// plus the 5 issue regressions: wrong-option marking, 答题卡 jump, 题干高度,
+/// mid-run persistence across relaunch and full-screen quiz page.
 /// Hermetic: runs in CI without any local server.
 ///
 /// Setup happens inline in the test method (not in setUp/tearDown): those
@@ -22,7 +23,9 @@ final class PracticeFlowUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["LANJING_BASE_URL"] = "http://127.0.0.1:\(server.port)"
         // Wipe the local bank so the crawl (and its attempt-end) runs on
-        // every execution, not just the first one per simulator.
+        // every execution, not just the first one per simulator. -reset-bank
+        // also clears the persisted practice session (AppState.start), so
+        // every run starts at 第 1/.
         app.launchArguments = ["-reset-bank"]
         app.launch()
         logInIfNeeded(app)
@@ -33,11 +36,12 @@ final class PracticeFlowUITests: XCTestCase {
         XCTAssertTrue(practiceTab.waitForExistence(timeout: 10), "练习 tab missing")
         practiceTab.tap()
 
-        // Both mock papers are 言语理解 with the same q1–q3 batch — the crawl
-        // dedupes by _id, so the category holds exactly 3 questions.
+        // Both mock papers are 言语理解 with the same q1–q5 batch — the crawl
+        // dedupes by _id, so the category holds exactly 5 questions (q1–q3
+        // 成语辨析 + q4/q5 虚词辨析; the latter pair feeds the 题干高度 test).
         let categoryRow = app.staticTexts["言语理解"]
         XCTAssertTrue(categoryRow.waitForExistence(timeout: 20), "category list never appeared (crawl failed?)")
-        XCTAssertTrue(app.staticTexts["3 题"].waitForExistence(timeout: 5), "category count missing")
+        XCTAssertTrue(app.staticTexts["5 题"].waitForExistence(timeout: 5), "category count missing")
         categoryRow.tap()
 
         // Subcategory list groups the crawled questions by 题型细分.
@@ -49,7 +53,7 @@ final class PracticeFlowUITests: XCTestCase {
         let header = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 1/'")).firstMatch
         XCTAssertTrue(header.waitForExistence(timeout: 10), "quiz screen is blank — no question header")
 
-        // Answer all three questions, then finish (the last one shows 完成).
+        // Answer all three 成语辨析 questions, then finish (the last one shows 完成).
         let headers = ["第 1/", "第 2/", "第 3/"]
         for (index, expected) in headers.enumerated() {
             let currentHeader = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '\(expected)'")).firstMatch
@@ -102,6 +106,248 @@ final class PracticeFlowUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter().wait(for: [reEnabled], timeout: 10), .completed,
                        "更新题库 did not re-enable after refresh")
+    }
+
+    /// 问题 2 (选错选项标红) + 问题 5 (答题卡) + 问题 4 (全屏) regression test.
+    /// q1's answer is A, so tapping B must mark the row wrong via the
+    /// "option-B-wrong" accessibility identifier; the answer card sheet then
+    /// jumps to any question and back.
+    func testPracticeWrongOptionMarkedAndAnswerCard() throws {
+        continueAfterFailure = false
+
+        let server = MockUpstreamServer()
+        try server.start()
+        defer { server.stop() }
+
+        let app = XCUIApplication()
+        app.launchEnvironment["LANJING_BASE_URL"] = "http://127.0.0.1:\(server.port)"
+        app.launchArguments = ["-reset-bank"]
+        app.launch()
+        logInIfNeeded(app)
+
+        enterSubcategory("成语辨析", app: app)
+
+        // 问题 4: the pushed quiz page hides the tab bar (full screen).
+        let header = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 1/'")).firstMatch
+        XCTAssertTrue(header.waitForExistence(timeout: 10), "quiz screen is blank — no question header")
+        let profileTab = app.tabBars.buttons["我的"]
+        XCTAssertTrue(waitForDisappearance(profileTab, timeout: 5),
+                      "tab bar still visible on the quiz page (问题 4)")
+
+        // 问题 2: tap the WRONG option (B; q1's answer is A) — the row must
+        // be marked "option-B-wrong"; the unselected correct row gets no
+        // verdict identifier.
+        let wrongOption = app.buttons["B"]
+        XCTAssertTrue(wrongOption.waitForExistence(timeout: 5), "option row missing")
+        wrongOption.tap()
+        XCTAssertTrue(app.buttons["option-B-wrong"].waitForExistence(timeout: 5),
+                      "wrongly-tapped option was not marked (问题 2)")
+        XCTAssertFalse(app.buttons["option-A-wrong"].exists, "unselected correct row must not be marked")
+
+        // 问题 5: the answer card sheet opens, all dots render, tapping a dot
+        // jumps the header (and closes the sheet).
+        let answerCardButton = app.buttons["答题卡"]
+        XCTAssertTrue(answerCardButton.waitForExistence(timeout: 5), "答题卡 button missing")
+        answerCardButton.tap()
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 5), "answer card sheet never appeared")
+        // The dot grid lives in the sheet's ScrollView — scoping there keeps
+        // the numeric dot buttons unambiguous (the stats bar above the grid
+        // also carries numeric labels like "1"/"2").
+        let dots = sheet.scrollViews.firstMatch
+        for dot in ["1", "2", "3"] {
+            XCTAssertTrue(dots.buttons[dot].waitForExistence(timeout: 5), "answer card dot \(dot) missing")
+        }
+        dots.buttons["3"].tap()
+
+        let header3 = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 3/'")).firstMatch
+        XCTAssertTrue(header3.waitForExistence(timeout: 5), "jump to question 3 did not move the header")
+        XCTAssertTrue(waitForDisappearance(sheet, timeout: 5), "answer card sheet did not dismiss")
+        // 问题 4 stays fixed after a jump.
+        XCTAssertTrue(waitForDisappearance(profileTab, timeout: 5), "tab bar reappeared after jump")
+
+        answerCardButton.tap()
+        XCTAssertTrue(sheet.waitForExistence(timeout: 5), "answer card sheet never reappeared")
+        dots.buttons["2"].tap()
+        let header2 = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 2/'")).firstMatch
+        XCTAssertTrue(header2.waitForExistence(timeout: 5), "jump to question 2 did not move the header")
+        XCTAssertTrue(waitForDisappearance(sheet, timeout: 5), "answer card sheet did not dismiss")
+
+        // Finish the run to leave a clean persisted state.
+        answerCurrentQuestion(app, letter: "A", advance: "下一题")
+        answerCurrentQuestion(app, letter: "A", advance: "完成")
+        XCTAssertTrue(app.staticTexts["练习完成"].waitForExistence(timeout: 10), "summary card never appeared")
+    }
+
+    /// 问题 1 regression: the 题干 web view must resize with the question, in
+    /// BOTH directions. 虚词辨析 holds q4 (short 题干) then q5 (very long 题干):
+    /// short → long must grow, and jumping back (答题卡) long → short must
+    /// shrink — the old bug kept the previous question's height. The 答题卡
+    /// nav-bar button stays on-screen even when the long 题干 fills the page,
+    /// so no scrolling is needed.
+    func testPracticeStemHeightTracksQuestion() throws {
+        continueAfterFailure = false
+
+        let server = MockUpstreamServer()
+        try server.start()
+        defer { server.stop() }
+
+        let app = XCUIApplication()
+        app.launchEnvironment["LANJING_BASE_URL"] = "http://127.0.0.1:\(server.port)"
+        app.launchArguments = ["-reset-bank"]
+        app.launch()
+        logInIfNeeded(app)
+
+        enterSubcategory("虚词辨析", app: app)
+
+        let header = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 1/'")).firstMatch
+        XCTAssertTrue(header.waitForExistence(timeout: 10), "quiz screen is blank — no question header")
+
+        // The question 题干 is the FIRST web view in the tree (headerRow is
+        // plain text; option rows follow). Web-view frames are not
+        // KVC-compliant, so poll instead of NSPredicate expectations.
+        let questionWebView = app.webViews.element(boundBy: 0)
+        XCTAssertTrue(waitForElement(questionWebView, shorterThan: 200, timeout: 10),
+                      "short question 题干 did not render short")
+
+        // Short → long: answering q4 and advancing to the long q5 must grow
+        // the 题干 (a stale height would keep it small — 问题 1).
+        answerCurrentQuestion(app, letter: "A", advance: "下一题")
+        let header2 = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 2/'")).firstMatch
+        XCTAssertTrue(header2.waitForExistence(timeout: 10), "question 2 header missing")
+        XCTAssertTrue(waitForElement(questionWebView, tallerThan: 400, timeout: 10),
+                      "long question 题干 did not render tall (问题 1)")
+        let longHeight = questionWebView.frame.height
+
+        // Long → short (the user's exact complaint): jump back to q4 via the
+        // answer card — the short 题干 must shrink, not keep the long height.
+        let answerCardButton = app.buttons["答题卡"]
+        XCTAssertTrue(answerCardButton.waitForExistence(timeout: 5), "答题卡 button missing")
+        answerCardButton.tap()
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 5), "answer card sheet never appeared")
+        sheet.scrollViews.firstMatch.buttons["1"].tap()
+        let header1 = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 1/'")).firstMatch
+        XCTAssertTrue(header1.waitForExistence(timeout: 5), "jump back to question 1 did not move the header")
+        XCTAssertTrue(waitForDisappearance(sheet, timeout: 5), "answer card sheet did not dismiss")
+        XCTAssertTrue(waitForElement(questionWebView, shorterThan: 200, timeout: 10),
+                      "short question kept the previous long height (问题 1)")
+        XCTAssertLessThan(questionWebView.frame.height, longHeight * 0.6,
+                          "short question 题干 did not shrink relative to the long one")
+    }
+
+    /// 问题 3 regression: a mid-run session survives app termination and
+    /// relaunch (no -reset-bank on the second launch), resuming at the same
+    /// question with the one-off "已恢复上次练习进度" banner.
+    func testPracticeSessionResumesAfterTerminate() throws {
+        continueAfterFailure = false
+
+        let server = MockUpstreamServer()
+        try server.start()
+        defer { server.stop() }
+
+        let app = XCUIApplication()
+        app.launchEnvironment["LANJING_BASE_URL"] = "http://127.0.0.1:\(server.port)"
+
+        // Launch 1: crawl a fresh bank, answer q1, advance to question 2,
+        // then kill the app — the mid-run session must survive on disk.
+        app.launchArguments = ["-reset-bank"]
+        app.launch()
+        logInIfNeeded(app)
+        enterSubcategory("成语辨析", app: app)
+        let header1 = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 1/'")).firstMatch
+        XCTAssertTrue(header1.waitForExistence(timeout: 10), "quiz screen is blank — no question header")
+        answerCurrentQuestion(app, letter: "A", advance: "下一题")
+        let header2 = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 2/'")).firstMatch
+        XCTAssertTrue(header2.waitForExistence(timeout: 5), "did not advance to question 2")
+        app.terminate()
+
+        // Launch 2 WITHOUT -reset-bank: the local bank and the persisted
+        // session survive, so re-entering the same subcategory resumes at
+        // question 2 (the Keychain login persists across launches; if the
+        // simulator lost it, logInIfNeeded re-logs-in).
+        app.launchArguments = []
+        app.launch()
+        logInIfNeeded(app)
+
+        enterSubcategory("成语辨析", app: app)
+        let resumedHeader = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 2/'")).firstMatch
+        XCTAssertTrue(resumedHeader.waitForExistence(timeout: 10),
+                      "session did not resume at question 2 (问题 3)")
+        // The resumed session is live: 答题卡 button present (not finished).
+        XCTAssertTrue(app.buttons["答题卡"].waitForExistence(timeout: 5), "答题卡 button missing after resume")
+
+        // The one-off resume banner appears; 知道了 dismisses it.
+        let banner = app.staticTexts["已恢复上次练习进度"]
+        XCTAssertTrue(banner.waitForExistence(timeout: 5), "resume banner missing")
+        let gotIt = app.buttons["知道了"]
+        XCTAssertTrue(gotIt.waitForExistence(timeout: 5), "banner dismiss button missing")
+        gotIt.tap()
+        XCTAssertTrue(waitForDisappearance(banner, timeout: 5), "banner did not dismiss")
+
+        // Complete the resumed run.
+        answerCurrentQuestion(app, letter: "A", advance: "下一题")
+        answerCurrentQuestion(app, letter: "A", advance: "完成")
+        XCTAssertTrue(app.staticTexts["练习完成"].waitForExistence(timeout: 10), "summary card never appeared")
+    }
+
+    // MARK: - Helpers
+
+    /// 练习 tab → category row → subcategory row (each level waits for its
+    /// content to exist — same wait pattern as the main flow test).
+    private func enterSubcategory(_ name: String, app: XCUIApplication, category: String = "言语理解") {
+        let practiceTab = app.tabBars.buttons["练习"]
+        XCTAssertTrue(practiceTab.waitForExistence(timeout: 10), "练习 tab missing")
+        practiceTab.tap()
+
+        let categoryRow = app.staticTexts[category]
+        XCTAssertTrue(categoryRow.waitForExistence(timeout: 20), "category list never appeared (crawl failed?)")
+        categoryRow.tap()
+
+        let subRow = app.staticTexts[name]
+        XCTAssertTrue(subRow.waitForExistence(timeout: 10), "subcategory list is blank — no rows appeared")
+        subRow.tap()
+    }
+
+    /// Tap an option letter, then the reveal button ("下一题" / "完成").
+    private func answerCurrentQuestion(_ app: XCUIApplication, letter: String, advance: String) {
+        let option = app.buttons[letter]
+        XCTAssertTrue(option.waitForExistence(timeout: 5), "option row missing")
+        option.tap()
+        let button = app.buttons[advance]
+        XCTAssertTrue(button.waitForExistence(timeout: 5), "answer did not reveal the \(advance) button")
+        button.tap()
+    }
+
+    /// Bounded polling for XCUIElement geometry: frame is a C struct (not
+    /// KVC-compliant), so NSPredicate expectations cannot wait on it.
+    private func waitForElement(_ element: XCUIElement, tallerThan height: CGFloat, timeout: TimeInterval = 10) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if element.exists, element.frame.height > height { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        return element.exists && element.frame.height > height
+    }
+
+    private func waitForElement(_ element: XCUIElement, shorterThan height: CGFloat, timeout: TimeInterval = 10) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if element.exists, element.frame.height < height { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        return element.exists && element.frame.height < height
+    }
+
+    /// Bounded polling until an element leaves the hierarchy (tab-bar hiding,
+    /// sheet dismissal, banner dismissal).
+    private func waitForDisappearance(_ element: XCUIElement, timeout: TimeInterval = 5) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if !element.exists { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        return !element.exists
     }
 
     /// Taps the nav bar's back button, waiting for it to exist first (pop

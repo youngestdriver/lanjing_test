@@ -22,15 +22,20 @@ final class AppState {
     let api: APIClient
     let cookieCloudSync: CookieCloudSync
     let bankStorage: BankStorage
+    /// Practice-run persistence (Application Support/LanjingQuiz/
+    /// practice-session.json), injected like bankStorage so tests can fake it.
+    let practiceSessionStore: FileManagerPracticeSessionStore
     /// Bumped whenever the local bank is deleted (我的 > 删除题库) so every
     /// PracticeBankViewModel instance (练习 tab and 我的 tab create their own)
     /// resets and re-crawls on its next appearance.
     private(set) var bankResetVersion = 0
 
-    init(api: APIClient = APIClient(), bankStorage: BankStorage = FileManagerBankStorage()) {
+    init(api: APIClient = APIClient(), bankStorage: BankStorage = FileManagerBankStorage(),
+         practiceSessionStore: FileManagerPracticeSessionStore = FileManagerPracticeSessionStore()) {
         self.api = api
         self.cookieCloudSync = CookieCloudSync(cookieStore: api.cookieStore)
         self.bankStorage = bankStorage
+        self.practiceSessionStore = practiceSessionStore
         self.theme = Theme.load()
         self.autoAdvanceOnCorrect = QuizSettings.loadAutoAdvanceOnCorrect()
     }
@@ -45,6 +50,10 @@ final class AppState {
         // passed in production builds).
         if ProcessInfo.processInfo.arguments.contains("-reset-bank") {
             try? bankStorage.removeAll()
+            // Also drop any persisted practice run: otherwise a stale archive
+            // from the previous test execution resumes at question 2/3 and
+            // breaks "第 1/" assertions.
+            try? await practiceSessionStore.clear()
         }
         #endif
         let hasSession = await cookieCloudSync.pullAndApplyIfNeeded()
@@ -102,11 +111,14 @@ final class AppState {
     }
 
     /// Wipe the local question bank (我的 > 题库 > 删除题库). Also clears the
-    /// crawl log (it lives in the bank dir); re-entering the practice tab
-    /// re-crawls everything from scratch.
+    /// crawl log (it lives in the bank dir) and the persisted practice
+    /// session; re-entering the practice tab re-crawls everything from
+    /// scratch. (PracticeBankViewModel.bankWasDeleted clears the session file
+    /// too — double insurance.)
     func deleteBank() {
         try? bankStorage.removeAll()
         bankResetVersion += 1
         notice = "题库已删除，重新进入练习页会重新爬取全部试卷"
+        Task { try? await practiceSessionStore.clear() }
     }
 }

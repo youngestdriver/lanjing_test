@@ -21,6 +21,7 @@ final class PracticeBankViewModel {
     private let appState: AppState
     private let storage: BankStorage
     private let facade: PracticeUpstreamClient
+    private let sessionStore: any PracticeSessionStoring
 
     /// The underlying store, exposed for the 我的 > 题库 > 日志导出 row.
     var bankStore: BankStorage { storage }
@@ -29,22 +30,31 @@ final class PracticeBankViewModel {
     var meta: BankMeta?
     var subcategories: [(name: String, count: Int)] = []
     var session: PracticeSession?
+    /// True when the current session was resumed from disk. Shown as a one-off
+    /// banner by the quiz view; consumeResumeNotice() clears it (not persisted).
+    private(set) var resumedFromDisk = false
 
-    init(appState: AppState, storage: BankStorage? = nil, facade: PracticeUpstreamClient? = nil) {
+    init(appState: AppState, storage: BankStorage? = nil, facade: PracticeUpstreamClient? = nil,
+         sessionStore: (any PracticeSessionStoring)? = nil) {
         self.appState = appState
         self.storage = storage ?? appState.bankStorage
         self.facade = facade ?? PracticeUpstreamClient(api: appState.api)
+        self.sessionStore = sessionStore ?? appState.practiceSessionStore
     }
 
     // MARK: - Bank availability
 
     /// Reset after the local bank was deleted elsewhere (我的 > 删除题库):
-    /// the next ensureBankReady re-crawls everything from scratch.
+    /// the next ensureBankReady re-crawls everything from scratch. The
+    /// persisted practice session is cleared too (AppState.deleteBank also
+    /// clears it — double insurance for the settings screen's own VM).
     func bankWasDeleted() {
         phase = .idle
         meta = nil
         subcategories = []
         session = nil
+        resumedFromDisk = false
+        Task { try? await sessionStore.clear() }
     }
 
     /// Entry point from the practice tab's .task: use the local bank when
@@ -80,6 +90,12 @@ final class PracticeBankViewModel {
             }
             meta = storage.loadMeta()
             phase = .ready
+            if force {
+                // 题库内容可能已变化:按恢复规则(问题 ID 顺序比对)旧存档
+                // 不可能再匹配,清掉避免残留;失败(refresh 模式)不清,
+                // 旧库保留,存档依然有效。
+                Task { try? await sessionStore.clear() }
+            }
         } catch is CancellationError {
             // Tab switched away mid-crawl: per-paper meta.papers progress is
             // persisted, so the next entry resumes without re-entering papers.
@@ -108,17 +124,31 @@ final class PracticeBankViewModel {
 
     /// Local-only session start (no network): parse the category file, filter
     /// by 题型细分, optionally shuffle (comb stems stay grouped — see
-    /// BankLogic.shuffledKeepingGroups).
-    func startSession(category: String, subCategory: String) {
+    /// BankLogic.shuffledKeepingGroups). A persisted run resumes — and is NOT
+    /// reshuffled (the archive already contains the shuffled order) — when
+    /// BankLogic.resumeCandidate matches; otherwise a fresh session is created
+    /// and persisted once. Returns whether a saved run was resumed.
+    @discardableResult
+    func resumeOrStart(category: String, subCategory: String) async -> Bool {
         guard let text = storage.loadCategoryText(category) else {
             phase = .failed("本地题库缺少 \(category).jsonl，请在 我的 > 更新题库 重新爬取")
-            return
+            return false
         }
         let questions = BankLogic.parseJSONL(text).filter { $0.subCategory == subCategory }
         let ordered = shuffleEnabled(category: category)
             ? BankLogic.shuffledKeepingGroups(questions, seed: UInt64.random(in: .min ... .max))
             : questions
+        let saved = await sessionStore.load()
+        if let resume = BankLogic.resumeCandidate(saved: saved, category: category, subCategory: subCategory,
+                                                  ordered: ordered) {
+            session = resume
+            resumedFromDisk = true
+            return true
+        }
         session = PracticeSession(category: category, subCategory: subCategory, questions: ordered)
+        resumedFromDisk = false
+        persist()
+        return false
     }
 
     // MARK: - Shuffle preference (per-category, persisted independently)
@@ -138,19 +168,33 @@ final class PracticeBankViewModel {
         "practice.shuffle.\(category)"
     }
 
-    /// Clears the finished session (the quiz view dismisses itself via
-    /// @Environment(\.dismiss) when popping back).
+    /// Explicit exit (summary screen's 返回题型列表): drops the in-memory
+    /// session and the persisted file — a finished run must never resume.
+    /// (Plain system-back / swipe-back no longer clears anything: the ID-order
+    /// resumeCandidate check is what prevents stale sessions from leaking.)
     func endSession() {
         session = nil
+        resumedFromDisk = false
+        Task { try? await sessionStore.clear() }
     }
 
-    /// Called on quiz-view disappear (including the system back button):
-    /// clears only a session that belongs to this quiz, so a stale session
-    /// can never leak into a later entry of the same subcategory.
-    func endSessionIfCurrent(category: String, subCategory: String) {
-        if session?.category == category && session?.subCategory == subCategory {
-            session = nil
-        }
+    /// Dismisses the "已恢复上次练习进度" banner. Not persisted — the flag is
+    /// reset on every resumeOrStart.
+    func consumeResumeNotice() {
+        resumedFromDisk = false
+    }
+
+    // MARK: - Persistence
+
+    /// Snapshot-and-save the current session. The snapshot is captured at
+    /// call time (value copy); the actor serializes writes so rapid mutations
+    /// land in order (last write wins); failures are silent — the next
+    /// mutation rewrites the file.
+    private func persist() {
+        guard let session else { return }
+        let snapshot = session
+        let store = sessionStore
+        Task { try? await store.save(snapshot) }
     }
 
     // MARK: - Quiz
@@ -161,47 +205,70 @@ final class PracticeBankViewModel {
     }
 
     func tapOption(_ letter: String) {
-        guard var session, !session.isFinished, session.revealed == nil,
-              session.index < session.questions.count else { return }
-        let question = session.questions[session.index]
-        guard question.isGradable else {
+        guard var session, !session.isFinished, session.index < session.questions.count else { return }
+        let index = session.index
+        let question = session.questions[index]
+        var answer = session.answers[index]
+        if !question.isGradable {
             // Unknown answer: tapping reveals without grading.
-            session.revealed = PracticeSession.RevealedAnswer(selected: [letter], correct: nil)
-            self.session = session
-            return
-        }
-        if question.isMulti {
-            if session.selected.contains(letter) {
-                session.selected.remove(letter)
+            answer.selected = [letter]
+            answer.revealed = true
+            answer.correct = nil
+        } else if question.isMulti {
+            if answer.selected.contains(letter) {
+                answer.selected.remove(letter)
             } else {
-                session.selected.insert(letter)
+                answer.selected.insert(letter)
             }
-            self.session = session
         } else {
-            let selected: Set<String> = [letter]
-            let correct = BankLogic.grade(selected: selected, question: question)
-            session.revealed = PracticeSession.RevealedAnswer(selected: selected, correct: correct)
-            if correct == true { session.rightCount += 1 } else { session.wrongCount += 1 }
-            self.session = session
+            // Single-select grades and reveals immediately. The selected
+            // letter is written back into answers — the data-layer fix for
+            // "选错的选项没有标红" (the option row reads it from here).
+            answer.selected = [letter]
+            answer.revealed = true
+            answer.correct = BankLogic.grade(selected: answer.selected, question: question)
         }
+        session.answers[index] = answer
+        self.session = session
+        persist()
     }
 
     func confirmSelection() {
-        guard var session, session.revealed == nil, !session.selected.isEmpty,
-              session.index < session.questions.count else { return }
-        let question = session.questions[session.index]
-        let correct = BankLogic.grade(selected: session.selected, question: question)
-        session.revealed = PracticeSession.RevealedAnswer(selected: session.selected, correct: correct)
-        if correct == true { session.rightCount += 1 } else { session.wrongCount += 1 }
+        guard var session, session.index < session.questions.count else { return }
+        let index = session.index
+        var answer = session.answers[index]
+        guard !answer.revealed, !answer.selected.isEmpty else { return }
+        let question = session.questions[index]
+        answer.correct = BankLogic.grade(selected: answer.selected, question: question)
+        answer.revealed = true
+        session.answers[index] = answer
         self.session = session
+        persist()
     }
 
     func nextQuestion() {
-        guard var session, session.revealed != nil else { return }
+        guard var session, session.index < session.questions.count else { return }
         session.index += 1
-        session.selected = []
-        session.revealed = nil
         self.session = session
+        if session.isFinished {
+            // Run complete: clear the persisted file (a finished run must
+            // not resume), but keep the in-memory session for the summary.
+            Task { try? await sessionStore.clear() }
+        } else {
+            persist()
+        }
+    }
+
+    /// 答题卡 jump: move the cursor to any question (answered or not) — the
+    /// target's per-question state restores from `answers`. No-op for the
+    /// current question or out-of-range indexes. Index is part of the
+    /// persisted state, so a jump survives exit/relaunch.
+    func jumpTo(_ index: Int) {
+        guard var session, index != session.index,
+              (0 ..< session.questions.count).contains(index) else { return }
+        session.index = index
+        self.session = session
+        persist()
     }
 
     // MARK: - Helpers
@@ -224,26 +291,48 @@ final class PracticeBankViewModel {
 }
 
 /// One practice run. Value type mutated wholesale through the @Observable
-/// property (Observation's modify accessor tracks it).
-struct PracticeSession: Equatable {
+/// property (Observation's modify accessor tracks it). Per-question state
+/// lives in `answers` (index-aligned with `questions`), so the 答题卡 can jump
+/// to any question without losing pending/revealed state. Codable + Sendable
+/// let the whole run be persisted off the main actor (strict concurrency).
+struct PracticeSession: Codable, Equatable, Sendable {
     let category: String
     let subCategory: String
-    let questions: [BankQuestion]
+    let questions: [BankQuestion]           // BankQuestion 已 Codable+Sendable
     var index = 0
-    var selected: Set<String> = [] // pending multi selection
-    var revealed: RevealedAnswer? // nil = unanswered
-    var rightCount = 0
-    var wrongCount = 0
+    var answers: [PracticeAnswer]
 
-    struct RevealedAnswer: Equatable {
-        let selected: Set<String>
-        let correct: Bool? // nil = 无标准答案 (null-answer record)
+    /// One question's state: pending multi-select lives in `selected` with
+    /// `revealed == false`; after reveal `correct` is the verdict, and
+    /// `correct == nil` after reveal means 无答案 (ungradable record).
+    struct PracticeAnswer: Codable, Equatable, Sendable {
+        var selected: Set<String> = []
+        var revealed = false
+        var correct: Bool?   // nil while pending; nil after reveal = 无答案
+    }
+
+    init(category: String, subCategory: String, questions: [BankQuestion]) {
+        self.category = category
+        self.subCategory = subCategory
+        self.questions = questions
+        self.answers = questions.map { _ in PracticeAnswer() }
     }
 
     var isFinished: Bool { index >= questions.count }
+
+    var currentAnswer: PracticeAnswer? {
+        guard index < answers.count else { return nil }
+        return answers[index]
+    }
 
     var progress: Double {
         guard !questions.isEmpty else { return 0 }
         return Double(index) / Double(questions.count)
     }
+
+    // 由 answers 推导,summary 与答题卡统计永不漂移。
+    // 语义微调:无答案题(correct == nil)不再计为答错。
+    var rightCount: Int { answers.reduce(0) { $0 + ($1.correct == true ? 1 : 0) } }
+    var wrongCount: Int { answers.reduce(0) { $0 + ($1.correct == false ? 1 : 0) } }
+    var answeredCount: Int { answers.reduce(0) { $0 + ($1.revealed ? 1 : 0) } }
 }

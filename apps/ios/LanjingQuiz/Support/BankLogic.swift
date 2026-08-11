@@ -38,6 +38,19 @@ enum BankLogic {
         return selected == Set(answer.letters)
     }
 
+    /// Whether a saved session may resume: same category/subCategory, not
+    /// finished, and its question-ID order identical to the current bank's
+    /// `ordered` list. One rule covers bank updates (IDs change → fresh),
+    /// shuffle toggles (order changes → fresh) and finished runs (→ fresh).
+    /// Pure function so unit tests never need the VM.
+    static func resumeCandidate(saved: PracticeSession?, category: String, subCategory: String,
+                                ordered: [BankQuestion]) -> PracticeSession? {
+        guard let saved, saved.category == category, saved.subCategory == subCategory,
+              !saved.isFinished,
+              saved.questions.map(\.id) == ordered.map(\.id) else { return nil }
+        return saved
+    }
+
     /// Result marker for one option row after reveal: selected-but-wrong → .wrong,
     /// correct → .correct, everything else nil. (Bank variant of
     /// QuizLogic.optionResult without a question state.)
