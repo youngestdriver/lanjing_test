@@ -91,7 +91,7 @@ final class PracticeBankViewModel {
             meta = storage.loadMeta()
             phase = .ready
             if force {
-                // 题库内容可能已变化:按恢复规则(问题 ID 顺序比对)旧存档
+                // 题库内容可能已变化:按恢复规则(问题 ID 集合比对)旧存档
                 // 不可能再匹配,清掉避免残留;失败(refresh 模式)不清,
                 // 旧库保留,存档依然有效。
                 Task { try? await sessionStore.clear() }

@@ -39,15 +39,16 @@ enum BankLogic {
     }
 
     /// Whether a saved session may resume: same category/subCategory, not
-    /// finished, and its question-ID order identical to the current bank's
-    /// `ordered` list. One rule covers bank updates (IDs change → fresh),
-    /// shuffle toggles (order changes → fresh) and finished runs (→ fresh).
-    /// Pure function so unit tests never need the VM.
+    /// finished, and its question-ID SET identical to the current bank's
+    /// `ordered` list. Order no longer matters — a saved run carries its own
+    /// (possibly shuffled) order, so re-entering with 随机顺序 on resumes
+    /// progress instead of starting fresh (需求 3). Only a real bank change
+    /// (IDs added/removed) or a finished run forces a fresh start.
     static func resumeCandidate(saved: PracticeSession?, category: String, subCategory: String,
                                 ordered: [BankQuestion]) -> PracticeSession? {
         guard let saved, saved.category == category, saved.subCategory == subCategory,
               !saved.isFinished,
-              saved.questions.map(\.id) == ordered.map(\.id) else { return nil }
+              Set(saved.questions.map(\.id)) == Set(ordered.map(\.id)) else { return nil }
         return saved
     }
 

@@ -277,27 +277,27 @@ final class PracticeBankViewModelTests: XCTestCase {
         XCTAssertEqual(saveCount, 1)
     }
 
-    func testResumeOrStartFreshOnDifferentIdOrder() async throws {
+    func testResumeOrStartResumesOnDifferentIdOrder() async throws {
         let storage = FakeBankStorage()
         storage.categoryTexts = categoryTexts()
         let store = FakePracticeSessionStore()
         let original = orderedQuestions
-        // Different ID order (e.g. after a bank update or shuffle toggle).
+        // 存档顺序与当前题库顺序不同(模拟随机顺序)但 ID 集合一致 → 必须恢复,
+        // 且不再重新洗牌(存档自带其顺序)与不重复持久化(需求 3)。
         var saved = PracticeSession(category: "言语理解", subCategory: "成语辨析",
                                     questions: [original[1], original[0], original[2]])
+        saved.answers[0] = PracticeSession.PracticeAnswer(selected: ["B"], revealed: true, correct: false)
         saved.index = 1
         try await store.save(saved)
 
         let vm = makeVM(storage: storage, sessionStore: store)
         let resumed = await vm.resumeOrStart(category: "言语理解", subCategory: "成语辨析")
-        XCTAssertFalse(resumed)
-        XCTAssertFalse(vm.resumedFromDisk)
-        XCTAssertEqual(vm.session?.index, 0)
-        XCTAssertEqual(vm.session?.questions.map(\.id), original.map(\.id))
-        // Fresh run persisted once (on top of the seed save).
-        await store.awaitSaveCount(2)
+        XCTAssertTrue(resumed)
+        XCTAssertTrue(vm.resumedFromDisk)
+        XCTAssertEqual(vm.session, saved)
+        XCTAssertEqual(vm.session?.answers[0].correct, false)
         let saveCount = await store.saveCount
-        XCTAssertEqual(saveCount, 2)
+        XCTAssertEqual(saveCount, 1) // 恢复不重复持久化
     }
 
     func testResumeOrStartMissingCategoryFails() async {
