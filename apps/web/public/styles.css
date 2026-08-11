@@ -2026,5 +2026,17 @@ button:disabled {
 .practice-option-letter { font-weight: 800; width: 20px; }
 .practice-result { margin-top: 16px; border-top: 2px solid var(--border); padding-top: 12px; }
 .practice-analysis { color: var(--text2); font-size: 14px; margin: 8px 0 12px; }
+.practice-confirm { width: 100%; margin-top: 12px; }
+.practice-error {
+  max-width: 560px;
+  margin: 8px auto;
+  padding: 10px 14px;
+  border: 2px solid var(--red);
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  color: var(--red);
+  font-size: 13px;
+  font-weight: 700;
+}
 .bank-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .btn-danger { color: #ff4b4b; border-color: #ff4b4b; background: transparent; }

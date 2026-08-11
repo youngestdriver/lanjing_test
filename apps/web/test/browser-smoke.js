@@ -130,12 +130,13 @@ async function verifyPracticeOffline(browser) {
     await context.route("**/api/status", (route) => json(route, { loggedIn: true, hasSavedSession: true }));
     await context.route("**/api/practice/status", (route) => json(route, {
       loggedIn: true, isPopulated: true,
-      meta: { counts: { 言语理解: 2, 数字运算: 1 }, round: 1, lastRun: "2026-08-11T00:00:00.000Z", papers: 2 },
+      meta: { counts: { 言语理解: 3, 数字运算: 1 }, round: 1, lastRun: "2026-08-11T00:00:00.000Z", papers: 2 },
       task: { running: false, index: 0, total: 0, paperName: "", error: null, doneAt: "2026-08-11T00:00:00.000Z" },
     }));
     const practiceJSONL = [
       JSON.stringify({ _id: "p1", subCategory: "逻辑填空", question: "<p>第一题题干</p>", options: ["正确选项", "干扰项二", "干扰项三", "干扰项四"], answer: "A", analysis: "因为 A 正确。", stem: "" }),
-      JSON.stringify({ _id: "p2", subCategory: "成语辨析", question: "<p>第二题题干</p>", options: ["甲", "乙", "丙", "丁"], answer: ["A", "C"], analysis: "应同时选择甲和丙。", stem: "" }),
+      JSON.stringify({ _id: "p2", subCategory: "逻辑填空", question: "<p>第二题题干</p>", options: ["甲", "乙", "丙", "丁"], answer: ["A", "C"], analysis: "应同时选择甲和丙。", stem: "" }),
+      JSON.stringify({ _id: "p3", subCategory: "成语辨析", question: "<p>第三题题干</p>", options: ["选项甲", "选项乙", "选项丙", "选项丁"], answer: "A", analysis: "选甲。", stem: "" }),
     ].join("\n");
     await context.route("**/api/practice/categories/*", (route) => route.fulfill({
       status: 200,
@@ -155,9 +156,119 @@ async function verifyPracticeOffline(browser) {
     await page.waitForSelector("[data-practice-result]");
     const result = await page.$eval("[data-practice-result]", (el) => el.textContent.trim());
     assert.ok(result.includes("答对"), `reveal shows result: ${result}`);
+    // Multi-select: tap two options, confirm explicitly, then grade.
+    await page.click("[data-practice-next]");
+    await page.waitForSelector("[data-practice-question]");
+    await page.click('[data-practice-option="A"]');
+    await page.click('[data-practice-option="C"]');
+    await page.click("[data-practice-confirm]");
+    await page.waitForSelector("[data-practice-result]");
+    const multiResult = await page.$eval("[data-practice-result]", (el) => el.textContent.trim());
+    assert.ok(multiResult.includes("答对"), `multi reveal shows result: ${multiResult}`);
     await page.close();
   } finally {
     await context.close();
+  }
+}
+
+async function verifyPracticeStatusFailure(browser) {
+  // A failed /api/practice/status must keep the last known state and surface
+  // an error banner — it must not fake an empty bank ("题库为空") nor claim
+  // the bank is unpopulated.
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    serviceWorkers: "block",
+  });
+  try {
+    await context.route("**/api/status", (route) => json(route, { loggedIn: true, hasSavedSession: true }));
+    await context.route("**/api/practice/status", (route) => json(route, { error: "题库状态读取失败" }, 500));
+    const page = await context.newPage();
+    await page.goto(BASE_URL + "/practice", { waitUntil: "domcontentloaded" });
+    await page.waitForSelector("[data-practice-error]");
+    assert.equal(await page.locator("[data-practice-category]").count(), 0, "failed status must not render an empty bank");
+    await page.close();
+  } finally {
+    await context.close();
+  }
+}
+
+async function verifyPracticeCrawlStream(browser) {
+  // SSE race: the server's first frame is a {type:"state"} snapshot. If the
+  // task already finished between POST /crawl (202) and the subscription, the
+  // frontend must take the terminal branch instead of hanging on "正在爬取题库…".
+  {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      serviceWorkers: "block",
+    });
+    try {
+      let populated = false;
+      await context.route("**/api/status", (route) => json(route, { loggedIn: true, hasSavedSession: true }));
+      await context.route("**/api/practice/status", (route) => json(route, {
+        loggedIn: true, isPopulated: populated,
+        meta: populated ? { counts: { 言语理解: 1 }, round: 1, lastRun: "2026-08-11T00:00:00.000Z", papers: 1 }
+          : { counts: {}, round: 0, lastRun: null, papers: 0 },
+        task: { running: false, index: 0, total: 0, paperName: "", error: null, doneAt: null },
+      }));
+      await context.route("**/api/practice/crawl", (route) => {
+        populated = true; // the task finished before the SSE subscription
+        return json(route, { success: true }, 202);
+      });
+      await context.addInitScript(() => {
+        // Fake EventSource that only emits the server's first state frame:
+        // the snapshot of an already-finished task.
+        window.EventSource = class {
+          constructor() {
+            queueMicrotask(() => this.onmessage?.({ data: JSON.stringify({
+              type: "state", running: false, refresh: false, index: 1, total: 1,
+              paperName: "试卷A", error: null, doneAt: "2026-08-11T00:00:00.000Z",
+            }) }));
+          }
+          close() {}
+        };
+      });
+      const page = await context.newPage();
+      await page.goto(BASE_URL + "/practice", { waitUntil: "domcontentloaded" });
+      await page.locator("[data-practice-start]").waitFor();
+      await page.click("[data-practice-start]");
+      await page.waitForSelector("[data-practice-category]");
+      assert.equal(await page.locator("[data-practice-progress]").count(), 0, "finished task must not hang on the crawl view");
+      await page.close();
+    } finally {
+      await context.close();
+    }
+  }
+  // SSE drop: EventSource.onerror must stop the crawl view and show a hint.
+  {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      serviceWorkers: "block",
+    });
+    try {
+      await context.route("**/api/status", (route) => json(route, { loggedIn: true, hasSavedSession: true }));
+      await context.route("**/api/practice/status", (route) => json(route, {
+        loggedIn: true, isPopulated: false,
+        meta: { counts: {}, round: 0, lastRun: null, papers: 0 },
+        task: { running: false, index: 0, total: 0, paperName: "", error: null, doneAt: null },
+      }));
+      await context.route("**/api/practice/crawl", (route) => json(route, { success: true }, 202));
+      await context.addInitScript(() => {
+        window.EventSource = class {
+          constructor() { queueMicrotask(() => this.onerror?.()); }
+          close() {}
+        };
+      });
+      const page = await context.newPage();
+      await page.goto(BASE_URL + "/practice", { waitUntil: "domcontentloaded" });
+      await page.locator("[data-practice-start]").waitFor();
+      await page.click("[data-practice-start]");
+      await page.waitForSelector("[data-practice-error]");
+      await page.locator("[data-practice-start]").waitFor();
+      assert.equal(await page.locator("[data-practice-progress]").count(), 0, "dropped stream must stop the crawl view");
+      await page.close();
+    } finally {
+      await context.close();
+    }
   }
 }
 
@@ -733,6 +844,8 @@ async function main() {
     assert.equal(submitAttempts, 3);
     assert.deepEqual(pageErrors, []);
     await verifyPracticeOffline(browser);
+    await verifyPracticeStatusFailure(browser);
+    await verifyPracticeCrawlStream(browser);
     await verifyOfflineShell(browser);
 
     console.log(JSON.stringify({

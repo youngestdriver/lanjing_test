@@ -21,6 +21,9 @@ const Practice = (() => {
   // 最近一次 /api/practice/status 结果。refreshStatus 写入,renderCategories
   // 读取(分类列表依赖 meta.counts,与窗口刷新后的状态保持一致)。
   let status = null;
+  // 最近一次失败提示(status 读取失败 / 题库读取失败 / 爬取连接中断)。
+  // 失败时保留上一次成功状态,仅在顶部显示错误横幅,不重置视图。
+  let lastError = null;
   const root = () => document.getElementById("practiceRoot");
   const bankStatus = () => document.querySelector("[data-practice-bank-status]");
 
@@ -49,10 +52,27 @@ const Practice = (() => {
     } else {
       renderQuiz(el);
     }
+    if (lastError) {
+      const banner = document.createElement("div");
+      banner.className = "practice-error";
+      banner.setAttribute("data-practice-error", "");
+      banner.textContent = lastError;
+      el.insertBefore(banner, el.firstChild);
+    }
   }
 
   async function refreshStatus() {
-    status = await api("/api/practice/status");
+    const result = await api("/api/practice/status");
+    if (result.error) {
+      // 读取失败:保留上一次成功状态与视图,顶部显示错误提示,不把已爬取的
+      // 题库误渲染为"题库为空",也不在未爬取时显示误导性的爬取门。
+      lastError = result.error || "题库状态读取失败";
+      if (bankStatus() && !status) bankStatus().textContent = "题库状态读取失败";
+      render();
+      return;
+    }
+    status = result;
+    lastError = null;
     const meta = status.meta;
     const counts = meta ? meta.counts : {};
     if (status.isPopulated && view === "start") view = "categories";
@@ -93,10 +113,18 @@ const Practice = (() => {
 
   async function openCategory(name) {
     category = name;
-    const text = await (await fetch(`/api/practice/categories/${encodeURIComponent(name)}`)).text();
-    const questionsList = PracticeCore.parseJSONL(text);
-    groups = PracticeCore.groupBySubcategory(questionsList);
-    view = "subcategories";
+    try {
+      const response = await fetch(`/api/practice/categories/${encodeURIComponent(name)}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const text = await response.text();
+      const questionsList = PracticeCore.parseJSONL(text);
+      groups = PracticeCore.groupBySubcategory(questionsList);
+      view = "subcategories";
+      lastError = null;
+    } catch (error) {
+      // 题库读取失败:停留在当前视图并显示错误横幅,不卡死在半途状态。
+      lastError = "题库读取失败,请重试";
+    }
     render();
   }
 
@@ -157,6 +185,11 @@ const Practice = (() => {
     }).join("");
     const badge = !revealed && isMulti ? "<span class=\"practice-badge\">多选</span>"
       : !revealed && (question.answer == null || question.answer === "") ? "<span class=\"practice-badge\">无答案</span>" : "";
+    // 多选未判分时必须显式确认才判分(语义同 app.js confirmMultiSelection),
+    // 否则选择永远不会被判定,也无法进入下一题。
+    const confirmHtml = !revealed && isMulti
+      ? `<button type="button" class="cta-btn practice-confirm" data-practice-confirm onclick="PracticeConfirm()" ${selected.size ? "" : "disabled"}>确认</button>`
+      : "";
     const resultHtml = revealed ? `<div class="practice-result" data-practice-result>
       ${revealed.correct === null ? "<p>无标准答案</p>" : revealed.correct ? "<p>答对 ✓</p>" : "<p>答错 ✗</p>"}
       ${question.analysis ? `<div class="practice-analysis">${question.analysis}</div>` : ""}
@@ -176,6 +209,7 @@ const Practice = (() => {
       ${stemHtml}
       <div class="q-block">${question.question}</div>
       <div class="practice-options">${optionRows}</div>
+      ${confirmHtml}
       ${resultHtml}
     </div>`;
   }
@@ -190,6 +224,19 @@ const Practice = (() => {
       return;
     }
     selected = new Set([letter]);
+    const correct = PracticeCore.grade(selected, question);
+    revealed = { selected, correct };
+    if (correct === true) right += 1;
+    else if (correct === false) wrong += 1;
+    render();
+  }
+
+  // 多选判分:与 app.js confirmMultiSelection 相同的"显式确认"语义。
+  function confirmSelection() {
+    const question = questions[index];
+    if (revealed || !question) return;
+    if (!(Array.isArray(question.answer) && question.answer.length > 1)) return;
+    if (!selected.size) return;
     const correct = PracticeCore.grade(selected, question);
     revealed = { selected, correct };
     if (correct === true) right += 1;
@@ -223,27 +270,54 @@ const Practice = (() => {
     });
   }
 
+  function finishCrawl(kind, message) {
+    if (!eventSource) return;
+    eventSource.close();
+    eventSource = null;
+    if (kind === "done") {
+      view = "categories";
+      refreshStatus();
+    } else {
+      lastError = message || "爬取失败,请重试";
+      view = "start";
+      render();
+    }
+  }
+
   function openEvents() {
     if (eventSource) eventSource.close();
     eventSource = new EventSource("/api/practice/events");
     eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+      let data;
+      try { data = JSON.parse(event.data); } catch { return; }
       const progress = root()?.querySelector("[data-practice-progress]");
       const paper = root()?.querySelector("[data-practice-paper]");
       if (data.type === "progress" && progress) {
         progress.textContent = `正在爬取题库（${data.index}/${data.total}）`;
         if (paper) paper.textContent = data.paperName || "";
+      } else if (data.type === "state") {
+        // 服务端首帧快照:任务可能在 POST 202 与订阅之间已完成/失败(竞态),
+        // 直接走对应终态分支,避免永久卡在"正在爬取题库…"。
+        if (data.error) finishCrawl("error", data.error);
+        else if (!data.running && data.doneAt) finishCrawl("done");
+        else if (progress) {
+          progress.textContent = `正在爬取题库（${data.index}/${data.total}）`;
+          if (paper) paper.textContent = data.paperName || "";
+        }
       } else if (data.type === "done") {
-        eventSource.close();
-        eventSource = null;
-        view = "categories";
-        refreshStatus();
+        finishCrawl("done");
       } else if (data.type === "error") {
-        eventSource.close();
-        eventSource = null;
-        view = "start";
-        render();
+        finishCrawl("error", data.message);
       }
+    };
+    eventSource.onerror = () => {
+      // 连接中断兜底:停止"爬取中"状态并显示失败提示,可重试。
+      if (!eventSource) return;
+      eventSource.close();
+      eventSource = null;
+      lastError = "爬取进度连接中断,请重试";
+      view = "start";
+      render();
     };
   }
 
@@ -265,6 +339,7 @@ const Practice = (() => {
   window.PracticeOpenCategory = openCategory;
   window.PracticeStartSession = startSession;
   window.PracticeTapOption = tapOption;
+  window.PracticeConfirm = confirmSelection;
   window.PracticeNext = nextQuestion;
   window.PracticeToggleShuffle = (enabled) => { setShuffleEnabled(enabled); render(); };
   window.PracticeBackToCategories = () => { view = "categories"; render(); };
