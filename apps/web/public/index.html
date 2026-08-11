@@ -89,12 +89,7 @@
           <h1 id="practiceHeading" tabindex="-1">练习</h1>
         </div>
       </header>
-      <div class="empty-home-view">
-        <div class="empty-home-symbol" aria-hidden="true"></div>
-        <h2>开始练习</h2>
-        <p>从考试列表选择一份试卷开始答题</p>
-        <button type="button" class="cta-btn" onclick="openHomeTab('exams')">前往考试列表</button>
-      </div>
+      <div id="practiceRoot" class="practice-root" aria-live="polite"></div>
     </section>
 
     <section class="home-view" data-home-view="profile" aria-labelledby="profileHeading" hidden>
@@ -174,6 +169,17 @@
               <button type="button" class="btn-style" data-cookiecloud-sync onclick="syncCookieCloudNow()">立即同步</button>
             </div>
           </div>
+          <div class="settings-row settings-row-wide">
+            <div>
+              <h2>题库</h2>
+              <p data-practice-bank-status>正在检查…</p>
+            </div>
+            <div class="bank-actions">
+              <button type="button" class="btn-style" data-practice-update onclick="practiceUpdateBank()">更新题库</button>
+              <button type="button" class="btn-style" data-practice-log onclick="practiceDownloadLog()">日志导出</button>
+              <button type="button" class="btn-style btn-danger" data-practice-delete onclick="practiceDeleteBank()">删除题库</button>
+            </div>
+          </div>
           <div class="settings-row settings-row-danger">
             <div>
               <h2>登录状态</h2>
@@ -231,6 +237,8 @@
 </section>
 
 <script src="/js/quiz-core.js"></script>
+<script src="/js/practice-core.js"></script>
+<script src="/js/practice.js"></script>
 <script src="/js/app.js"></script>
 </body>
 </html>

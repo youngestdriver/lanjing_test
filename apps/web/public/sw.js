@@ -1,5 +1,5 @@
 const CACHE="quiz-v5";
-const SHELL=["/","/manifest.json","/styles.css","/js/quiz-core.js","/js/app.js","/icon-192.png","/icon-512.png"];
+const SHELL=["/","/manifest.json","/styles.css","/js/quiz-core.js","/js/practice-core.js","/js/practice.js","/js/app.js","/icon-192.png","/icon-512.png"];
 
 self.addEventListener("install",e=>{
   e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));
