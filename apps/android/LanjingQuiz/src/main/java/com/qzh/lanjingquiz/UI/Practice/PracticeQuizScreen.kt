@@ -403,7 +403,7 @@ private fun PracticeOptionRow(
         Keycap(mark = mark, answered = isAnswered, letter = letter, isSelected = isSelected)
         if (isEmptySlot) {
             Text(
-                "(填空)",
+                "（填空）",
                 fontSize = 15.sp,
                 color = Color(0xFF8E8E93),
                 modifier = Modifier.padding(top = 5.dp),

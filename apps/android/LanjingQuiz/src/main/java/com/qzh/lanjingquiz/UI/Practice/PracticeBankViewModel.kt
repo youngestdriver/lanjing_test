@@ -132,6 +132,16 @@ class PracticeBankViewModel @Inject constructor(
         appState.showNotice("题库已删除，重新进入练习页会重新爬取全部试卷")
     }
 
+    /**
+     * 失败屏"重试":复位为 Idle 后重走 ensureBankReady —— ensureBankReady 仅 Idle 才跑,
+     * Failed 相位下直接调用是 no-op(重试死路)。增量爬取经 meta.papers 从中断处继续。
+     */
+    fun retry() {
+        if (_phase.value !is BankPhase.Failed) return
+        _phase.value = BankPhase.Idle
+        ensureBankReady()
+    }
+
     /** 他处(我的)删除题库后的复位:下次 ensureBankReady 重爬。 */
     fun bankWasDeleted() {
         resetState()

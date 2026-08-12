@@ -160,6 +160,28 @@ class PracticeBankViewModelTest {
         assertEquals("网络错误：boom", (vm.phase.value as BankPhase.Failed).message)
     }
 
+    @Test
+    fun `retry after failure re-runs crawl and reaches Ready`() = runTest(dispatcher) {
+        val api = FakeApi().apply {
+            session = true
+            examListError = ApiException(ApiException.UPSTREAM, "网络错误：boom")
+        }
+        val vm = makeVm(api)
+
+        vm.ensureBankReady()
+        advanceUntilIdle()
+        assertTrue(vm.phase.value is BankPhase.Failed)
+        assertEquals(1, api.examListCalls)
+
+        api.examListError = null   // 网络恢复
+        vm.retry()
+        advanceUntilIdle()
+
+        // ensureBankReady 仅 Idle 才跑,retry 必须复位相位后重爬(否则重试是死路)
+        assertEquals(2, api.examListCalls)
+        assertEquals(BankPhase.Ready, vm.phase.value)
+    }
+
     // ---- 进度注册表 ----
 
     @Test

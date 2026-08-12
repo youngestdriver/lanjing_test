@@ -72,7 +72,7 @@ fun PracticeBankScreen(
         is BankPhase.Crawling -> CrawlProgressUi(currentPhase.progress)
         is BankPhase.Failed -> ErrorRetry(
             message = currentPhase.message,
-            onRetry = vm::ensureBankReady,
+            onRetry = vm::retry,
         )
         BankPhase.Ready -> CategoryListScreen(
             vm = vm,
@@ -166,7 +166,7 @@ private fun ErrorRetry(message: String, onRetry: () -> Unit) {
     ) {
         Text("题库爬取失败", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color(0xFF3C3C3C))
         Text(
-            "$message\n\n请检查网络后重试;已爬取的题目会保留，重试会从中断处继续。",
+            "$message\n\n请检查网络后重试；已爬取的题目会保留，重试会从中断处继续。",
             fontSize = 14.sp,
             color = Color(0xFF8E8E93),
             textAlign = TextAlign.Center,

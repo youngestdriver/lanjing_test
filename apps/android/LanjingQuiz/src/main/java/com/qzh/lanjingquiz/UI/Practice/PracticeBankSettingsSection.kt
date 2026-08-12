@@ -108,7 +108,7 @@ fun PracticeBankSettingsSection(vm: PracticeBankViewModel = hiltViewModel()) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text("删除本地题库？") },
-            text = { Text("本地题库将被清空(含爬取日志),再次进入练习页会重新从蓝鲸平台爬取全部试卷，每张新卷占用一次作答机会并自动结束。") },
+            text = { Text("本地题库将被清空（含爬取日志），再次进入练习页会重新从蓝鲸平台爬取全部试卷，每张新卷占用一次作答机会并自动结束。") },
             confirmButton = {
                 Button(
                     onClick = {
@@ -136,12 +136,12 @@ private fun SectionHeader(title: String) {
 /**
  * 导出爬取日志:写 cacheDir/BankExport/爬取日志_yyyyMMdd_HHmm.txt(UTF-8)
  * → FileProvider content:// URI → ACTION_SEND text/plain。
- * 空日志 → "暂无爬取日志(完成一次爬取后生成)";失败 → "导出失败：{message}"。
+ * 空日志 → "暂无爬取日志（完成一次爬取后生成）";失败 → "导出失败：{message}"。
  */
 private fun exportLog(context: Context, vm: PracticeBankViewModel, onStatus: (String?) -> Unit) {
     val text = vm.exportLog()
     if (text == null) {
-        onStatus("暂无爬取日志(完成一次爬取后生成)")
+        onStatus("暂无爬取日志（完成一次爬取后生成）")
         return
     }
     val result = runCatching {
