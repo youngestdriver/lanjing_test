@@ -188,7 +188,7 @@ final class PracticeBankViewModel {
 
     /// Explicit exit (summary screen's 返回题型列表): drops the in-memory
     /// session and the persisted file — a finished run must never resume.
-    /// (Plain system-back / swipe-back no longer clears anything: the ID-order
+    /// (Plain system-back / swipe-back no longer clears anything: the ID-set
     /// resumeCandidate check is what prevents stale sessions from leaking.)
     func endSession() {
         session = nil

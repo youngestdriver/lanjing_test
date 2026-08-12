@@ -42,7 +42,7 @@ struct PracticeQuizView: View {
         .toolbar(.hidden, for: .tabBar)
         .task {
             // Resume a persisted run of this subcategory when it matches the
-            // current bank (question-ID order check), otherwise start fresh.
+            // current bank (question-ID set check), otherwise start fresh.
             // System-back / swipe-back no longer clears anything — exiting
             // mid-run and re-entering continues where it left off (问题 3).
             await vm.resumeOrStart(category: category, subCategory: subCategory)
