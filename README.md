@@ -4,7 +4,7 @@
 [![CI iOS](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-ios.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-ios.yml)
 [![CI Bank](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-bank.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-bank.yml)
 
-面向蓝鲸微课考试流程的第三方学习客户端。本仓库按应用维护 Web/PWA 与原生 iOS 两套独立实现。两端现已覆盖同一组核心考试流程，但仍拥有各自的网络层、会话存储、界面代码和测试体系，不共享运行时或业务实现。
+面向蓝鲸微课考试流程的第三方学习客户端。本仓库按应用维护 Web/PWA、原生 iOS 与原生安卓三套独立实现。三端现已覆盖同一组核心考试流程，但仍拥有各自的网络层、会话存储、界面代码和测试体系，不共享运行时或业务实现。
 
 > [!IMPORTANT]
 > 本项目会把进入考试、提交答案、标记题目和交卷等操作发送到上游服务，可能直接改变账号中的真实考试记录。只应在获得授权的账号和场景中使用，不要把它用于违规答题、未授权访问或公开服务。
@@ -14,17 +14,20 @@
 | 客户端 | 定位 | 代码位置 | 运行方式 | 会话存储 |
 |---|---|---|---|---|
 | 原生 iOS | SwiftUI 原生客户端 | `apps/ios/` | Xcode 构建并安装到模拟器或设备 | iOS Keychain |
+| 原生安卓 | Kotlin/Compose 原生客户端 | `apps/android/` | Android Studio 或 Gradle 构建 | 加密 SharedPreferences |
 | Web / PWA | 响应式浏览器客户端与本地代理 | `apps/web/` | 浏览器访问本地 Express 服务 | Node 进程内存与 `apps/web/.local/` |
 
-两套客户端的网络路径不同：
+三套客户端的网络路径不同：
 
 ```text
 浏览器 / PWA ──> 本地 Express API ──> https://test.lanjingweike.com
 
 原生 iOS ────────────────────────> https://test.lanjingweike.com
+
+原生安卓 ────────────────────────> https://test.lanjingweike.com
 ```
 
-Web 版必须启动 `apps/web/server.js`。iOS 版直接访问上游，不依赖 Node.js，也不需要同时运行 Web 服务。
+Web 版必须启动 `apps/web/server.js`。iOS 与安卓版直接访问上游，不依赖 Node.js，也不需要同时运行 Web 服务。
 
 ## 功能
 
@@ -44,6 +47,7 @@ Web 版必须启动 `apps/web/server.js`。iOS 版直接访问上游，不依赖
 | 练习刷题 | 首次使用直连蓝鲸平台爬取全部机考题库到本地（.local/practice，逐卷进度与断点续爬），按 大类→题型细分 两级分类离线刷题，组合题材料渲染、按大类随机顺序；我的页提供 更新题库/删除题库/爬取日志导出 | 与 Web 对齐的完整练习页（首次直连爬取、断点续爬、原子更新、删除、日志导出） |
 | 云端会话同步 | 可选启用 CookieCloud 同步：登录后自动上传、启动时拉取、设置中手动同步（协议与官方扩展兼容） | 可选启用 CookieCloud 同步：登录后自动上传、启动时拉取、"我的"中手动同步（同一协议） |
 | 自动化验证 | 78 项 Node 单元测试 + 真实 Chrome + mock API 的浏览器回归；无真实上游 E2E | 13 个 XCTest 套件、130 项单元测试；练习流程 UI 测试基于进程内 mock 上游（`LANJING_BASE_URL`），CI 内全自动运行；尚无真机或真实上游 E2E |
+| 原生安卓 | — | Kotlin/Compose 原生客户端：考试/练习/CookieCloud 与 iOS 逐字对齐（见设计文档）；UI 测试在 CI 模拟器上运行（进程内 mock 上游，不触真实服务） |
 
 Web 与 iOS 登录后都以“考试列表 / 练习 / 我的”组织一级导航；主题、自动下一题、Cookie 云端同步和退出登录集中在“我的”，局域网访问开关仅 Web 提供。Web 额外提供桌面浏览器入口、响应式布局、触控和键盘答题以及可安装的 PWA 应用壳，iOS 提供原生分页手势、iPad 键盘导航、原生富文本容器和系统级会话存储。Web 与 iOS 的“练习”页**首次使用直连蓝鲸平台爬取全部机考题库题目并保存在本地**（Web 存于 `apps/web/.local/practice`；每个分类一个 JSONL，与收集器 `apps/bank/data` 同格式；每卷爬取进度写入 meta.json，中断后从断点续爬），之后离线按 一级分类（大类）→ 二级分类（题型细分）聚合刷题，题型由本地规则引擎分类，答案只在本机判分、不提交上游；爬取每张“新开”卷会创建一次上游作答并自动结束（消耗尝试次数），不再依赖局域网题库下载。Web 的“我的”页提供 更新题库（重爬全部试卷并原子替换）/删除题库/爬取日志导出。
 
@@ -136,6 +140,23 @@ DEVELOPMENT_TEAM=XXXXXX xcodegen generate
 
 完整的构建说明、用户流程和 iOS 架构见 [apps/ios/README.md](apps/ios/README.md)。
 
+### 原生安卓
+
+环境要求：
+
+- JDK 17 或更高版本
+- Android SDK（platform 35、build-tools、platform-tools）；命令行构建需设置 `ANDROID_HOME`（Homebrew 示例：`export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools`）
+- 跑 UI 测试需 Android 模拟器（API 35）
+
+用 Android Studio 打开 `apps/android/` 直接运行，或命令行构建：
+
+```bash
+cd apps/android
+./gradlew assembleDebug
+```
+
+完整的构建说明、目录结构与测试命令见 [apps/android/README.md](apps/android/README.md)。
+
 ## 本地 API
 
 Web 前端通过同源的 `/api` 路由访问本地 Express 代理：
@@ -222,6 +243,10 @@ npm --prefix apps/bank run export
 │   │   ├── package.json
 │   │   ├── README.md
 │   │   └── data/                   # 收集/分类/导出的数据（gitignore，不入库）
+│   ├── android/
+│   │   ├── LanjingQuiz/            # Kotlin/Compose 应用源码(主/单元测试/仪器化测试)
+│   │   ├── gradle/libs.versions.toml
+│   │   └── README.md               # 安卓构建、架构与验证
 │   ├── ios/
 │   │   ├── LanjingQuiz.xcodeproj/  # 已提交的 Xcode 工程与共享 scheme
 │   │   ├── LanjingQuiz/            # SwiftUI 应用源码
@@ -298,6 +323,7 @@ xcodebuild \
 
 - [`ci-web.yml`](.github/workflows/ci-web.yml)（`Node`）：当改动涉及 `apps/web/`、`docs/`、`README.md` 或该 workflow 自身时运行 Node job；Ubuntu、Node 22、依赖安装、JavaScript 语法检查、51 项单元与安全测试、mock API 浏览器回归和 `/api/status` smoke test
 - [`ci-ios.yml`](.github/workflows/ci-ios.yml)（`iOS`）：当改动涉及 `apps/ios/` 或该 workflow 自身时运行 iOS job；macOS 15、Xcode 16.4、动态选择可用 iPhone 模拟器并运行测试
+- [`ci-android.yml`](.github/workflows/ci-android.yml)（`Android`）：当改动涉及 `apps/android/` 或该 workflow 自身时运行；`android` job 在 Ubuntu 上跑单元测试与 assembleDebug，`android-ui` job 在 API 35 模拟器上跑仪器化 UI 测试（进程内 mock 上游，不触真实服务）
 - [`ci-bank.yml`](.github/workflows/ci-bank.yml)（`Bank`）：当改动涉及 `apps/bank/` 或该 workflow 自身时运行 Bank job；Ubuntu、Node 22，题库工具零 npm 依赖所以无需安装，直接跑语法检查与题库测试（收集器、直连上游客户端、子分类、导出；全库 dry-run 在无本地数据时自动跳过）
 
 workflow 本身始终运行（而不是在事件级用 `paths` 过滤）：GitHub 只对**被跳过的 job** 自动放行 required check，对因路径过滤而从未运行的 workflow 不会放行——那样纯 Web、纯 iOS 或纯题库的 PR 会永远卡在分支保护上。不匹配任何检测范围时（例如仅修改 `.github/` 下其他文件）三个构建 job 都会被跳过，`Node`、`iOS` 与 `Bank` 检查自动通过。
@@ -323,6 +349,7 @@ workflow 本身始终运行（而不是在事件级用 `paths` 过滤）：GitHu
 > [!WARNING]
 > 局域网访问：服务默认监听所有网卡，同一局域网设备可用 `http://<本机IP>:3000` 访问，可在「我的 > 局域网访问」关闭。该服务共享同一份会话，没有多用户隔离/TLS/限流，只适合可信局域网，请勿暴露到公网。
 
+- **Android 未签名 APK**：始终构建（`assembleRelease`，未签名 release 可直接安装）；版本号取自发布 tag（versionCode 按 `major×10000+minor×100+patch` 派生）；
 - **iOS 未签名 ipa**：始终构建（`CODE_SIGNING_ALLOWED=NO`），附安装说明——配合 Sideloadly/AltStore 用免费 Apple ID 签名后装真机（7 天续签一次）；
 - **iOS 签名 ipa（ADHOC）**：仅当配置了签名 secrets（`IOS_CERT_BASE64`、`IOS_CERT_PASSWORD`、`IOS_PROVISIONING_BASE64`、`DEVELOPMENT_TEAM`）时才会构建并签名，否则自动跳过；
 - **题库快照**：默认关闭的保留位（`include_bank` 输入，仅手动运行时可用）——题库数据因版权问题被 gitignore，不在 CI 工作区；如需附带，可在私有仓库纳入数据，或本地打包后 `gh release upload <tag> 题库导出-*.zip`。
@@ -364,7 +391,8 @@ iOS 安装包应通过受控的 Release、TestFlight 或 CI artifact 分发，�
 
 - [本地 API 与上游映射](docs/web-api.md)
 - [原生 iOS 构建、架构与验证](apps/ios/README.md)
-- [Web 持续集成](.github/workflows/ci-web.yml)、[iOS 持续集成](.github/workflows/ci-ios.yml)、[题库工具持续集成](.github/workflows/ci-bank.yml) 与 [发布 workflow](.github/workflows/release.yml)
+- [原生安卓构建、架构与验证](apps/android/README.md)
+- [Web 持续集成](.github/workflows/ci-web.yml)、[iOS 持续集成](.github/workflows/ci-ios.yml)、[安卓持续集成](.github/workflows/ci-android.yml)、[题库工具持续集成](.github/workflows/ci-bank.yml) 与 [发布 workflow](.github/workflows/release.yml)
 
 ## 许可与免责声明
 

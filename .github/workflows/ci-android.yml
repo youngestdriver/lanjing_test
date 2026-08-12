@@ -1,0 +1,86 @@
+name: CI Android
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            android:
+              - 'apps/android/**'
+              - '.github/workflows/ci-android.yml'
+      - if: steps.filter.outputs.android == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - if: steps.filter.outputs.android == 'true'
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.10.2
+      - if: steps.filter.outputs.android == 'true'
+        name: Unit tests + build
+        working-directory: apps/android
+        run: |
+          ./gradlew testDebugUnitTest assembleDebug --no-daemon
+          mkdir -p ../../artifact && cp LanjingQuiz/build/outputs/apk/debug/LanjingQuiz-debug.apk ../../artifact/
+      - if: steps.filter.outputs.android == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-apk
+          path: artifact/
+
+  # 仪器化 UI 测试:API 35 模拟器 + connectedDebugAndroidTest(进程内 MockWebServer,
+  # 不触真实上游;路径过滤未命中时 job 内全部步骤跳过,check 自动通过)。
+  android-ui:
+    runs-on: ubuntu-latest
+    needs: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            android:
+              - 'apps/android/**'
+              - '.github/workflows/ci-android.yml'
+      - if: steps.filter.outputs.android == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - if: steps.filter.outputs.android == 'true'
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.10.2
+      # 注意:不要对 AVD 做 actions/cache —— 缓存 ~/.android/avd 与下方无条件
+      # avdmanager create(无 --force)互斥:第二次运行起缓存恢复的 AVD 会让 create
+      # 报 "already exists" 导致 job 必败;且 ~1GB 系统镜像在 $ANDROID_HOME/system-images,
+      # 不在 ~/.android/avd,静态 key 缓存本身也无效。每次运行重新创建即可。
+      - if: steps.filter.outputs.android == 'true'
+        name: Create AVD
+        working-directory: apps/android
+        run: |
+          echo "y" | sdkmanager --licenses > /dev/null
+          sdkmanager "emulator" "system-images;android-35;google_apis;x86_64"
+          avdmanager create avd -n pixel6_api35 -k "system-images;android-35;google_apis;x86_64" --device "pixel_6"
+      - if: steps.filter.outputs.android == 'true'
+        name: Run UI tests
+        working-directory: apps/android
+        run: |
+          $ANDROID_HOME/emulator/emulator -avd pixel6_api35 -no-window -no-audio -no-snapshot -gpu swiftshader_indirect &
+          adb wait-for-device
+          for i in $(seq 1 60); do
+            [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ] && break
+            sleep 5
+          done
+          ./gradlew connectedDebugAndroidTest --no-daemon
