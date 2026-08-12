@@ -62,12 +62,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.10.2
-      - if: steps.filter.outputs.android == 'true'
-        name: AVD cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/avd
-          key: avd-pixel6-api35
+      # 注意:不要对 AVD 做 actions/cache —— 缓存 ~/.android/avd 与下方无条件
+      # avdmanager create(无 --force)互斥:第二次运行起缓存恢复的 AVD 会让 create
+      # 报 "already exists" 导致 job 必败;且 ~1GB 系统镜像在 $ANDROID_HOME/system-images,
+      # 不在 ~/.android/avd,静态 key 缓存本身也无效。每次运行重新创建即可。
       - if: steps.filter.outputs.android == 'true'
         name: Create AVD
         working-directory: apps/android
