@@ -47,12 +47,13 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.qzh.lanjingquiz.App.AppState
 import com.qzh.lanjingquiz.UI.DSAccent
 import com.qzh.lanjingquiz.UI.DSRed
 
 /** 两屏登录流程:落地页(密码登录入口 + 协议勾选)→ 密码页(手机号/密码/登录)。 */
 @Composable
-fun LoginScreen(vm: LoginViewModel, onFinished: () -> Unit) {
+fun LoginScreen(vm: LoginViewModel, appState: AppState, onFinished: () -> Unit) {
     var page by remember { mutableStateOf(0) } // 0 落地页, 1 密码页
     val error by vm.errorMessage.collectAsState()
     val phone by vm.phone.collectAsState()
@@ -68,6 +69,10 @@ fun LoginScreen(vm: LoginViewModel, onFinished: () -> Unit) {
 
     // 成功路径:onFinished 即 AppRoot 注入的 AppState.finishLogin(同一实例)
     LaunchedEffect(Unit) { vm.onFinished = onFinished }
+
+    // 登录页出现时重试一次云端拉取(iOS LoginView .task → retryCloudSyncIfNeeded):
+    // 启动时拉取受 4s 边界限制,云端会话稍晚同步完成会把用户留在登录页;用户已输入不打断。
+    LaunchedEffect(Unit) { appState.retryCloudSyncIfNeeded(vm.phone.value, vm.password.value) }
 
     Box(Modifier.fillMaxSize().systemBarsPadding()) {
         if (page == 0) {

@@ -9,6 +9,7 @@ import com.qzh.lanjingquiz.Network.StoredCookie
 import com.qzh.lanjingquiz.Network.UpstreamApi
 import com.qzh.lanjingquiz.Support.CookieCloudCrypto
 import com.qzh.lanjingquiz.Support.Hashers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -212,6 +213,8 @@ class CookieCloudSync @Inject constructor(
             } else {
                 api.hasSession()
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             api.hasSession()
         }
@@ -224,6 +227,8 @@ class CookieCloudSync @Inject constructor(
         if (hash == lastPushedHash) return
         try {
             pushUnconditionally()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             // 保持本地 hash 不变,下次调用重试
         }
@@ -252,6 +257,8 @@ class CookieCloudSync @Inject constructor(
                 pushed = true
             }
             SyncResult(null, applied, pushed)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             SyncResult(e.message ?: "同步失败", false, false)
         }

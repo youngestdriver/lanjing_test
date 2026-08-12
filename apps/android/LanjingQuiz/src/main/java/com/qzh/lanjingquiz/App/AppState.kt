@@ -7,6 +7,7 @@ import com.qzh.lanjingquiz.Network.ExamResult
 import com.qzh.lanjingquiz.Network.UpstreamApi
 import com.qzh.lanjingquiz.UI.HomeTab
 import com.qzh.lanjingquiz.UI.Practice.PracticeRoute
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -60,6 +61,10 @@ class AppState @Inject constructor(
     /** 删除题库版本号:我的 > 删除题库 +1,练习页 VM 据此重置并重爬(iOS bankResetVersion)。 */
     val bankResetVersion = MutableStateFlow(0)
 
+    private val _booted = MutableStateFlow(false)
+    /** start() 完成路由决策后置 true(AppRoot 据此撤下 splash,避免闪屏)。 */
+    val booted: StateFlow<Boolean> = _booted.asStateFlow()
+
     private val _notice = MutableStateFlow<String?>(null)
     val notice: StateFlow<String?> = _notice.asStateFlow()
 
@@ -72,12 +77,38 @@ class AppState @Inject constructor(
     /**
      * 启动:先做 CookieCloud 云端拉取(内部 4s 硬边界,任何异常都吞掉 —— 绝不让启动超过
      * 约 4s 或崩溃),再按会话决定路由;新设备凭云端会话直达首页,无需重新登录。
+     * 路由决策完成后置 booted(true),AppRoot 据此撤下 splash(保持到决策完成,防闪屏)。
      */
     fun start() {
         scope.launch {
-            val hasSession = runCatching { cookieCloudSync.pullAndApplyIfNeeded() }
-                .getOrDefault(api.hasSession())
+            val hasSession = try {
+                cookieCloudSync.pullAndApplyIfNeeded()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                api.hasSession()
+            }
             navigateTo(if (hasSession) Route.Home else Route.Login)
+            _booted.value = true
+        }
+    }
+
+    /**
+     * 登录页出现时重试一次云端拉取(iOS LoginViewModel.retryCloudSyncIfNeeded 移植):
+     * 启动时的拉取受 4s 硬边界限制,云端会话若在启动后稍晚同步完成,用户会被留在登录页;
+     * 重试一次,若用户已开始输入则不打断;拉取成功(会话存在)自动进首页。
+     */
+    fun retryCloudSyncIfNeeded(phone: String, password: String) {
+        if (phone.isNotEmpty() || password.isNotEmpty()) return
+        scope.launch {
+            val hasSession = try {
+                cookieCloudSync.pullAndApplyIfNeeded()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                false
+            }
+            if (hasSession) navigateTo(Route.Home)
         }
     }
 

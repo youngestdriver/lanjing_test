@@ -3,18 +3,26 @@ package com.qzh.lanjingquiz.App
 import com.qzh.lanjingquiz.Data.InMemorySecureStore
 import com.qzh.lanjingquiz.Data.InMemorySettingsStore
 import com.qzh.lanjingquiz.Data.SettingsStore
+import com.qzh.lanjingquiz.Domain.CloudConfig
 import com.qzh.lanjingquiz.Domain.CookieCloudSync
 import com.qzh.lanjingquiz.FakeApi
 import com.qzh.lanjingquiz.Network.PrefsCookieStore
 import com.qzh.lanjingquiz.Network.StoredCookie
+import com.qzh.lanjingquiz.Network.TestConfig
+import com.qzh.lanjingquiz.Support.CookieCloudCrypto
 import com.qzh.lanjingquiz.UI.HomeTab
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.serialization.json.Json
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -35,18 +43,50 @@ class AppStateTest {
         return AppState(api, settings, sync)
     }
 
+    /** 配置好 CookieCloud(settings + 密码,指向给定云端地址)的 AppState 组合。 */
+    private fun makeCloudState(
+        api: FakeApi,
+        cloudUrl: String,
+        settings: SettingsStore = InMemorySettingsStore(),
+        secure: InMemorySecureStore = InMemorySecureStore(),
+    ): AppState {
+        settings.putString(
+            "quiz.cookieCloud",
+            Json.encodeToString(CloudConfig.serializer(), CloudConfig(true, cloudUrl, "uuid-1")),
+        )
+        secure.putString("cookiecloud.password", "pass-1")
+        val sync = CookieCloudSync(api, PrefsCookieStore(secure), secure, settings)
+        return AppState(api, settings, sync)
+    }
+
+    /**
+     * 轮询等待路由变化。拉取走真实 MockWebServer IO,但 withTimeoutOrNull 的 4s 计时器
+     * 走测试调度器的虚拟时钟 —— 用 runCurrent(不推进虚拟时钟)执行已就绪任务 + 真实
+     * 睡眠等待 IO 完成,避免虚拟时钟提前触发 4s 超时。
+     */
+    private suspend fun TestScope.awaitRoute(state: AppState, expected: Route, timeoutMs: Long = 5000) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (state.route.value != expected && System.currentTimeMillis() < deadline) {
+            runCurrent()
+            Thread.sleep(10)
+        }
+        runCurrent()
+    }
+
     @Test fun `start routes home when session exists`() = runTest {
         val api = FakeApi().apply { session = true }
         val state = makeState(api)
         state.start()
         advanceUntilIdle()   // start 先做云端拉取(未配置 → 立即返回),再决定路由
         assertEquals(Route.Home, state.route.value)
+        assertTrue(state.booted.value)   // 路由决策完成 → splash 撤下
     }
     @Test fun `start routes login when no session`() = runTest {
         val state = makeState(FakeApi())
         state.start()
         advanceUntilIdle()
         assertEquals(Route.Login, state.route.value)
+        assertTrue(state.booted.value)
     }
     @Test fun `handleSessionExpiry clears session and shows notice`() = runTest {
         val api = FakeApi().apply { session = true }
@@ -84,6 +124,45 @@ class AppStateTest {
         assertEquals("CookieCloud 同步未配置", result.error)
         assertFalse(result.applied)
         assertFalse(result.pushed)
+    }
+
+    // —— 登录页云重试(retryCloudSyncIfNeeded;iOS LoginView .task 移植)——
+
+    @Test fun `retryCloudSyncIfNeeded pulls cloud session and routes home`() = runTest(dispatcher) {
+        val cloud = MockWebServer().apply { start() }
+        val probe = MockWebServer().apply { start() }
+        TestConfig.mockBaseUrl = probe.url("/").toString().trimEnd('/')
+        try {
+            // 远端 blob:含 lanjingweike sessionId 的密文 + 探活通过(有效会话)
+            val plain = """{"cookie_data":{"test.lanjingweike.com":[{"name":"sessionId","value":"REMOTE","domain":"test.lanjingweike.com","path":"/","secure":true,"expirationDate":1755000000}]},"local_storage_data":{}}"""
+            val (encrypted, type) = CookieCloudCrypto.encryptAny(plain, "uuid-1", "pass-1")
+            cloud.enqueue(MockResponse().setBody("""{"encrypted":"$encrypted","crypto_type":"$type"}"""))
+            probe.enqueue(MockResponse().setBody("""{"success":true}"""))
+
+            val state = makeCloudState(FakeApi(), cloud.url("/").toString().trimEnd('/'))
+            state.retryCloudSyncIfNeeded("", "")
+            awaitRoute(state, Route.Home)
+
+            assertEquals(Route.Home, state.route.value)
+            assertTrue(cloud.requestCount >= 1)   // 确实执行了云端拉取
+        } finally {
+            cloud.shutdown()
+            probe.shutdown()
+            TestConfig.mockBaseUrl = null
+        }
+    }
+
+    @Test fun `retryCloudSyncIfNeeded skips pull when user typed`() = runTest(dispatcher) {
+        val cloud = MockWebServer().apply { start() }
+        try {
+            val state = makeCloudState(FakeApi(), cloud.url("/").toString().trimEnd('/'))
+            state.retryCloudSyncIfNeeded("138", "123456")
+            advanceUntilIdle()
+            assertEquals(0, cloud.requestCount)   // 已输入 → 守卫拦截,不发任何请求
+            assertEquals(Route.Login, state.route.value)
+        } finally {
+            cloud.shutdown()
+        }
     }
 
     // —— 主题与会话状态(我的页复用) ——

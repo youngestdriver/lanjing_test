@@ -32,9 +32,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -65,9 +62,10 @@ enum class HomeTab { Exams, Practice, Profile }
 fun AppRoot(appState: AppState) {
     val route by appState.route.collectAsState()
     val notice by appState.notice.collectAsState()
-    var splashDone by remember { mutableStateOf(false) }
+    val booted by appState.booted.collectAsState()
 
-    LaunchedEffect(Unit) { appState.start(); splashDone = true }
+    // start() 为异步(云端拉取 + 路由决策);splash 保持到 booted 才撤下(防闪屏)。
+    LaunchedEffect(Unit) { appState.start() }
 
     Box(Modifier.fillMaxSize()) {
         val currentRoute = route   // 局部非委托 val,允许 when 分支智能转换
@@ -76,16 +74,16 @@ fun AppRoot(appState: AppState) {
                 val loginVm = hiltViewModel<LoginViewModel>()
                 // 会话级登录错误(上游回登录页)→ AppState 统一处理(清会话+通知+回登录页)
                 LaunchedEffect(loginVm, appState) { loginVm.onSessionError = appState::handleSessionExpiry }
-                LoginScreen(vm = loginVm, onFinished = appState::finishLogin)
+                LoginScreen(vm = loginVm, appState = appState, onFinished = appState::finishLogin)
             }
             Route.Home -> HomeTabHost(appState)
             is Route.Quiz -> QuizScreen(exam = currentRoute.exam, appState = appState)
             is Route.Result -> ResultScreen(result = currentRoute.result, examName = currentRoute.examName, appState = appState)
         }
         notice?.let { NoticeBanner(it) { appState.showNotice(null) } }
-        // 简单静态启动页;fade-out 0.45s(iOS 0.45s 淡出对齐)
+        // 简单静态启动页;保持到 start() 完成路由决策,再 fade-out 0.45s(iOS 0.45s 淡出对齐)
         AnimatedVisibility(
-            visible = !splashDone,
+            visible = !booted,
             exit = fadeOut(animationSpec = tween(durationMillis = 450)),
         ) {
             SplashScreen()
