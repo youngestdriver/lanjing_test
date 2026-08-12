@@ -1,7 +1,6 @@
 package com.qzh.lanjingquiz.UI.Quiz
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,7 +31,7 @@ import com.qzh.lanjingquiz.UI.DSRed
 
 /**
  * 底部统计条(iOS StatsBarView 移植):答对/答错/未答统计 + 答题卡入口 + 交卷(红)。
- * 进度条(高 16dp)附于上方。
+ * 进度条仅一处(QuizScreen 头部,iOS ProgressBarView 在 QuizHeaderView 内;此处不重复渲染)。
  */
 @Composable
 fun StatsBar(
@@ -49,53 +48,47 @@ fun StatsBar(
     val unanswered = states.count { it.state == QuizLogic.STATE_UNANSWERED }
 
     Surface(color = Color(0xFFF2F2F2), modifier = modifier) {
-        Column {
-            QuizProgressBar(
-                progress = if (states.isEmpty()) 0f
-                    else (vm.page.collectAsState().value + 1).coerceAtMost(states.size).toFloat() / states.size,
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                StatItem("$right", "✓", DSAccent)
+                StatItem("$error", "✗", DSRed)
+                StatItem("$unanswered", "○", Color(0xFF8E8E93))
+            }
+            Spacer(Modifier.weight(1f))
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFFE5E5EA),
+                modifier = Modifier.testTag("answer-card-btn"),
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    StatItem("$right", "✓", DSAccent)
-                    StatItem("$error", "✗", DSRed)
-                    StatItem("$unanswered", "○", Color(0xFF8E8E93))
-                }
-                Spacer(Modifier.weight(1f))
-                Surface(
-                    shape = CircleShape,
-                    color = Color(0xFFE5E5EA),
-                    modifier = Modifier.testTag("answer-card-btn"),
+                Text(
+                    "答题卡",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF3C3C3C),
+                    modifier = Modifier
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                        .testTag("answer-card-btn-text"),
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            if (isSubmitting) {
+                CircularProgressIndicator(modifier = Modifier.size(28.dp), color = DSRed, strokeWidth = 2.5.dp)
+            } else {
+                Button(
+                    onClick = onSubmit,
+                    modifier = Modifier
+                        .width(92.dp)
+                        .height(44.dp)
+                        .testTag("submit-exam"),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = DSRed),
                 ) {
-                    Text(
-                        "答题卡",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF3C3C3C),
-                        modifier = Modifier
-                            .padding(horizontal = 14.dp, vertical = 8.dp)
-                            .testTag("answer-card-btn-text"),
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                if (isSubmitting) {
-                    CircularProgressIndicator(modifier = Modifier.size(28.dp), color = DSRed, strokeWidth = 2.5.dp)
-                } else {
-                    Button(
-                        onClick = onSubmit,
-                        modifier = Modifier
-                            .width(92.dp)
-                            .height(44.dp)
-                            .testTag("submit-exam"),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = DSRed),
-                    ) {
-                        Text("交卷", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    }
+                    Text("交卷", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
         }
@@ -110,7 +103,7 @@ private fun StatItem(text: String, glyph: String, color: Color) {
     }
 }
 
-/** 16pt 绿色进度条(iOS ProgressBarView 移植)。 */
+/** 16pt 绿色进度条(iOS ProgressBarView 移植);仅 QuizScreen 头部渲染一处。 */
 @Composable
 fun QuizProgressBar(progress: Float, modifier: Modifier = Modifier) {
     Surface(
@@ -128,4 +121,3 @@ fun QuizProgressBar(progress: Float, modifier: Modifier = Modifier) {
         ) {}
     }
 }
-
