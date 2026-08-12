@@ -1,18 +1,19 @@
 package com.qzh.lanjingquiz.App
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.qzh.lanjingquiz.Data.SettingsStore
 import com.qzh.lanjingquiz.Network.ExamDto
 import com.qzh.lanjingquiz.Network.ExamResult
 import com.qzh.lanjingquiz.Network.UpstreamApi
 import com.qzh.lanjingquiz.UI.HomeTab
-import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import javax.inject.Singleton
 
 /** 应用路由;Quiz/Result 携带 Task 1 DTO(T3 消费)。 */
 sealed interface Route {
@@ -31,11 +32,17 @@ enum class ThemeMode(val rawValue: String) {
     }
 }
 
-@HiltViewModel
+/**
+ * 应用级状态单例(路由/通知/主题/自动下一题开关)。
+ * 注:早期为 @HiltViewModel;T3 起改为普通 @Singleton —— Hilt 禁止把 @HiltViewModel 注入
+ * 到其他 ViewModel 构造器(QuizViewModel/ExamListViewModel 均消费 AppState)。
+ */
+@Singleton
 class AppState @Inject constructor(
     private val api: UpstreamApi,
     private val settings: SettingsStore,
-) : ViewModel() {
+) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val _route = MutableStateFlow<Route>(Route.Login)
     val route: StateFlow<Route> = _route.asStateFlow()
@@ -73,7 +80,7 @@ class AppState @Inject constructor(
     /** 退出登录:异步 best-effort 上游注销(异常吞掉),随后清本地会话、回登录页并复位 Tab。
      *  不在调用线程阻塞(ApiClient.logout 内部已吞错误,runCatching 为双保险)。 */
     fun logout() {
-        viewModelScope.launch {
+        scope.launch {
             runCatching { api.logout() }
             api.clearSession()
             navigateTo(Route.Login)

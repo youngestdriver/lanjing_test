@@ -18,11 +18,22 @@ android {
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // 版本号可由 CI 覆盖:./gradlew assembleRelease -PversionName=1.1.0 -PversionCode=10100
+        buildConfigField("String", "API_BASE_URL", "\"https://test.lanjingweike.com\"")
     }
     buildTypes {
         release {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("debug") // 未签名发布版可安装;正式签名 T7 接线
+        }
+        // 本地手动冒烟可用 -PmockBaseUrl=http://127.0.0.1:port 覆盖 debug 的 API_BASE_URL;
+        // 仪器化 UI 测试走 TestConfig intent extra(动态端口,见 TestConfig.kt),不依赖此属性。
+        debug {
+            val mock = providers.gradleProperty("mockBaseUrl")
+            if (mock.isPresent) {
+                buildConfigField("String", "API_BASE_URL", "\"${mock.get()}\"")
+            } else {
+                buildConfigField("String", "API_BASE_URL", "\"https://test.lanjingweike.com\"")
+            }
         }
     }
     compileOptions {
@@ -30,7 +41,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     testOptions { unitTests.isReturnDefaultValues = true }
 }
 
@@ -63,6 +74,8 @@ dependencies {
     androidTestImplementation(libs.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.compose.ui.test.junit4)
+    androidTestImplementation(libs.mockwebserver)
+    androidTestImplementation(libs.androidx.test.core)
     debugImplementation(libs.compose.ui.test.manifest)
     debugImplementation(libs.compose.ui.tooling)
 }

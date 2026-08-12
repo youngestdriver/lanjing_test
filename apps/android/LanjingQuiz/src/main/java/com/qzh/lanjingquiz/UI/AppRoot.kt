@@ -44,18 +44,21 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.qzh.lanjingquiz.App.AppState
 import com.qzh.lanjingquiz.App.Route
+import com.qzh.lanjingquiz.UI.ExamList.ExamListScreen
 import com.qzh.lanjingquiz.UI.Login.LoginScreen
 import com.qzh.lanjingquiz.UI.Login.LoginViewModel
+import com.qzh.lanjingquiz.UI.Quiz.QuizScreen
+import com.qzh.lanjingquiz.UI.Result.ResultScreen
 
 enum class HomeTab { Exams, Practice, Profile }
 
 @Composable
-fun AppRoot(vm: AppState = hiltViewModel()) {
-    val route by vm.route.collectAsState()
-    val notice by vm.notice.collectAsState()
+fun AppRoot(appState: AppState) {
+    val route by appState.route.collectAsState()
+    val notice by appState.notice.collectAsState()
     var splashDone by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) { vm.start(); splashDone = true }
+    LaunchedEffect(Unit) { appState.start(); splashDone = true }
 
     Box(Modifier.fillMaxSize()) {
         val currentRoute = route   // 局部非委托 val,允许 when 分支智能转换
@@ -63,14 +66,14 @@ fun AppRoot(vm: AppState = hiltViewModel()) {
             Route.Login -> {
                 val loginVm = hiltViewModel<LoginViewModel>()
                 // 会话级登录错误(上游回登录页)→ AppState 统一处理(清会话+通知+回登录页)
-                LaunchedEffect(loginVm, vm) { loginVm.onSessionError = vm::handleSessionExpiry }
-                LoginScreen(vm = loginVm, onFinished = vm::finishLogin)
+                LaunchedEffect(loginVm, appState) { loginVm.onSessionError = appState::handleSessionExpiry }
+                LoginScreen(vm = loginVm, onFinished = appState::finishLogin)
             }
-            Route.Home -> HomeTabHost(vm)
-            is Route.Quiz -> QuizScreen(exam = currentRoute.exam)   // T3 实现
-            is Route.Result -> ResultScreen(result = currentRoute.result, examName = currentRoute.examName) // T3 实现
+            Route.Home -> HomeTabHost(appState)
+            is Route.Quiz -> QuizScreen(exam = currentRoute.exam, appState = appState)
+            is Route.Result -> ResultScreen(result = currentRoute.result, examName = currentRoute.examName, appState = appState)
         }
-        notice?.let { NoticeBanner(it) { vm.showNotice(null) } }
+        notice?.let { NoticeBanner(it) { appState.showNotice(null) } }
         // 简单静态启动页;fade-out 0.45s(iOS 0.45s 淡出对齐)
         AnimatedVisibility(
             visible = !splashDone,
@@ -82,32 +85,32 @@ fun AppRoot(vm: AppState = hiltViewModel()) {
 }
 
 @Composable
-fun HomeTabHost(vm: AppState) {
-    val tab by vm.selectedTab.collectAsState()
+fun HomeTabHost(appState: AppState) {
+    val tab by appState.selectedTab.collectAsState()
     Scaffold(bottomBar = {
         NavigationBar {
             NavigationBarItem(
                 selected = tab == HomeTab.Exams,
-                onClick = { vm.selectedTab.value = HomeTab.Exams },
+                onClick = { appState.selectedTab.value = HomeTab.Exams },
                 icon = { Icon(Icons.Filled.CheckCircle, contentDescription = null) },
                 label = { Text("考试列表") },
             )
             NavigationBarItem(
                 selected = tab == HomeTab.Practice,
-                onClick = { vm.selectedTab.value = HomeTab.Practice },
+                onClick = { appState.selectedTab.value = HomeTab.Practice },
                 icon = { Icon(Icons.Filled.Edit, contentDescription = null) },
                 label = { Text("练习") },
             )
             NavigationBarItem(
                 selected = tab == HomeTab.Profile,
-                onClick = { vm.selectedTab.value = HomeTab.Profile },
+                onClick = { appState.selectedTab.value = HomeTab.Profile },
                 icon = { Icon(Icons.Filled.Person, contentDescription = null) },
                 label = { Text("我的") },
             )
         }
     }) { padding ->
         when (tab) {
-            HomeTab.Exams -> ExamListScreenPlaceholder(padding)   // T3 替换
+            HomeTab.Exams -> Box(Modifier.padding(padding)) { ExamListScreen() }
             HomeTab.Practice -> PracticeBankScreenPlaceholder(padding)  // T5 替换
             HomeTab.Profile -> ProfileScreenPlaceholder(padding)  // T6 替换
         }

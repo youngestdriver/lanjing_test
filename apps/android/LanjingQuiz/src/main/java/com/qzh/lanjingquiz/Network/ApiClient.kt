@@ -41,7 +41,10 @@ interface UpstreamApi {
     suspend fun warmUpJsSession()
     suspend fun login(phone: String, password: String)
     suspend fun examList(): ExamListResult
-    suspend fun enterExam(examInfoId: String): EnterExamResult
+    /** 进卷;isNew=true(wfs==1 新卷)走完整队列轮询,false(wfs==0 继续)直取 exam_start。 */
+    suspend fun enterExam(examInfoId: String, isNew: Boolean = true): EnterExamResult
+    /** exam_start 页面 HTML(QuizViewModel 答题卡解析 / ExamListViewModel 放弃流程用)。 */
+    suspend fun examStartHtml(examInfoId: String): String
     suspend fun fetchQuestions(req: QuestionBatchRequest): List<QuestionDto>
     suspend fun submitAnswer(examResultsId: String, examInfoId: String, testId: String, testAns: String, correct: Boolean)
     suspend fun markQuestion(testId: String, examResultsId: String, examInfoId: String, isMark: Boolean)
@@ -103,38 +106,44 @@ class ApiClient(
         ExamListResult(biz.total, biz.styles, biz.exams)
     }
 
-    override suspend fun enterExam(examInfoId: String): EnterExamResult = withContext(Dispatchers.IO) {
+    override suspend fun enterExam(examInfoId: String, isNew: Boolean): EnterExamResult = withContext(Dispatchers.IO) {
         val referer = "$baseUrl/exam/before_answer_notice/$examInfoId"
-        // 新卷步骤 0:enter_exam,跟随重定向(手动,规则 1 生效)
-        request("/exam/enter_exam/1/$examInfoId")
-        // 步骤 1:faceCheckCondition
-        request("/exam/faceCheckCondition",
-            form = FormEncoder.encode(mapOf("examInfoId" to examInfoId)), referer = referer)
-        // 步骤 2:start_exam_queue;成功 = bizContent.isOk == true 或 code == "60011"
-        val queueResp = request("/exam/start_exam_queue",
-            form = FormEncoder.encode(mapOf("examId" to examInfoId)), referer = referer)
-        val queue = runCatching { json.decodeFromString(QueueResponse.serializer(), queueResp) }.getOrNull()
-        val queueOk = queue?.bizContent?.isOk == true || queue?.code?.value == "60011"
-        // 步骤 3:未就绪则轮询 check_queue_status ≤30 次 × 2s(解码失败视为未就绪)
-        if (!queueOk) {
-            poll@ for (i in 0 until 30) {
-                val poll = request("/exam/check_queue_status",
+        if (isNew) {
+            // 新卷步骤 0:enter_exam,跟随重定向(手动,规则 1 生效)
+            request("/exam/enter_exam/1/$examInfoId")
+            // 步骤 1:faceCheckCondition
+            request("/exam/faceCheckCondition",
+                form = FormEncoder.encode(mapOf("examInfoId" to examInfoId)), referer = referer)
+            // 步骤 2:start_exam_queue;成功 = bizContent.isOk == true 或 code == "60011"
+            val queueResp = request("/exam/start_exam_queue",
+                form = FormEncoder.encode(mapOf("examId" to examInfoId)), referer = referer)
+            val queue = runCatching { json.decodeFromString(QueueResponse.serializer(), queueResp) }.getOrNull()
+            val queueOk = queue?.bizContent?.isOk == true || queue?.code?.value == "60011"
+            // 步骤 3:未就绪则轮询 check_queue_status ≤30 次 × 2s(解码失败视为未就绪)
+            if (!queueOk) {
+                poll@ for (i in 0 until 30) {
+                    val poll = request("/exam/check_queue_status",
+                        form = FormEncoder.encode(mapOf("examId" to examInfoId)), referer = referer)
+                    val status = runCatching { json.decodeFromString(QueueResponse.serializer(), poll) }.getOrNull()
+                    if (status?.bizContent?.isOk == true) break@poll
+                    delay(2000)
+                }
+            }
+            // 步骤 4:轮询 test_complete 至 body(trim+小写)== "true"(≤30 次 × 2s)
+            complete@ for (i in 0 until 30) {
+                val complete = request("/exam/test_complete",
                     form = FormEncoder.encode(mapOf("examId" to examInfoId)), referer = referer)
-                val status = runCatching { json.decodeFromString(QueueResponse.serializer(), poll) }.getOrNull()
-                if (status?.bizContent?.isOk == true) break@poll
+                if (complete.trim().lowercase() == "true") break@complete
                 delay(2000)
             }
         }
-        // 步骤 4:轮询 test_complete 至 body(trim+小写)== "true"(≤30 次 × 2s)
-        complete@ for (i in 0 until 30) {
-            val complete = request("/exam/test_complete",
-                form = FormEncoder.encode(mapOf("examId" to examInfoId)), referer = referer)
-            if (complete.trim().lowercase() == "true") break@complete
-            delay(2000)
-        }
-        // 步骤 5:GET exam_start,解析三个 JS 变量(卡片/分区/状态解析在 Task 3 ExamHtmlParser)
-        val start = request("/exam/exam_start/$examInfoId", referer = referer)
+        // 步骤 5:GET exam_start,解析三个 JS 变量(卡片/分区/状态解析在 ExamHtmlParser)
+        val start = request("/exam/exam_start/$examInfoId", referer = if (isNew) referer else "$baseUrl/exam")
         parseEnterResult(start, examInfoId)
+    }
+
+    override suspend fun examStartHtml(examInfoId: String): String = withContext(Dispatchers.IO) {
+        request("/exam/exam_start/$examInfoId")
     }
 
     override suspend fun fetchQuestions(req: QuestionBatchRequest): List<QuestionDto> = withContext(Dispatchers.IO) {

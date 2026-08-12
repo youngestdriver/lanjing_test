@@ -7,6 +7,7 @@ import com.qzh.lanjingquiz.Network.ApiClient
 import com.qzh.lanjingquiz.Network.CookieStore
 import com.qzh.lanjingquiz.Network.PersistentCookieJar
 import com.qzh.lanjingquiz.Network.PrefsCookieStore
+import com.qzh.lanjingquiz.Network.TestConfig
 import com.qzh.lanjingquiz.Network.UpstreamApi
 import dagger.Module
 import dagger.Provides
@@ -43,5 +44,6 @@ object AppModule {
         .build()
 
     @Provides @Singleton
-    fun apiClient(http: OkHttpClient, cookieJar: PersistentCookieJar): UpstreamApi = ApiClient(http, cookieJar)
+    fun apiClient(http: OkHttpClient, cookieJar: PersistentCookieJar): UpstreamApi =
+        ApiClient(http, cookieJar, TestConfig.effectiveBaseUrl())
 }

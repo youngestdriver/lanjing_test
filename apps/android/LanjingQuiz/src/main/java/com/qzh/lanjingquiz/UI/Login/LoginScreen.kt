@@ -280,7 +280,7 @@ private fun PasswordPage(
             OutlinedTextField(
                 value = phone,
                 onValueChange = onPhoneChange,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().testTag("login-phone"),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 singleLine = true,
                 leadingIcon = {
@@ -295,7 +295,7 @@ private fun PasswordPage(
             OutlinedTextField(
                 value = password,
                 onValueChange = onPasswordChange,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().testTag("login-password"),
                 visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 singleLine = true,
