@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 日志导出:仅暴露 cacheDir/BankExport/(FileProvider 最小授权路径)。 -->
+<paths>
+    <cache-path name="exports" path="BankExport/" />
+</paths>

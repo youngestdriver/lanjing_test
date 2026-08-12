@@ -5,6 +5,7 @@ import com.qzh.lanjingquiz.Network.ExamDto
 import com.qzh.lanjingquiz.Network.ExamResult
 import com.qzh.lanjingquiz.Network.UpstreamApi
 import com.qzh.lanjingquiz.UI.HomeTab
+import com.qzh.lanjingquiz.UI.Practice.PracticeRoute
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -49,6 +50,13 @@ class AppState @Inject constructor(
 
     /** HomeTabHost 直接写值(brief AppRoot 接线),故暴露 MutableStateFlow。 */
     val selectedTab = MutableStateFlow(HomeTab.Exams)
+
+    /** 练习页内部导航(Home tab 内;iOS NavigationStack 等价物):分类 → 题型 → 刷题。
+     *  Hoist 到 AppState 使切 Tab 后练习导航保留。 */
+    val practiceRoute = MutableStateFlow<PracticeRoute>(PracticeRoute.Categories)
+
+    /** 删除题库版本号:我的 > 删除题库 +1,练习页 VM 据此重置并重爬(iOS bankResetVersion)。 */
+    val bankResetVersion = MutableStateFlow(0)
 
     private val _notice = MutableStateFlow<String?>(null)
     val notice: StateFlow<String?> = _notice.asStateFlow()

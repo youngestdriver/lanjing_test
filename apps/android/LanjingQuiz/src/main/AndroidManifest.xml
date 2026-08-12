@@ -16,5 +16,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- 日志导出:仅暴露 cacheDir/BankExport/(T5 练习题库设置)。 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.qzh.lanjingquiz.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

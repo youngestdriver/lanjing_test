@@ -11,10 +11,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
-/** T5 替换:练习占位屏。 */
-@Composable
-fun PracticeBankScreenPlaceholder(padding: PaddingValues) = PlaceholderScreen("练习", padding)
-
 /** T6 替换:我的占位屏。 */
 @Composable
 fun ProfileScreenPlaceholder(padding: PaddingValues) = PlaceholderScreen("我的", padding)

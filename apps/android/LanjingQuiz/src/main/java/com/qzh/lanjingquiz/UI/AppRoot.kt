@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,6 +48,13 @@ import com.qzh.lanjingquiz.App.Route
 import com.qzh.lanjingquiz.UI.ExamList.ExamListScreen
 import com.qzh.lanjingquiz.UI.Login.LoginScreen
 import com.qzh.lanjingquiz.UI.Login.LoginViewModel
+import com.qzh.lanjingquiz.UI.Practice.BankPhase
+import com.qzh.lanjingquiz.UI.Practice.PracticeBankScreen
+import com.qzh.lanjingquiz.UI.Practice.PracticeBankViewModel
+import com.qzh.lanjingquiz.UI.Practice.PracticeQuizScreen
+import com.qzh.lanjingquiz.UI.Practice.PracticeQuizViewModel
+import com.qzh.lanjingquiz.UI.Practice.PracticeRoute
+import com.qzh.lanjingquiz.UI.Practice.SubcategoryListScreen
 import com.qzh.lanjingquiz.UI.Quiz.QuizScreen
 import com.qzh.lanjingquiz.UI.Result.ResultScreen
 
@@ -111,8 +119,56 @@ fun HomeTabHost(appState: AppState) {
     }) { padding ->
         when (tab) {
             HomeTab.Exams -> Box(Modifier.padding(padding)) { ExamListScreen() }
-            HomeTab.Practice -> PracticeBankScreenPlaceholder(padding)  // T5 替换
+            HomeTab.Practice -> PracticeTabHost(appState, padding)
             HomeTab.Profile -> ProfileScreenPlaceholder(padding)  // T6 替换
+        }
+    }
+}
+
+/**
+ * 练习 Tab 容器:分类列表 → 题型列表 → 刷题(内部状态切换,route 恒在 Home 内;
+ * Hoist 在 AppState,切 Tab 后导航保留)。题库进入爬取/重爬 → 弹回分类根(镜像 iOS dismiss)。
+ */
+@Composable
+fun PracticeTabHost(appState: AppState, padding: PaddingValues) {
+    val bankVm: PracticeBankViewModel = hiltViewModel()
+    val quizVm: PracticeQuizViewModel = hiltViewModel()
+    val route by appState.practiceRoute.collectAsState()
+    val phase by bankVm.phase.collectAsState()
+
+    LaunchedEffect(phase) {
+        if (phase is BankPhase.Crawling && route != PracticeRoute.Categories) {
+            appState.practiceRoute.value = PracticeRoute.Categories
+        }
+    }
+
+    val currentRoute = route   // 局部非委托 val,允许 when 分支智能转换
+    Box(Modifier.padding(padding)) {
+        when (currentRoute) {
+            PracticeRoute.Categories -> PracticeBankScreen(
+                appState = appState,
+                vm = bankVm,
+                onOpenCategory = { appState.practiceRoute.value = PracticeRoute.Subcategories(it) },
+                onStart = { category, subCategory ->
+                    appState.practiceRoute.value = PracticeRoute.Quiz(category, subCategory)
+                },
+            )
+            is PracticeRoute.Subcategories -> SubcategoryListScreen(
+                vm = bankVm,
+                category = currentRoute.category,
+                onStart = { category, subCategory ->
+                    appState.practiceRoute.value = PracticeRoute.Quiz(category, subCategory)
+                },
+                onBack = { appState.practiceRoute.value = PracticeRoute.Categories },
+            )
+            is PracticeRoute.Quiz -> PracticeQuizScreen(
+                appState = appState,
+                bankVm = bankVm,
+                vm = quizVm,
+                category = currentRoute.category,
+                subCategory = currentRoute.subCategory,
+                onBack = { appState.practiceRoute.value = PracticeRoute.Subcategories(currentRoute.category) },
+            )
         }
     }
 }

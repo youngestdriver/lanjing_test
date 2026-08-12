@@ -7,6 +7,7 @@ import com.qzh.lanjingquiz.Network.ExamResult
 import com.qzh.lanjingquiz.Network.QuestionBatchRequest
 import com.qzh.lanjingquiz.Network.QuestionDto
 import com.qzh.lanjingquiz.Network.UpstreamApi
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 
 /** JVM 单测用假上游(跨任务复用,与 UpstreamApi 接口逐方法对齐)。 */
@@ -32,8 +33,16 @@ class FakeApi : UpstreamApi {
     var submitExamDelayMs = 0L
     var submitExamResult = ExamResult("88", "72", "35")
 
+    // ---- 练习/爬取(T5) ----
+    var examListResult = ExamListResult(0, emptyList(), emptyList())
+    var examListError: ApiException? = null
+    /** 第 gateFromCall+1 次起 enterExam 挂起等待(确定性观察爬取中间进度)。 */
+    var enterExamGate: CompletableDeferred<Unit>? = null
+    var gateFromCall: Int = 0
+
     // ---- 调用记录 ----
     var enterExamCalls = 0
+    var examListCalls = 0
     var lastEnterExamInfoId: String? = null
     var lastEnterIsNew: Boolean = true
     var examStartHtmlCalls = 0
@@ -55,12 +64,17 @@ class FakeApi : UpstreamApi {
         session = true
     }
 
-    override suspend fun examList(): ExamListResult = ExamListResult(0, emptyList(), emptyList())
+    override suspend fun examList(): ExamListResult {
+        examListCalls++
+        examListError?.let { throw it }
+        return examListResult
+    }
 
     override suspend fun enterExam(examInfoId: String, isNew: Boolean): EnterExamResult {
         enterExamCalls++
         lastEnterExamInfoId = examInfoId
         lastEnterIsNew = isNew
+        if (enterExamGate != null && enterExamCalls > gateFromCall) enterExamGate!!.await()
         enterExamError?.let { throw it }
         return enterExamResult
     }
