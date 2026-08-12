@@ -1,6 +1,7 @@
 package com.qzh.lanjingquiz.App
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.qzh.lanjingquiz.Data.SettingsStore
 import com.qzh.lanjingquiz.Network.ExamDto
 import com.qzh.lanjingquiz.Network.ExamResult
@@ -10,7 +11,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /** 应用路由;Quiz/Result 携带 Task 1 DTO(T3 消费)。 */
@@ -69,12 +70,15 @@ class AppState @Inject constructor(
         navigateTo(Route.Login)
     }
 
-    /** 退出登录:best-effort 上游注销(异常吞掉),清本地会话,回登录页并复位 Tab。 */
+    /** 退出登录:异步 best-effort 上游注销(异常吞掉),随后清本地会话、回登录页并复位 Tab。
+     *  不在调用线程阻塞(ApiClient.logout 内部已吞错误,runCatching 为双保险)。 */
     fun logout() {
-        runBlocking { runCatching { api.logout() } }
-        api.clearSession()
-        selectedTab.value = HomeTab.Exams
-        navigateTo(Route.Login)
+        viewModelScope.launch {
+            runCatching { api.logout() }
+            api.clearSession()
+            navigateTo(Route.Login)
+            selectedTab.value = HomeTab.Exams
+        }
     }
 
     /** 唯一写 route 的入口;路由切换一律走它。 */

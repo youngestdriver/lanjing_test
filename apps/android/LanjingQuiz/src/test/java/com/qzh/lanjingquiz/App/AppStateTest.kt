@@ -3,11 +3,26 @@ package com.qzh.lanjingquiz.App
 import com.qzh.lanjingquiz.Data.InMemorySettingsStore
 import com.qzh.lanjingquiz.FakeApi
 import com.qzh.lanjingquiz.UI.HomeTab
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
 import org.junit.Assert.*
+import org.junit.Before
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class AppStateTest {
+    // logout() 走 viewModelScope(Main),测试需注入 Main 派发器并推进调度器
+    private val dispatcher = StandardTestDispatcher()
+
+    @Before fun setUp() { Dispatchers.setMain(dispatcher) }
+    @After fun tearDown() { Dispatchers.resetMain() }
+
     @Test fun `start routes home when session exists`() = runTest {
         val api = FakeApi().apply { session = true }
         val state = AppState(api, InMemorySettingsStore())
@@ -27,10 +42,11 @@ class AppStateTest {
         assertEquals("登录已过期，请重新登录", state.notice.value)
         assertFalse(api.hasSession())
     }
-    @Test fun `logout calls upstream then clears locally`() = runTest {
+    @Test fun `logout calls upstream then clears locally`() = runTest(dispatcher) {
         val api = FakeApi().apply { session = true }
         val state = AppState(api, InMemorySettingsStore())
         state.logout()
+        advanceUntilIdle()   // logout 现为异步(viewModelScope),等协程完成后再断言
         assertEquals(1, api.logoutCalls)
         assertFalse(api.hasSession())
         assertEquals(Route.Login, state.route.value)
