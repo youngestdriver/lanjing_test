@@ -70,13 +70,16 @@ jobs:
         name: Create AVD
         working-directory: apps/android
         run: |
+          # runner 的 sdkmanager/avdmanager 不在 PATH,需 cmdline-tools 全路径
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
           echo "y" | sdkmanager --licenses > /dev/null
           sdkmanager "emulator" "system-images;android-35;google_apis;x86_64"
-          avdmanager create avd -n pixel6_api35 -k "system-images;android-35;google_apis;x86_64" --device "pixel_6"
+          echo "no" | avdmanager create avd -n pixel6_api35 -k "system-images;android-35;google_apis;x86_64" --device "pixel_6"
       - if: steps.filter.outputs.android == 'true'
         name: Run UI tests
         working-directory: apps/android
         run: |
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
           $ANDROID_HOME/emulator/emulator -avd pixel6_api35 -no-window -no-audio -no-snapshot -gpu swiftshader_indirect &
           adb wait-for-device
           for i in $(seq 1 60); do
