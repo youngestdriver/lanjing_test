@@ -7,6 +7,11 @@ plugins {
     kotlin("kapt")
 }
 
+// 版本号可由 CI 覆盖(release.yml android-apk producer):
+//   ./gradlew assembleRelease -PversionName=1.1.0 -PversionCode=10100
+val releaseVersionName = project.findProperty("versionName")?.toString()?.takeIf { it.isNotBlank() } ?: "1.0"
+val releaseVersionCode = project.findProperty("versionCode")?.toString()?.toIntOrNull() ?: 1
+
 android {
     namespace = "com.qzh.lanjingquiz"
     compileSdk = 35
@@ -14,10 +19,9 @@ android {
         applicationId = "com.qzh.lanjingquiz"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = releaseVersionCode
+        versionName = releaseVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        // 版本号可由 CI 覆盖:./gradlew assembleRelease -PversionName=1.1.0 -PversionCode=10100
         buildConfigField("String", "API_BASE_URL", "\"https://test.lanjingweike.com\"")
     }
     buildTypes {

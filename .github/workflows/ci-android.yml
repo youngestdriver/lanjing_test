@@ -38,3 +38,51 @@ jobs:
         with:
           name: android-debug-apk
           path: artifact/
+
+  # 仪器化 UI 测试:API 35 模拟器 + connectedDebugAndroidTest(进程内 MockWebServer,
+  # 不触真实上游;路径过滤未命中时 job 内全部步骤跳过,check 自动通过)。
+  android-ui:
+    runs-on: ubuntu-latest
+    needs: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            android:
+              - 'apps/android/**'
+              - '.github/workflows/ci-android.yml'
+      - if: steps.filter.outputs.android == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - if: steps.filter.outputs.android == 'true'
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.10.2
+      - if: steps.filter.outputs.android == 'true'
+        name: AVD cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/avd
+          key: avd-pixel6-api35
+      - if: steps.filter.outputs.android == 'true'
+        name: Create AVD
+        working-directory: apps/android
+        run: |
+          echo "y" | sdkmanager --licenses > /dev/null
+          sdkmanager "emulator" "system-images;android-35;google_apis;x86_64"
+          avdmanager create avd -n pixel6_api35 -k "system-images;android-35;google_apis;x86_64" --device "pixel_6"
+      - if: steps.filter.outputs.android == 'true'
+        name: Run UI tests
+        working-directory: apps/android
+        run: |
+          $ANDROID_HOME/emulator/emulator -avd pixel6_api35 -no-window -no-audio -no-snapshot -gpu swiftshader_indirect &
+          adb wait-for-device
+          for i in $(seq 1 60); do
+            [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ] && break
+            sleep 5
+          done
+          ./gradlew connectedDebugAndroidTest --no-daemon
