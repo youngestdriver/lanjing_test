@@ -1,14 +1,17 @@
 package com.qzh.lanjingquiz.App
 
+import com.qzh.lanjingquiz.Data.PrefsSettingsStore
 import com.qzh.lanjingquiz.Data.SecureStore
 import com.qzh.lanjingquiz.Data.SettingsStore
 import com.qzh.lanjingquiz.Network.ApiClient
 import com.qzh.lanjingquiz.Network.CookieStore
 import com.qzh.lanjingquiz.Network.PersistentCookieJar
 import com.qzh.lanjingquiz.Network.PrefsCookieStore
+import com.qzh.lanjingquiz.Network.UpstreamApi
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -18,10 +21,10 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object AppModule {
     @Provides @Singleton
-    fun settingsStore(context: android.content.Context): SettingsStore = SettingsStore(context)
+    fun settingsStore(@ApplicationContext context: android.content.Context): SettingsStore = PrefsSettingsStore(context)
 
     @Provides @Singleton
-    fun secureStore(context: android.content.Context): SecureStore = SecureStore(context)
+    fun secureStore(@ApplicationContext context: android.content.Context): SecureStore = SecureStore(context)
 
     @Provides @Singleton
     fun cookieStore(secureStore: SecureStore): CookieStore = PrefsCookieStore(secureStore)
@@ -40,5 +43,5 @@ object AppModule {
         .build()
 
     @Provides @Singleton
-    fun apiClient(http: OkHttpClient, cookieJar: PersistentCookieJar): ApiClient = ApiClient(http, cookieJar)
+    fun apiClient(http: OkHttpClient, cookieJar: PersistentCookieJar): UpstreamApi = ApiClient(http, cookieJar)
 }
