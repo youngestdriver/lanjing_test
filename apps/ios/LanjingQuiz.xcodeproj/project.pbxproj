@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0750D6F6977341749D0F1B17 /* Question.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34E242E150FF74041E7BA8E5 /* Question.swift */; };
+		0ABCEE9F033ADFBBB6B0478D /* PracticeProgressStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4DB5CFB75C79185F8AB7512 /* PracticeProgressStoreTests.swift */; };
 		0C66E3A25774391E8339400C /* Formatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0364F22B8201AF3CC52F19FE /* Formatters.swift */; };
 		0DB261CA89D7EACF6B41481B /* CookieCloudClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05796CE89C2C81EA0EC1B8D5 /* CookieCloudClient.swift */; };
 		0E2517FEDF893563660AD3D1 /* QuizLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = F79AF1AA06722655AAA9C969 /* QuizLogic.swift */; };
@@ -39,6 +40,7 @@
 		6F368E7E1EBFF45A10CFD7BB /* OptionRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A379D8F9B0C242F2ABE001B0 /* OptionRowView.swift */; };
 		741E447E0B5AFD95BFE8CBB1 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 537D051E4644236232756CB3 /* Extensions.swift */; };
 		74A6E99F1CAC6EC9B9D6FEA7 /* BankStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FF5AB4B1C7BCE1D1BA79FA0 /* BankStorageTests.swift */; };
+		7FBAF986E211793CA6339392 /* PracticeProgressStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30200C49DAEDE5C752C3BCBB /* PracticeProgressStore.swift */; };
 		7FE52BC515554B62992E522A /* PracticeOptionRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBEC331B9CC28250E7160459 /* PracticeOptionRowView.swift */; };
 		8243C64240A61BFE565BED9F /* PracticeAnswerCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1133C5D8F1711CF399B2E524 /* PracticeAnswerCardView.swift */; };
 		82CF707AF0A66AD6EB1D3040 /* RichHTMLContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56AA693D7FFFB20B8364E9F5 /* RichHTMLContent.swift */; };
@@ -128,6 +130,7 @@
 		2D6B481FC05585B2110A8B19 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		2E6F97D0273040C8E0A2C306 /* PracticeSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeSessionStore.swift; sourceTree = "<group>"; };
 		2EC6D828E6FA0AB00C311AF9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		30200C49DAEDE5C752C3BCBB /* PracticeProgressStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeProgressStore.swift; sourceTree = "<group>"; };
 		329985DEEC96E51CF14F8407 /* LanjingQuizUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LanjingQuizUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		32BFB7AB9B136148CFC37135 /* LanjingQuizTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LanjingQuizTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		33F905DFA804D34FFB20F66C /* PracticeBankViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeBankViewModel.swift; sourceTree = "<group>"; };
@@ -185,6 +188,7 @@
 		DDA0F435FACAC1527BB92A1D /* BankModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankModelTests.swift; sourceTree = "<group>"; };
 		E21335F7B31985CE3647EE6E /* LoginFormTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginFormTests.swift; sourceTree = "<group>"; };
 		E2584DF0E03F4C66B86C082D /* ResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultView.swift; sourceTree = "<group>"; };
+		E4DB5CFB75C79185F8AB7512 /* PracticeProgressStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeProgressStoreTests.swift; sourceTree = "<group>"; };
 		E6AC6144CF6B87E67A637A1F /* PracticeFlowUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeFlowUITests.swift; sourceTree = "<group>"; };
 		E79BCB55F107262197AF9EF9 /* ExamCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExamCardView.swift; sourceTree = "<group>"; };
 		EBEC331B9CC28250E7160459 /* PracticeOptionRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeOptionRowView.swift; sourceTree = "<group>"; };
@@ -231,6 +235,7 @@
 				37D041F47271D626E7EE60A4 /* HashingTests.swift */,
 				E21335F7B31985CE3647EE6E /* LoginFormTests.swift */,
 				2D2E8D2729A582B391B3A839 /* PracticeBankViewModelTests.swift */,
+				E4DB5CFB75C79185F8AB7512 /* PracticeProgressStoreTests.swift */,
 				F6D8FFB1EA1CBFDCFC515882 /* PracticeSessionTests.swift */,
 				B49E295DDA6EFC32D2143147 /* PracticeUpstreamMappingTests.swift */,
 				2D3CA1090761016E6D779447 /* QuestionClassifierTests.swift */,
@@ -288,6 +293,7 @@
 				0364F22B8201AF3CC52F19FE /* Formatters.swift */,
 				59F40B97D0409BCE50D7C6C5 /* Hashing.swift */,
 				51617D25D6FE8FDA9BD31D32 /* HTMLText.swift */,
+				30200C49DAEDE5C752C3BCBB /* PracticeProgressStore.swift */,
 				2E6F97D0273040C8E0A2C306 /* PracticeSessionStore.swift */,
 				56AA693D7FFFB20B8364E9F5 /* RichHTMLContent.swift */,
 			);
@@ -570,6 +576,7 @@
 				23B57501204B215210E0976F /* PracticeBankViewModel.swift in Sources */,
 				D43681CBAFADBCEBC83D138C /* PracticeCategoryListView.swift in Sources */,
 				7FE52BC515554B62992E522A /* PracticeOptionRowView.swift in Sources */,
+				7FBAF986E211793CA6339392 /* PracticeProgressStore.swift in Sources */,
 				F7A06E367A50D6AFD71E47DC /* PracticeQuizView.swift in Sources */,
 				9BDEBD4B0CC88D8F0AD6E86D /* PracticeSessionStore.swift in Sources */,
 				89393C557CD8AE5A45084240 /* PracticeSubcategoryListView.swift in Sources */,
@@ -620,6 +627,7 @@
 				D696887E947DA6154A1033EC /* HashingTests.swift in Sources */,
 				9F233F588C9ACD522BF61132 /* LoginFormTests.swift in Sources */,
 				1E6FEB92778220DA344414D4 /* PracticeBankViewModelTests.swift in Sources */,
+				0ABCEE9F033ADFBBB6B0478D /* PracticeProgressStoreTests.swift in Sources */,
 				642054B71EAF86E39A0EE05A /* PracticeSessionTests.swift in Sources */,
 				CCF5A21E9BFD0B8AE9E5674E /* PracticeUpstreamMappingTests.swift in Sources */,
 				112B658DA7E1C4564561985E /* QuestionClassifierTests.swift in Sources */,

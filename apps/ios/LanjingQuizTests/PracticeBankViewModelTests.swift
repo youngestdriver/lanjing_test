@@ -32,6 +32,31 @@ actor FakePracticeSessionStore: PracticeSessionStoring {
     }
 }
 
+/// In-memory progress store: records saves/clears, never touches the file system.
+actor FakePracticeProgressStore: PracticeProgressStoring {
+    private(set) var stored: [String: PracticeProgress]?
+    private(set) var saveCount = 0
+    private(set) var clearCount = 0
+
+    func load() async -> [String: PracticeProgress]? { stored }
+    func save(_ progress: [String: PracticeProgress]) async throws {
+        stored = progress
+        saveCount += 1
+    }
+    func clear() async throws {
+        stored = nil
+        clearCount += 1
+    }
+
+    func awaitSaveCount(_ target: Int) async {
+        while saveCount < target { await Task.yield() }
+    }
+
+    func awaitClearCount(_ target: Int) async {
+        while clearCount < target { await Task.yield() }
+    }
+}
+
 @MainActor
 final class PracticeBankViewModelTests: XCTestCase {
 
@@ -73,8 +98,10 @@ final class PracticeBankViewModelTests: XCTestCase {
             .filter { $0.subCategory == "成语辨析" }
     }
 
-    private func makeVM(storage: FakeBankStorage, sessionStore: FakePracticeSessionStore) -> PracticeBankViewModel {
-        PracticeBankViewModel(appState: AppState(), storage: storage, sessionStore: sessionStore)
+    private func makeVM(storage: FakeBankStorage, sessionStore: FakePracticeSessionStore,
+                        progressStore: FakePracticeProgressStore = FakePracticeProgressStore()) -> PracticeBankViewModel {
+        PracticeBankViewModel(appState: AppState(), storage: storage, sessionStore: sessionStore,
+                              progressStore: progressStore)
     }
 
     // MARK: - tapOption (问题 2 regression pins)
@@ -362,5 +389,84 @@ final class PracticeBankViewModelTests: XCTestCase {
         await store.awaitClearCount(1)
         let cleared = await store.stored
         XCTAssertNil(cleared)
+    }
+
+    // MARK: - 进度注册表(需求 4)
+
+    func testTapRecordsAnsweredProgress() async throws {
+        let storage = FakeBankStorage()
+        storage.categoryTexts = categoryTexts()
+        let store = FakePracticeSessionStore()
+        let progressStore = FakePracticeProgressStore()
+        let vm = makeVM(storage: storage, sessionStore: store, progressStore: progressStore)
+
+        await vm.resumeOrStart(category: "言语理解", subCategory: "成语辨析")
+        vm.tapOption("A") // q1 单选 reveal → 记录
+        await progressStore.awaitSaveCount(1)
+        let saved = await progressStore.stored
+        XCTAssertEqual(saved?["言语理解/成语辨析"]?.answeredIDs, ["q1"])
+        XCTAssertEqual(vm.answeredCount(category: "言语理解", subCategory: "成语辨析"), 1)
+        XCTAssertEqual(vm.answeredCount(category: "言语理解"), 1)
+    }
+
+    func testPendingMultiSelectionNotRecordedUntilConfirm() async throws {
+        let storage = FakeBankStorage()
+        storage.categoryTexts = categoryTexts()
+        let store = FakePracticeSessionStore()
+        let progressStore = FakePracticeProgressStore()
+        let vm = makeVM(storage: storage, sessionStore: store, progressStore: progressStore)
+
+        await vm.resumeOrStart(category: "言语理解", subCategory: "成语辨析")
+        vm.nextQuestion()
+        vm.nextQuestion() // → q3 多选
+        vm.tapOption("A") // 未提交 → 不计入进度
+        let saveCount = await progressStore.saveCount
+        XCTAssertEqual(saveCount, 0)
+
+        vm.confirmSelection()
+        await progressStore.awaitSaveCount(1)
+        let saved = await progressStore.stored
+        XCTAssertEqual(saved?["言语理解/成语辨析"]?.answeredIDs, ["q3"])
+    }
+
+    func testAnsweredProgressDeduplicatesAndAggregatesAcrossSubcategories() async throws {
+        let storage = FakeBankStorage()
+        storage.categoryTexts = categoryTexts()
+        let store = FakePracticeSessionStore()
+        let progressStore = FakePracticeProgressStore()
+        // 预置其他题型细分的进度存档:入口加载时进入 VM 内存副本(跨会话累计),
+        // 验证大类聚合。
+        try await progressStore.save([
+            "言语理解/虚词辨析": PracticeProgress(answeredIDs: ["x1", "x2"]),
+            "数字运算/速算": PracticeProgress(answeredIDs: ["y1"]),
+        ])
+        let vm = makeVM(storage: storage, sessionStore: store, progressStore: progressStore)
+
+        await vm.resumeOrStart(category: "言语理解", subCategory: "成语辨析")
+        vm.tapOption("A") // q1 reveal
+        vm.tapOption("A") // 再次 tap 同题(已 reveal,无变化)—— 不重复记录
+        await progressStore.awaitSaveCount(1)
+        XCTAssertEqual(vm.answeredCount(category: "言语理解", subCategory: "成语辨析"), 1)
+
+        // 大类聚合 = 键前缀求和:1(本会话成语辨析)+ 2(预置虚词辨析)。
+        XCTAssertEqual(vm.answeredCount(category: "言语理解"), 3)
+        XCTAssertEqual(vm.answeredCount(category: "数字运算"), 1)
+    }
+
+    func testBankDeletedClearsProgressRegistry() async throws {
+        let storage = FakeBankStorage()
+        storage.categoryTexts = categoryTexts()
+        let store = FakePracticeSessionStore()
+        let progressStore = FakePracticeProgressStore()
+        let vm = makeVM(storage: storage, sessionStore: store, progressStore: progressStore)
+
+        await vm.resumeOrStart(category: "言语理解", subCategory: "成语辨析")
+        vm.tapOption("A")
+        await progressStore.awaitSaveCount(1)
+        XCTAssertEqual(vm.answeredCount(category: "言语理解"), 1)
+
+        vm.bankWasDeleted()
+        XCTAssertEqual(vm.answeredCount(category: "言语理解"), 0)
+        await progressStore.awaitClearCount(1)
     }
 }

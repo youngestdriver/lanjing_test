@@ -25,17 +25,22 @@ final class AppState {
     /// Practice-run persistence (Application Support/LanjingQuiz/
     /// practice-session.json), injected like bankStorage so tests can fake it.
     let practiceSessionStore: FileManagerPracticeSessionStore
+    /// 练习进度注册表(Application Support/LanjingQuiz/practice-progress.json),
+    /// 与 sessionStore 同注入模式。
+    let practiceProgressStore: FileManagerPracticeProgressStore
     /// Bumped whenever the local bank is deleted (我的 > 删除题库) so every
     /// PracticeBankViewModel instance (练习 tab and 我的 tab create their own)
     /// resets and re-crawls on its next appearance.
     private(set) var bankResetVersion = 0
 
     init(api: APIClient = APIClient(), bankStorage: BankStorage = FileManagerBankStorage(),
-         practiceSessionStore: FileManagerPracticeSessionStore = FileManagerPracticeSessionStore()) {
+         practiceSessionStore: FileManagerPracticeSessionStore = FileManagerPracticeSessionStore(),
+         practiceProgressStore: FileManagerPracticeProgressStore = FileManagerPracticeProgressStore()) {
         self.api = api
         self.cookieCloudSync = CookieCloudSync(cookieStore: api.cookieStore)
         self.bankStorage = bankStorage
         self.practiceSessionStore = practiceSessionStore
+        self.practiceProgressStore = practiceProgressStore
         self.theme = Theme.load()
         self.autoAdvanceOnCorrect = QuizSettings.loadAutoAdvanceOnCorrect()
     }
@@ -54,6 +59,8 @@ final class AppState {
             // from the previous test execution resumes at question 2/3 and
             // breaks "第 1/" assertions.
             try? await practiceSessionStore.clear()
+            // 进度注册表同样清零:入口行回到纯 "N 题" 基线(UI 测试断言)。
+            try? await practiceProgressStore.clear()
         }
         #endif
         let hasSession = await cookieCloudSync.pullAndApplyIfNeeded()
@@ -120,5 +127,6 @@ final class AppState {
         bankResetVersion += 1
         notice = "题库已删除，重新进入练习页会重新爬取全部试卷"
         Task { try? await practiceSessionStore.clear() }
+        Task { try? await practiceProgressStore.clear() }
     }
 }
