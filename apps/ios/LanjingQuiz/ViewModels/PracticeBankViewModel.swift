@@ -22,6 +22,9 @@ final class PracticeBankViewModel {
     private let storage: BankStorage
     private let facade: PracticeUpstreamClient
     private let sessionStore: any PracticeSessionStoring
+    private let progressStore: any PracticeProgressStoring
+    /// 进度注册表内存副本(键 "\(category)/\(subCategory)")。
+    private var progress: [String: PracticeProgress] = [:]
 
     /// The underlying store, exposed for the 我的 > 题库 > 日志导出 row.
     var bankStore: BankStorage { storage }
@@ -35,11 +38,13 @@ final class PracticeBankViewModel {
     private(set) var resumedFromDisk = false
 
     init(appState: AppState, storage: BankStorage? = nil, facade: PracticeUpstreamClient? = nil,
-         sessionStore: (any PracticeSessionStoring)? = nil) {
+         sessionStore: (any PracticeSessionStoring)? = nil,
+         progressStore: (any PracticeProgressStoring)? = nil) {
         self.appState = appState
         self.storage = storage ?? appState.bankStorage
         self.facade = facade ?? PracticeUpstreamClient(api: appState.api)
         self.sessionStore = sessionStore ?? appState.practiceSessionStore
+        self.progressStore = progressStore ?? appState.practiceProgressStore
     }
 
     // MARK: - Bank availability
@@ -48,6 +53,7 @@ final class PracticeBankViewModel {
     /// the next ensureBankReady re-crawls everything from scratch. The
     /// persisted practice session is cleared too (AppState.deleteBank also
     /// clears it — double insurance for the settings screen's own VM).
+    /// 进度注册表同样清零:旧题 ID 无意义。
     func bankWasDeleted() {
         phase = .idle
         meta = nil
@@ -55,6 +61,8 @@ final class PracticeBankViewModel {
         session = nil
         resumedFromDisk = false
         Task { try? await sessionStore.clear() }
+        progress = [:]
+        Task { try? await progressStore.clear() }
     }
 
     /// Entry point from the practice tab's .task: use the local bank when
@@ -65,9 +73,16 @@ final class PracticeBankViewModel {
         if storage.isPopulated(), let meta = storage.loadMeta() {
             self.meta = meta
             phase = .ready
+            await loadProgressIfNeeded()
             return
         }
         await crawlIfNeeded(force: false)
+    }
+
+    /// 加载进度注册表(幂等,空表重载)。练习入口(题库列表/答题页)都会触发。
+    private func loadProgressIfNeeded() async {
+        guard progress.isEmpty else { return }
+        if let loaded = await progressStore.load() { progress = loaded }
     }
 
     /// 我的 > 更新题库: re-crawl EVERY paper and atomically replace the local
@@ -91,10 +106,12 @@ final class PracticeBankViewModel {
             meta = storage.loadMeta()
             phase = .ready
             if force {
-                // 题库内容可能已变化:按恢复规则(问题 ID 顺序比对)旧存档
+                // 题库内容可能已变化:按恢复规则(问题 ID 集合比对)旧存档
                 // 不可能再匹配,清掉避免残留;失败(refresh 模式)不清,
-                // 旧库保留,存档依然有效。
+                // 旧库保留,存档依然有效。进度注册表同样清空(旧 ID 无意义)。
                 Task { try? await sessionStore.clear() }
+                progress = [:]
+                Task { try? await progressStore.clear() }
             }
         } catch is CancellationError {
             // Tab switched away mid-crawl: per-paper meta.papers progress is
@@ -134,6 +151,7 @@ final class PracticeBankViewModel {
             phase = .failed("本地题库缺少 \(category).jsonl，请在 我的 > 更新题库 重新爬取")
             return false
         }
+        await loadProgressIfNeeded()
         let questions = BankLogic.parseJSONL(text).filter { $0.subCategory == subCategory }
         let ordered = shuffleEnabled(category: category)
             ? BankLogic.shuffledKeepingGroups(questions, seed: UInt64.random(in: .min ... .max))
@@ -170,7 +188,7 @@ final class PracticeBankViewModel {
 
     /// Explicit exit (summary screen's 返回题型列表): drops the in-memory
     /// session and the persisted file — a finished run must never resume.
-    /// (Plain system-back / swipe-back no longer clears anything: the ID-order
+    /// (Plain system-back / swipe-back no longer clears anything: the ID-set
     /// resumeCandidate check is what prevents stale sessions from leaking.)
     func endSession() {
         session = nil
@@ -214,6 +232,7 @@ final class PracticeBankViewModel {
             answer.selected = [letter]
             answer.revealed = true
             answer.correct = nil
+            recordAnswered(question)
         } else if question.isMulti {
             if answer.selected.contains(letter) {
                 answer.selected.remove(letter)
@@ -227,6 +246,7 @@ final class PracticeBankViewModel {
             answer.selected = [letter]
             answer.revealed = true
             answer.correct = BankLogic.grade(selected: answer.selected, question: question)
+            recordAnswered(question)
         }
         session.answers[index] = answer
         self.session = session
@@ -241,9 +261,37 @@ final class PracticeBankViewModel {
         let question = session.questions[index]
         answer.correct = BankLogic.grade(selected: answer.selected, question: question)
         answer.revealed = true
+        recordAnswered(question)
         session.answers[index] = answer
         self.session = session
         persist()
+    }
+
+    /// 已揭晓答案的题目记入进度注册表(跨会话累计,不因随机顺序/重新进入而
+    /// 重复计算)。三种 reveal 路径共用:单选 tap、无答案 tap、多选 confirm。
+    private func recordAnswered(_ question: BankQuestion) {
+        let key = "\(question.category)/\(question.subCategory)"
+        var entry = progress[key] ?? PracticeProgress()
+        if !entry.answeredIDs.contains(question.id) {
+            entry.answeredIDs.append(question.id)
+            progress[key] = entry
+            let snapshot = progress
+            let store = progressStore
+            Task { try? await store.save(snapshot) }
+        }
+    }
+
+    // MARK: - 做题进度(需求 4)
+
+    /// 某题型细分的已答数(跨会话累计)。
+    func answeredCount(category: String, subCategory: String) -> Int {
+        progress["\(category)/\(subCategory)"]?.answeredIDs.count ?? 0
+    }
+
+    /// 某大类下所有题型细分的已答数之和。
+    func answeredCount(category: String) -> Int {
+        progress.filter { $0.key.hasPrefix("\(category)/") }
+            .values.reduce(0) { $0 + $1.answeredIDs.count }
     }
 
     func nextQuestion() {

@@ -143,11 +143,21 @@ final class PracticeSessionTests: XCTestCase {
         )
     }
 
-    func testResumeCandidateRejectsDifferentIdOrder() {
+    func testResumeCandidateMatchesDifferentIdOrder() {
         let saved = makeSession()
-        // Shuffle toggle / bank update change the order → fresh start.
+        // 随机顺序(洗牌)只改变顺序、不改变 ID 集合 → 必须恢复存档(需求 3)。
         let shuffled = [makeQuestion("q2"), makeQuestion("q1"), makeQuestion("q3")]
-        XCTAssertNil(BankLogic.resumeCandidate(saved: saved, category: "言语理解", subCategory: "成语辨析", ordered: shuffled))
+        XCTAssertEqual(
+            BankLogic.resumeCandidate(saved: saved, category: "言语理解", subCategory: "成语辨析", ordered: shuffled),
+            saved
+        )
+    }
+
+    func testResumeCandidateRejectsDifferentIdSet() {
+        let saved = makeSession()
+        // 题库更新后 ID 集合变化(增/删题)→ 存档失效,全新开始。
+        let changedBank = [makeQuestion("q1"), makeQuestion("q2"), makeQuestion("q4")]
+        XCTAssertNil(BankLogic.resumeCandidate(saved: saved, category: "言语理解", subCategory: "成语辨析", ordered: changedBank))
     }
 
     func testResumeCandidateRejectsDifferentCategory() {

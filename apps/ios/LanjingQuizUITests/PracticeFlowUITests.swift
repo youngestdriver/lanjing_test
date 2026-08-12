@@ -60,7 +60,7 @@ final class PracticeFlowUITests: XCTestCase {
             XCTAssertTrue(currentHeader.waitForExistence(timeout: 10), "\(expected) header missing")
             // Option rows render their content in a WKWebView, so the button's
             // accessible label is just the keycap letter ("A").
-            let firstOption = app.buttons["A"]
+            let firstOption = optionButton(app, "A")
             XCTAssertTrue(firstOption.waitForExistence(timeout: 5), "option row missing")
             firstOption.tap()
             let button = app.buttons[index == headers.count - 1 ? "完成" : "下一题"]
@@ -137,7 +137,7 @@ final class PracticeFlowUITests: XCTestCase {
         // 问题 2: tap the WRONG option (B; q1's answer is A) — the row must
         // be marked "option-B-wrong"; the unselected correct row gets no
         // verdict identifier.
-        let wrongOption = app.buttons["B"]
+        let wrongOption = optionButton(app, "B")
         XCTAssertTrue(wrongOption.waitForExistence(timeout: 5), "option row missing")
         wrongOption.tap()
         XCTAssertTrue(app.buttons["option-B-wrong"].waitForExistence(timeout: 5),
@@ -197,7 +197,9 @@ final class PracticeFlowUITests: XCTestCase {
         // The question 题干 is the FIRST web view in the tree (headerRow is
         // plain text; option rows follow). Web-view frames are not
         // KVC-compliant, so poll instead of NSPredicate expectations.
-        let questionWebView = app.webViews.element(boundBy: 0)
+        // With the paged TabView the (boundBy:) order no longer equals the
+        // page order — take the stem that is actually on-screen.
+        let questionWebView = try XCTUnwrap(visibleStemWebView(app))
         XCTAssertTrue(waitForElement(questionWebView, shorterThan: 200, timeout: 10),
                       "short question 题干 did not render short")
 
@@ -278,6 +280,79 @@ final class PracticeFlowUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["练习完成"].waitForExistence(timeout: 10), "summary card never appeared")
     }
 
+    /// 需求 2:练习页像考试一样左右滑动切换题目,滑动位置(索引)已持久化。
+    func testPracticeSwipeNavigatesQuestions() throws {
+        continueAfterFailure = false
+
+        let server = MockUpstreamServer()
+        try server.start()
+        defer { server.stop() }
+
+        let app = XCUIApplication()
+        app.launchEnvironment["LANJING_BASE_URL"] = "http://127.0.0.1:\(server.port)"
+        app.launchArguments = ["-reset-bank"]
+        app.launch()
+        logInIfNeeded(app)
+        enterSubcategory("成语辨析", app: app)
+
+        let header1 = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 1/'")).firstMatch
+        XCTAssertTrue(header1.waitForExistence(timeout: 10), "quiz screen is blank — no question header")
+
+        // 左滑 → 第 2 题。
+        app.swipeLeft()
+        let header2 = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 2/'")).firstMatch
+        XCTAssertTrue(header2.waitForExistence(timeout: 5), "swipe left did not advance to question 2")
+
+        // 右滑 → 回到第 1 题。
+        app.swipeRight()
+        XCTAssertTrue(header1.waitForExistence(timeout: 5), "swipe right did not return to question 1")
+
+        // 答完收尾,不留脏状态。滑回第 1 题后从 q1 依次作答——成语辨析
+        // 共 3 题,最后一题才显示"完成"。
+        answerCurrentQuestion(app, letter: "A", advance: "下一题")
+        answerCurrentQuestion(app, letter: "A", advance: "下一题")
+        answerCurrentQuestion(app, letter: "A", advance: "完成")
+        XCTAssertTrue(app.staticTexts["练习完成"].waitForExistence(timeout: 10), "summary card never appeared")
+    }
+
+    /// 需求 4:做完练习后,题型入口显示做题进度 x/xx(子类行精确值、
+    /// 大类行聚合值)。
+    func testPracticeEntryRowsShowProgressAfterRun() throws {
+        continueAfterFailure = false
+
+        let server = MockUpstreamServer()
+        try server.start()
+        defer { server.stop() }
+
+        let app = XCUIApplication()
+        app.launchEnvironment["LANJING_BASE_URL"] = "http://127.0.0.1:\(server.port)"
+        app.launchArguments = ["-reset-bank"]
+        app.launch()
+        logInIfNeeded(app)
+        enterSubcategory("成语辨析", app: app)
+
+        // 答完全部 3 题。
+        let headers = ["第 1/", "第 2/", "第 3/"]
+        for (index, expected) in headers.enumerated() {
+            let header = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '\(expected)'")).firstMatch
+            XCTAssertTrue(header.waitForExistence(timeout: 10), "\(expected) header missing")
+            answerCurrentQuestion(app, letter: "A", advance: index == headers.count - 1 ? "完成" : "下一题")
+        }
+        XCTAssertTrue(app.staticTexts["练习完成"].waitForExistence(timeout: 10), "summary card never appeared")
+
+        // 返回题型列表:子类行显示 3/3。
+        app.buttons["返回题型列表"].tap()
+        let subRowProgress = app.staticTexts["3/3"]
+        XCTAssertTrue(subRowProgress.waitForExistence(timeout: 10), "subcategory row did not show 3/3 progress")
+
+        // 大类行显示聚合进度 3/5(成语辨析 3 题已做 + 虚词辨析 0 题)。
+        let subListBar = app.navigationBars["言语理解"]
+        XCTAssertTrue(subListBar.waitForExistence(timeout: 5), "subcategory list never reappeared")
+        tapBackButton(in: subListBar)
+        let categoryProgress = app.staticTexts["3/5"]
+        XCTAssertTrue(categoryProgress.waitForExistence(timeout: 5), "category row did not show 3/5 progress")
+    }
+
     // MARK: - Helpers
 
     /// 练习 tab → category row → subcategory row (each level waits for its
@@ -289,16 +364,53 @@ final class PracticeFlowUITests: XCTestCase {
 
         let categoryRow = app.staticTexts[category]
         XCTAssertTrue(categoryRow.waitForExistence(timeout: 20), "category list never appeared (crawl failed?)")
+        waitForHittable(categoryRow)
         categoryRow.tap()
 
         let subRow = app.staticTexts[name]
         XCTAssertTrue(subRow.waitForExistence(timeout: 10), "subcategory list is blank — no rows appeared")
+        waitForHittable(subRow)
         subRow.tap()
+    }
+
+    /// List 行刚出现时 frame 可能还没解析(冷启动首测常见):直接 tap 会算出
+    /// hit point {-1,-1} 而静默失败——轮询到可点再返回,失败时给出明确断言。
+    private func waitForHittable(_ element: XCUIElement, timeout: TimeInterval = 10) {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if element.isHittable { return }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        XCTAssertTrue(element.isHittable, "element never became hittable: \(element.debugDescription)")
+    }
+
+    /// 页面上可见的选项按钮:TabView 分页让邻页同时存在于 a11y 树,裸
+    /// firstMatch 可能命中屏幕外元素(not hittable)。分页切换动画期间相邻
+    /// 两页可能同时(或都不)可点——轮询到"恰好 1 个可点"才返回,这是
+    /// 当前页且动画已结束的确定性判据。
+    private func optionButton(_ app: XCUIApplication, _ letter: String) -> XCUIElement {
+        let deadline = Date().addingTimeInterval(10)
+        while Date() < deadline {
+            let hittable = app.buttons.matching(identifier: letter).allElementsBoundByIndex.filter(\.isHittable)
+            if hittable.count == 1 { return hittable[0] }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        let matches = app.buttons.matching(identifier: letter).allElementsBoundByIndex
+        return matches.first(where: \.isHittable) ?? matches.first!
+    }
+
+    /// 屏幕上可见的题干 web view(分页后元素(boundBy:) 顺序不再等于页码)。
+    private func visibleStemWebView(_ app: XCUIApplication) -> XCUIElement? {
+        let screen = app.windows.firstMatch.frame
+        return app.webViews.allElementsBoundByIndex.first { view in
+            let frame = view.frame
+            return frame.minX >= 0 && frame.maxX <= screen.width && frame.maxY > 0
+        }
     }
 
     /// Tap an option letter, then the reveal button ("下一题" / "完成").
     private func answerCurrentQuestion(_ app: XCUIApplication, letter: String, advance: String) {
-        let option = app.buttons[letter]
+        let option = optionButton(app, letter)
         XCTAssertTrue(option.waitForExistence(timeout: 5), "option row missing")
         option.tap()
         let button = app.buttons[advance]
