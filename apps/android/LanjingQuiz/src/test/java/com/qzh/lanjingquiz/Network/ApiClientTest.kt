@@ -46,6 +46,24 @@ class ApiClientTest {
     }
 
     @Test
+    fun `base url provider resolves lazily per request`() = runBlocking {
+        // 构造后改变 provider 返回值 → 下一次请求必须命中新 base(证明惰性,非构造时捕获)
+        var base = "http://127.0.0.1:1"   // 构造时指向一个必然失败/无服务的地址
+        val lazyClient = ApiClient(
+            OkHttpClient.Builder()
+                .cookieJar(jar)
+                .followRedirects(false)
+                .followSslRedirects(false)
+                .build(),
+            jar,
+        ) { base }
+        server.enqueue(MockResponse().setBody("""{"success":true}"""))
+        base = server.url("/").toString().trimEnd('/')
+        lazyClient.warmUpJsSession()
+        assertEquals("/login/account/login/1", server.takeRequest().path)
+    }
+
+    @Test
     fun `login success stores session cookie`() = runBlocking {
         server.enqueue(MockResponse()
             .setHeader("Set-Cookie", "sessionId=abc; Path=/")

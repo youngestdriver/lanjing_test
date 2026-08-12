@@ -51,6 +51,10 @@ class ExamFlowUiTest {
 
     @Test
     fun fullExamFlow() {
+        // 双保险:(1) 直接写 TestConfig(仪器化进程与 App 同进程,先于任何请求生效);
+        // (2) intent extra 经 MainActivity.onCreate 再写一次。ApiClient 按请求惰性解析 base URL,
+        //     故两者都早于首个网络请求。
+        TestConfig.mockBaseUrl = server.baseUrl()
         val context = ApplicationProvider.getApplicationContext<Context>()
         val intent = Intent(context, MainActivity::class.java)
             .putExtra(TestConfig.EXTRA_MOCK_BASE_URL, server.baseUrl())

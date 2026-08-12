@@ -62,8 +62,19 @@ interface UpstreamApi {
 class ApiClient(
     private val http: OkHttpClient,
     private val cookieJar: PersistentCookieJar,
-    private val baseUrl: String = DEFAULT_BASE_URL,
+    private val baseUrlProvider: () -> String,
 ) : UpstreamApi {
+
+    /** 兼容既有构造(String 固定 base);测试可用 provider 构造验证惰性解析。 */
+    constructor(http: OkHttpClient, cookieJar: PersistentCookieJar, baseUrl: String = DEFAULT_BASE_URL) :
+        this(http, cookieJar, { baseUrl })
+
+    /**
+     * 惰性 base URL:Hilt 在 attachBaseContext 期(早于 MainActivity.onCreate)构造单例,
+     * 测试 override(TestConfig.mockBaseUrl)只能在 onCreate/intent extra 之后写入,
+     * 故 base 必须按请求解析而非构造时捕获。生产路径恒返回 DEFAULT_BASE_URL。
+     */
+    private val baseUrl: String get() = baseUrlProvider()
 
     private val json = Json { ignoreUnknownKeys = true }
     private val formType = "application/x-www-form-urlencoded; charset=UTF-8".toMediaType()

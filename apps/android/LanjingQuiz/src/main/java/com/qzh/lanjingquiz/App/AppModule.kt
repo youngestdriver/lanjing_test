@@ -43,7 +43,9 @@ object AppModule {
         .cache(null)
         .build()
 
+    // 惰性解析:Hilt 在 attachBaseContext 期构造单例(早于 onCreate 读取测试 extra),
+    // base URL 必须按请求解析(TestConfig 只在测试进程写入;生产恒为 DEFAULT_BASE_URL)。
     @Provides @Singleton
     fun apiClient(http: OkHttpClient, cookieJar: PersistentCookieJar): UpstreamApi =
-        ApiClient(http, cookieJar, TestConfig.effectiveBaseUrl())
+        ApiClient(http, cookieJar) { TestConfig.effectiveBaseUrl() }
 }
