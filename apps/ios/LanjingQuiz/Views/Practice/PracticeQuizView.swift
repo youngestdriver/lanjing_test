@@ -3,8 +3,10 @@ import SwiftUI
 /// Practice quiz screen: header, stem, option rows, multi-select confirm,
 /// answer-reveal banner (with remote formula images), next/finish. Pushed
 /// inside the tab's NavigationStack, the page hides the tab bar (问题 4 —
-/// full screen). Question changes rebuild the content web views via
-/// `.id(question.id)` while the scroll snaps back to the top (问题 1).
+/// full screen). Questions page left/right like the exam (需求 2): a
+/// TabView(.page) whose selection binds to vm.jumpTo; each page is its own
+/// ScrollView and reads that page index's answer (per-page rebuilds of the
+/// web content are keyed via `.id(question.id)`).
 struct PracticeQuizView: View {
     let vm: PracticeBankViewModel
     let category: String
@@ -77,50 +79,14 @@ struct PracticeQuizView: View {
                     .padding(.horizontal)
                     .padding(.top, 8)
             }
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        // Scroll-to-top anchor for question changes (包括答题卡跳题).
-                        Color.clear
-                            .frame(height: 0)
-                            .id("quiz-top")
-                        // Comb (资料分析) material stem, rendered above the sub-question.
-                        if let stem = question.stem, !stem.isEmpty {
-                            RichHTMLContent(html: stem, fontSize: 15)
-                                // 问题 1: keying the identity per question rebuilds
-                                // the WKWebView and resets its reported height, so a
-                                // long → short question never keeps the old height.
-                                .id(question.id)
-                                .padding(.bottom, 4)
-                                .overlay(alignment: .bottom) {
-                                    Divider()
-                                }
-                        }
-                        RichHTMLContent(html: question.question, fontSize: 17)
-                            .id(question.id)
-                        options(for: session, question)
-                        if let answer = session.currentAnswer, answer.revealed {
-                            ExplainBannerView(
-                                correct: answer.correct,
-                                answerLabel: question.correctAnswers.joined(separator: "、"),
-                                analysis: question.analysis
-                            )
-                            Button(session.isLast ? "完成" : "下一题") {
-                                vm.nextQuestion()
-                            }
-                            .buttonStyle(KeycapButtonStyle(color: DS.accent, radius: DS.radiusSM))
-                            .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .onChange(of: question.id) { _, _ in
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        proxy.scrollTo("quiz-top", anchor: .top)
-                    }
+            TabView(selection: pageSelection) {
+                ForEach(Array(session.questions.enumerated()), id: \.offset) { index, q in
+                    questionPage(session, index)
+                        .tag(index)
                 }
             }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .frame(maxHeight: .infinity)
             // Bottom bar mirrors the exam's AnswerCardView container (stats +
             // 答题卡, no 交卷 — 需求 1).
             PracticeStatsBarView(vm: vm) { showAnswerCard = true }
@@ -145,6 +111,54 @@ struct PracticeQuizView: View {
         .padding(.vertical, 8)
         .background(DS.blue.opacity(0.12))
         .clipShape(RoundedRectangle(cornerRadius: DS.radiusSM))
+    }
+
+    /// 滑动/答题卡跳转共用:TabView selection 绑定走 vm.jumpTo(越界与同
+    /// 索引为 no-op;索引已持久化,滑动位置重启后保留)。
+    private var pageSelection: Binding<Int> {
+        Binding(
+            get: { vm.session?.index ?? 0 },
+            set: { vm.jumpTo($0) }
+        )
+    }
+
+    /// 单页 = 一个可滚动题目页。页内答案取本页索引,而不是全局
+    /// currentAnswer(相邻页渲染时全局 index 指向当前页,会错位)。
+    private func questionPage(_ session: PracticeSession, _ index: Int) -> some View {
+        let question = session.questions[index]
+        let answer = index < session.answers.count
+            ? session.answers[index]
+            : PracticeSession.PracticeAnswer()
+        let isLast = index + 1 >= session.questions.count
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                if let stem = question.stem, !stem.isEmpty {
+                    RichHTMLContent(html: stem, fontSize: 15)
+                        .id(question.id)
+                        .padding(.bottom, 4)
+                        .overlay(alignment: .bottom) { Divider() }
+                }
+                RichHTMLContent(html: question.question, fontSize: 17)
+                    .id(question.id)
+                options(for: question, answer: answer)
+                if answer.revealed {
+                    ExplainBannerView(
+                        correct: answer.correct,
+                        answerLabel: question.correctAnswers.joined(separator: "、"),
+                        analysis: question.analysis
+                    )
+                    Button(isLast ? "完成" : "下一题") {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            vm.nextQuestion()
+                        }
+                    }
+                    .buttonStyle(KeycapButtonStyle(color: DS.accent, radius: DS.radiusSM))
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private func headerRow(_ session: PracticeSession, _ question: BankQuestion) -> some View {
@@ -178,10 +192,7 @@ struct PracticeQuizView: View {
     }
 
     @ViewBuilder
-    private func options(for session: PracticeSession, _ question: BankQuestion) -> some View {
-        // currentAnswer is bounds-guarded; answers is index-aligned with
-        // questions (构造/解码双重保证), and !isFinished guarantees index < count.
-        let answer = session.currentAnswer ?? PracticeSession.PracticeAnswer()
+    private func options(for question: BankQuestion, answer: PracticeSession.PracticeAnswer) -> some View {
         VStack(spacing: 12) {
             ForEach(question.letters, id: \.self) { letter in
                 PracticeOptionRowView(
@@ -223,8 +234,4 @@ struct PracticeQuizView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-}
-
-private extension PracticeSession {
-    var isLast: Bool { index + 1 >= questions.count }
 }
