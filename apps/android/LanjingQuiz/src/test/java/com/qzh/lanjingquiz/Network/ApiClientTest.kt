@@ -121,6 +121,24 @@ class ApiClientTest {
     }
 
     @Test
+    fun `examList decodes numeric id examStyle wfs timeLeft`() = runBlocking {
+        // 真实上游以数字下发 id/examStyle/wfs/timeLeft 等字段(iOS 地面真相)
+        server.enqueue(MockResponse().setBody(
+            """{"success":true,"bizContent":{"total":2,"styles":[{"id":1,"name":"机考题库"}],""" +
+                """"examInfoModelList":[{"id":123,"examName":"测试卷","examStyle":1,"examStyleName":"机考题库",""" +
+                """"practiceMode":1,"examMode":"0","examTime":3600,"paperInfoId":9,"examTimesNum":3,""" +
+                """"examTimesRestrict":"1","paid":true,"examTimeRestrict":"1","wfs":1,"timeLeft":7200}]}}"""))
+        val result = client.examList()
+        assertEquals(2, result.total)
+        assertEquals(123, result.exams[0].id)
+        assertEquals("1", result.exams[0].examStyle?.value)
+        assertEquals(1, result.exams[0].wfs)
+        assertEquals(7200, result.exams[0].timeLeft)
+        assertEquals("机考题库", result.styles[0].name)
+        assertEquals("1", result.styles[0].id.value)
+    }
+
+    @Test
     fun `detectSessionExpiry rule 2 and 3`() {
         assertTrue(client.detectSessionExpiry(200,
             """<!DOCTYPE html><html><form action="/login/account/login"></form></html>"""))

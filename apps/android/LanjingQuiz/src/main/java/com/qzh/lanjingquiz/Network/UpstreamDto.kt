@@ -47,24 +47,25 @@ data class ExamListBiz(
 )
 
 @Serializable
-data class StyleDto(val id: String = "", val name: String = "")
+data class StyleDto(val id: StringValue = StringValue(""), val name: String = "")
 
 @Serializable
 data class ExamDto(
-    val id: String = "",
+    // 字段类型对齐 iOS UpstreamDTOs.swift:上游以数字下发 id/examStyle/wfs/timeLeft 等
+    val id: Int = 0,
     @SerialName("examName") val name: String = "",
-    @SerialName("examStyle") val examStyle: String = "",
-    @SerialName("examStyleName") val styleName: String = "",
-    @SerialName("practiceMode") val practiceMode: String = "",
-    @SerialName("examMode") val examMode: String = "",
-    @SerialName("examTime") val examTime: String = "",
-    @SerialName("paperInfoId") val paperInfoId: String = "",
-    @SerialName("examTimesNum") val examTimesNum: String = "",
-    @SerialName("examTimesRestrict") val examTimesRestrict: String = "",
-    val paid: Boolean = false,
-    @SerialName("examTimeRestrict") val timeRestrict: String = "",
-    val wfs: String = "",          // "1" 新卷
-    @SerialName("timeLeft") val timeLeft: String = "",
+    @SerialName("examStyle") val examStyle: StringValue? = null,
+    @SerialName("examStyleName") val styleName: String? = null,
+    @SerialName("practiceMode") val practiceMode: Int? = null,
+    @SerialName("examMode") val examMode: String? = null,
+    @SerialName("examTime") val examTime: Int? = null,
+    @SerialName("paperInfoId") val paperInfoId: Int? = null,
+    @SerialName("examTimesNum") val examTimesNum: Int? = null,
+    @SerialName("examTimesRestrict") val examTimesRestrict: String? = null,
+    val paid: Boolean? = null,
+    @SerialName("examTimeRestrict") val timeRestrict: String? = null,
+    val wfs: Int? = null,          // 1 = 新卷
+    @SerialName("timeLeft") val timeLeft: Int? = null,
 )
 
 @Serializable

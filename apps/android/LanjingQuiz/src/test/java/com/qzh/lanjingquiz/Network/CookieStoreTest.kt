@@ -62,4 +62,38 @@ class CookieStoreTest {
         assertEquals("abc", loaded.firstOrNull { it.name == "sessionId" }?.value)
         assertTrue(jar.hasSession())
     }
+
+    @Test
+    fun `loadForRequest returns every cookie on the same domain`() {
+        val jar = PersistentCookieJar(PrefsCookieStore(InMemorySecureStore()))
+        val url = "http://127.0.0.1:8080/exam".toHttpUrl()
+        // 与 iOS testKSXCIDSyncsLikeAnyOtherCookie 相同的三 cookie 会话形态
+        jar.saveFromResponse(url, listOf(cookie("JSESSIONID", "js1")))
+        jar.saveFromResponse(url, listOf(cookie("sessionId", "abc")))
+        jar.saveFromResponse(url, listOf(cookie("KSX_CID", "1")))
+        val names = jar.loadForRequest(url).map { "${it.name}=${it.value}" }.sorted()
+        assertEquals(listOf("JSESSIONID=js1", "KSX_CID=1", "sessionId=abc"), names)
+    }
+
+    @Test
+    fun `repeated Set-Cookie of the same name does not duplicate`() {
+        val jar = PersistentCookieJar(PrefsCookieStore(InMemorySecureStore()))
+        val url = "http://127.0.0.1:8080/exam".toHttpUrl()
+        jar.saveFromResponse(url, listOf(cookie("sessionId", "old")))
+        jar.saveFromResponse(url, listOf(cookie("sessionId", "new")))
+        assertEquals(1, jar.loadForRequest(url).count { it.name == "sessionId" })
+        assertEquals("sessionId=new", jar.headerStringForBase())
+    }
+
+    @Test
+    fun `headerStringForBase reflects the merged cookie set`() {
+        val jar = PersistentCookieJar(PrefsCookieStore(InMemorySecureStore()))
+        val url = "http://127.0.0.1:8080/exam".toHttpUrl()
+        jar.saveFromResponse(url, listOf(cookie("JSESSIONID", "js1")))
+        jar.saveFromResponse(url, listOf(cookie("sessionId", "abc")))
+        assertEquals("JSESSIONID=js1; sessionId=abc", jar.headerStringForBase())
+    }
+
+    private fun cookie(name: String, value: String) = Cookie.Builder()
+        .domain("127.0.0.1").path("/").name(name).value(value).build()
 }

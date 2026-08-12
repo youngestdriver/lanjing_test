@@ -18,12 +18,20 @@ class PersistentCookieJar(private val store: CookieStore) : CookieJar {
 
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
         cache[url.host] = cookies
-        store.save(store.load() + cookies.map { it.toStored() })
+        val incoming = cookies.map { it.toStored() }
+        // 同名同域同路径去重:新 cookie 覆盖旧 cookie(iOS HTTPCookieStorage 语义)
+        val merged = store.load()
+            .filter { old -> incoming.none { it.name == old.name && it.domain == old.domain && it.path == old.path } } + incoming
+        store.save(merged)
     }
 
     override fun loadForRequest(url: HttpUrl): List<Cookie> {
-        store.load().forEach { cache[it.domain] = listOf(it.toOkHttp(url)) }
         val now = System.currentTimeMillis()
+        // 每域聚合成列表再写入缓存:同一域名的多个 cookie 全部保留
+        store.load()
+            .filter { it.expiry == null || it.expiry * 1000 > now }
+            .groupBy { it.domain }
+            .forEach { (domain, cookies) -> cache[domain] = cookies.map { it.toOkHttp(url) } }
         return cache.values.flatten()
             .filter { it.matches(url) && (it.expiresAt == Long.MAX_VALUE || it.expiresAt > now) }
     }
