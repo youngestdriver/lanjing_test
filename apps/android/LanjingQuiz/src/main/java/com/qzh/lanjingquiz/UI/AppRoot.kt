@@ -55,6 +55,7 @@ import com.qzh.lanjingquiz.UI.Practice.PracticeQuizScreen
 import com.qzh.lanjingquiz.UI.Practice.PracticeQuizViewModel
 import com.qzh.lanjingquiz.UI.Practice.PracticeRoute
 import com.qzh.lanjingquiz.UI.Practice.SubcategoryListScreen
+import com.qzh.lanjingquiz.UI.Profile.ProfileScreen
 import com.qzh.lanjingquiz.UI.Quiz.QuizScreen
 import com.qzh.lanjingquiz.UI.Result.ResultScreen
 
@@ -120,7 +121,7 @@ fun HomeTabHost(appState: AppState) {
         when (tab) {
             HomeTab.Exams -> Box(Modifier.padding(padding)) { ExamListScreen() }
             HomeTab.Practice -> PracticeTabHost(appState, padding)
-            HomeTab.Profile -> ProfileScreenPlaceholder(padding)  // T6 替换
+            HomeTab.Profile -> ProfileScreen(appState, padding)
         }
     }
 }

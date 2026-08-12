@@ -2,9 +2,12 @@ package com.qzh.lanjingquiz.UI.Login
 
 import com.qzh.lanjingquiz.App.AppState
 import com.qzh.lanjingquiz.App.Route
+import com.qzh.lanjingquiz.Data.InMemorySecureStore
 import com.qzh.lanjingquiz.Data.InMemorySettingsStore
+import com.qzh.lanjingquiz.Domain.CookieCloudSync
 import com.qzh.lanjingquiz.FakeApi
 import com.qzh.lanjingquiz.Network.ApiException
+import com.qzh.lanjingquiz.Network.PrefsCookieStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -96,7 +99,8 @@ class LoginViewModelTest {
 
     @Test fun `successful login routes home through wired appState finishLogin`() = runTest(dispatcher) {
         val api = FakeApi()
-        val appState = AppState(api, InMemorySettingsStore())
+        val settings = InMemorySettingsStore()
+        val appState = AppState(api, settings, CookieCloudSync(api, PrefsCookieStore(InMemorySecureStore()), InMemorySecureStore(), settings))
         val vm = LoginViewModel(api)
         vm.onFinished = appState::finishLogin
         vm.phone.value = "13800000000"

@@ -8,6 +8,7 @@ import com.qzh.lanjingquiz.Data.PracticeProgressStore
 import com.qzh.lanjingquiz.Data.PracticeSessionStore
 import com.qzh.lanjingquiz.Data.PrefsSettingsStore
 import com.qzh.lanjingquiz.Data.SecureStore
+import com.qzh.lanjingquiz.Data.SecureStoreLike
 import com.qzh.lanjingquiz.Data.SettingsStore
 import com.qzh.lanjingquiz.Domain.Crawler
 import com.qzh.lanjingquiz.Network.ApiClient
@@ -33,6 +34,10 @@ object AppModule {
 
     @Provides @Singleton
     fun secureStore(@ApplicationContext context: android.content.Context): SecureStore = SecureStore(context)
+
+    /** 抽象绑定(T1 接口):SecureStore 自身即实现;JVM 单测用 InMemorySecureStore。 */
+    @Provides @Singleton
+    fun secureStoreLike(secureStore: SecureStore): SecureStoreLike = secureStore
 
     @Provides @Singleton
     fun cookieStore(secureStore: SecureStore): CookieStore = PrefsCookieStore(secureStore)

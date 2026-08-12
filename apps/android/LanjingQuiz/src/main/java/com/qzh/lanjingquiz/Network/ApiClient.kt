@@ -322,11 +322,7 @@ class ApiClient(
         else base + location
 
     /** 规则 2/3;规则 1(重定向目标含 /login/account/login)在 request() 内先行检查。 */
-    internal fun detectSessionExpiry(status: Int, body: String): Boolean {
-        val lc = body.lowercase()
-        if (lc.contains("/login/account/login") && lc.contains("<!doctype")) return true
-        return Regex("\"onlineStatus\"\\s*:\\s*\"?0\"?").containsMatchIn(body)
-    }
+    internal fun detectSessionExpiry(status: Int, body: String): Boolean = detectSessionExpiry(body)
 
     /** 仅解析 exam_start HTML 的三个 JS 变量;完整卡片/分区/状态解析属 Task 3 ExamHtmlParser。 */
     private fun parseEnterResult(html: String, fallbackExamInfoId: String): EnterExamResult {
@@ -361,4 +357,15 @@ class ApiClient(
         const val DEFAULT_BASE_URL = "https://test.lanjingweike.com"
         const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0"
     }
+}
+
+/**
+ * 会话过期检测规则 2/3(规则 1 —— 重定向目标含 /login/account/login —— 在 ApiClient.request()
+ * 内先行检查):登录页 HTML(<!doctype + 指向登录路径)或 {"onlineStatus":0}(含字符串形式)。
+ * 提为顶层函数供 CookieCloudClient 探活复用(CookieCloudSync 的"哪个 cookie 有效"判定基准)。
+ */
+internal fun detectSessionExpiry(body: String): Boolean {
+    val lc = body.lowercase()
+    if (lc.contains("/login/account/login") && lc.contains("<!doctype")) return true
+    return Regex("\"onlineStatus\"\\s*:\\s*\"?0\"?").containsMatchIn(body)
 }

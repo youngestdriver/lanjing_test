@@ -2,9 +2,12 @@ package com.qzh.lanjingquiz.UI.Quiz
 
 import com.qzh.lanjingquiz.App.AppState
 import com.qzh.lanjingquiz.App.Route
+import com.qzh.lanjingquiz.Data.InMemorySecureStore
 import com.qzh.lanjingquiz.Data.InMemorySettingsStore
+import com.qzh.lanjingquiz.Domain.CookieCloudSync
 import com.qzh.lanjingquiz.FakeApi
 import com.qzh.lanjingquiz.Fixtures
+import com.qzh.lanjingquiz.Network.PrefsCookieStore
 import com.qzh.lanjingquiz.Network.ApiException
 import com.qzh.lanjingquiz.Network.EnterExamResult
 import com.qzh.lanjingquiz.Network.ExamDto
@@ -40,7 +43,11 @@ class QuizViewModelTest {
         questionBatch = Fixtures.quizQuestionBatch
     }
 
-    private fun makeState(api: FakeApi = makeApi()): AppState = AppState(api, InMemorySettingsStore())
+    private fun makeState(api: FakeApi = makeApi()): AppState {
+        val secure = InMemorySecureStore()
+        val settings = InMemorySettingsStore()
+        return AppState(api, settings, CookieCloudSync(api, PrefsCookieStore(secure), secure, settings))
+    }
 
     @Before fun setUp() { Dispatchers.setMain(dispatcher) }
     @After fun tearDown() { Dispatchers.resetMain() }

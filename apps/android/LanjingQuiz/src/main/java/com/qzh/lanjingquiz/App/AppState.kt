@@ -1,6 +1,7 @@
 package com.qzh.lanjingquiz.App
 
 import com.qzh.lanjingquiz.Data.SettingsStore
+import com.qzh.lanjingquiz.Domain.CookieCloudSync
 import com.qzh.lanjingquiz.Network.ExamDto
 import com.qzh.lanjingquiz.Network.ExamResult
 import com.qzh.lanjingquiz.Network.UpstreamApi
@@ -42,6 +43,7 @@ enum class ThemeMode(val rawValue: String) {
 class AppState @Inject constructor(
     private val api: UpstreamApi,
     private val settings: SettingsStore,
+    private val cookieCloudSync: CookieCloudSync,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -67,16 +69,30 @@ class AppState @Inject constructor(
     private val _autoAdvance = MutableStateFlow(settings.getBoolean(KEY_AUTO_ADVANCE, false))
     val autoAdvance: StateFlow<Boolean> = _autoAdvance.asStateFlow()
 
-    /** 启动:有会话 → 首页,否则登录页。 */
+    /**
+     * 启动:先做 CookieCloud 云端拉取(内部 4s 硬边界,任何异常都吞掉 —— 绝不让启动超过
+     * 约 4s 或崩溃),再按会话决定路由;新设备凭云端会话直达首页,无需重新登录。
+     */
     fun start() {
-        // T6: CookieCloud pull
-        navigateTo(if (api.hasSession()) Route.Home else Route.Login)
+        scope.launch {
+            val hasSession = runCatching { cookieCloudSync.pullAndApplyIfNeeded() }
+                .getOrDefault(api.hasSession())
+            navigateTo(if (hasSession) Route.Home else Route.Login)
+        }
     }
 
-    /** 登录成功(或该页会话恢复)后:有会话 → 首页,否则仍登录页。 */
+    /**
+     * 登录成功(或该页会话恢复)后:有会话 → 首页,随后 fire-and-forget 云端推送
+     * (注入的 scope,不阻塞;未配置/无会话/hash 未变时同步内部 no-op)。
+     */
     fun finishLogin() {
-        navigateTo(if (api.hasSession()) Route.Home else Route.Login)
+        val hasSession = api.hasSession()
+        navigateTo(if (hasSession) Route.Home else Route.Login)
+        if (hasSession) scope.launch { runCatching { cookieCloudSync.pushIfNeeded() } }
     }
+
+    /** 我的页手动同步委托(CookieCloudSync.syncNow 双向探活)。 */
+    suspend fun syncNow(): CookieCloudSync.SyncResult = cookieCloudSync.syncNow()
 
     /** 会话失效:清会话 + 通知 + 回登录页。 */
     fun handleSessionExpiry() {

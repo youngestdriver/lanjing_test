@@ -7,13 +7,16 @@ import com.qzh.lanjingquiz.Data.BankQuestion
 import com.qzh.lanjingquiz.Data.FakePracticeProgressStore
 import com.qzh.lanjingquiz.Data.FakePracticeSessionStore
 import com.qzh.lanjingquiz.Data.InMemoryBankStorage
+import com.qzh.lanjingquiz.Data.InMemorySecureStore
 import com.qzh.lanjingquiz.Data.InMemorySettingsStore
 import com.qzh.lanjingquiz.Data.PracticeAnswer
 import com.qzh.lanjingquiz.Data.PracticeProgress
 import com.qzh.lanjingquiz.Data.PracticeSession
+import com.qzh.lanjingquiz.Domain.CookieCloudSync
 import com.qzh.lanjingquiz.Domain.Crawler
 import com.qzh.lanjingquiz.FakeApi
 import com.qzh.lanjingquiz.Network.ApiException
+import com.qzh.lanjingquiz.Network.PrefsCookieStore
 import com.qzh.lanjingquiz.Network.ExamDto
 import com.qzh.lanjingquiz.Network.ExamListResult
 import kotlinx.coroutines.CompletableDeferred
@@ -63,7 +66,7 @@ class PracticeBankViewModelTest {
         storage: InMemoryBankStorage = InMemoryBankStorage(),
         sessionStore: FakePracticeSessionStore = FakePracticeSessionStore(),
         progressStore: FakePracticeProgressStore = FakePracticeProgressStore(),
-        appState: AppState = AppState(FakeApi(), InMemorySettingsStore()),
+        appState: AppState = makeAppState(),
     ): PracticeBankViewModel = PracticeBankViewModel(
         api = api,
         storage = storage,
@@ -73,6 +76,13 @@ class PracticeBankViewModelTest {
         appState = appState,
         crawler = Crawler(api, storage),
     )
+
+    /** T6 起 AppState 带 CookieCloudSync;测试用内存存储构造未配置同步。 */
+    private fun makeAppState(): AppState {
+        val secure = InMemorySecureStore()
+        val settings = InMemorySettingsStore()
+        return AppState(FakeApi(), settings, CookieCloudSync(FakeApi(), PrefsCookieStore(secure), secure, settings))
+    }
 
     // ---- ensureBankReady ----
 
@@ -234,7 +244,7 @@ class PracticeBankViewModelTest {
         }
         val sessionStore = FakePracticeSessionStore()
         val progressStore = FakePracticeProgressStore()
-        val appState = AppState(FakeApi(), InMemorySettingsStore())
+        val appState = makeAppState()
         val vm = makeVm(storage = storage, sessionStore = sessionStore, progressStore = progressStore, appState = appState)
 
         vm.ensureBankReady()

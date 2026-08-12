@@ -6,11 +6,14 @@ import com.qzh.lanjingquiz.Data.BankQuestion
 import com.qzh.lanjingquiz.Data.FakePracticeProgressStore
 import com.qzh.lanjingquiz.Data.FakePracticeSessionStore
 import com.qzh.lanjingquiz.Data.InMemoryBankStorage
+import com.qzh.lanjingquiz.Data.InMemorySecureStore
 import com.qzh.lanjingquiz.Data.InMemorySettingsStore
 import com.qzh.lanjingquiz.Data.PracticeAnswer
 import com.qzh.lanjingquiz.Data.PracticeSession
 import com.qzh.lanjingquiz.Domain.BankLogic
+import com.qzh.lanjingquiz.Domain.CookieCloudSync
 import com.qzh.lanjingquiz.FakeApi
+import com.qzh.lanjingquiz.Network.PrefsCookieStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -61,13 +64,17 @@ class PracticeQuizViewModelTest {
         sessionStore: FakePracticeSessionStore = FakePracticeSessionStore(),
         progressStore: FakePracticeProgressStore = FakePracticeProgressStore(),
         settings: InMemorySettingsStore = InMemorySettingsStore(),
-    ): PracticeQuizViewModel = PracticeQuizViewModel(
-        appState = AppState(FakeApi(), InMemorySettingsStore()),
+    ): PracticeQuizViewModel {
+        val secure = InMemorySecureStore()
+        val appState = AppState(FakeApi(), InMemorySettingsStore(), CookieCloudSync(FakeApi(), PrefsCookieStore(secure), secure, InMemorySettingsStore()))
+        return PracticeQuizViewModel(
+        appState = appState,
         storage = storage,
         sessionStore = sessionStore,
-        progressStore = progressStore,
-        settings = settings,
-    )
+            progressStore = progressStore,
+            settings = settings,
+        )
+    }
 
     /** start + 推进进度注册表加载。 */
     private fun TestScope.startQuiz(vm: PracticeQuizViewModel, questions: List<BankQuestion> = quiz) {
