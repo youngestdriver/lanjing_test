@@ -55,6 +55,7 @@
 		A04EDE1E6E98453D9478097B /* AnswerCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7DA9741048B817074E66C41 /* AnswerCardView.swift */; };
 		A2852C9B2D915545A503219A /* QuestionClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB4E27302E0554219D72FC5E /* QuestionClassifier.swift */; };
 		A676E4995FDABDEF04219645 /* BankMeta.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55FB7FC70E35C87B78F5769F /* BankMeta.swift */; };
+		A67DA731BDE9266E74289EA0 /* PracticeStatsBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AE1D211E7B59149D567D9D /* PracticeStatsBarView.swift */; };
 		A7FCF3B778CDCCAC2B55952A /* Hashing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59F40B97D0409BCE50D7C6C5 /* Hashing.swift */; };
 		A8FAE9D8FCE74EDB730C5A33 /* UpstreamDTOs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 994850B50C48BB1768EAD1FE /* UpstreamDTOs.swift */; };
 		AA7933938A189AB45B00AF10 /* ResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2584DF0E03F4C66B86C082D /* ResultView.swift */; };
@@ -117,6 +118,7 @@
 		076328ABD900D50196B69B82 /* CookieCloudCryptoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieCloudCryptoTests.swift; sourceTree = "<group>"; };
 		1039294FEB0B4CE1352C3CAF /* Fixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fixtures.swift; sourceTree = "<group>"; };
 		1133C5D8F1711CF399B2E524 /* PracticeAnswerCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeAnswerCardView.swift; sourceTree = "<group>"; };
+		11AE1D211E7B59149D567D9D /* PracticeStatsBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeStatsBarView.swift; sourceTree = "<group>"; };
 		145620DF56112CD358D32190 /* SectionStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectionStats.swift; sourceTree = "<group>"; };
 		1613A3AFDED5B85859DEFE16 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		1968D8CED206F85E14A8B24B /* PracticeBankSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeBankSettingsSection.swift; sourceTree = "<group>"; };
@@ -384,6 +386,7 @@
 				95A34F098B4963C2F6C7113B /* PracticeCategoryListView.swift */,
 				EBEC331B9CC28250E7160459 /* PracticeOptionRowView.swift */,
 				1DA9458CFA3471DC25C864D4 /* PracticeQuizView.swift */,
+				11AE1D211E7B59149D567D9D /* PracticeStatsBarView.swift */,
 				F72732D56A7058AD72078B70 /* PracticeSubcategoryListView.swift */,
 			);
 			path = Practice;
@@ -579,6 +582,7 @@
 				7FBAF986E211793CA6339392 /* PracticeProgressStore.swift in Sources */,
 				F7A06E367A50D6AFD71E47DC /* PracticeQuizView.swift in Sources */,
 				9BDEBD4B0CC88D8F0AD6E86D /* PracticeSessionStore.swift in Sources */,
+				A67DA731BDE9266E74289EA0 /* PracticeStatsBarView.swift in Sources */,
 				89393C557CD8AE5A45084240 /* PracticeSubcategoryListView.swift in Sources */,
 				6379B9011D74D50B1349EC8E /* PracticeUpstreamClient.swift in Sources */,
 				E20F686633E9E0DCCC03280F /* ProgressBarView.swift in Sources */,
