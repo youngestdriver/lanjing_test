@@ -74,6 +74,14 @@ final class AppState {
         route = api.hasSession ? .examList : .login
     }
 
+    /// 登录页「跳过」:绕过登录直接进入主界面。不持久化——重启后仍由
+    /// start() 决定路由(已配置 CookieCloud 且有云端会话时自动进入主界面,
+    /// 否则回到登录页)。未登录状态下考试/练习页会提示先登录,「我的」页
+    /// 可配置 Cookie 云端同步并回到登录页。
+    func skipLogin() {
+        route = .examList
+    }
+
     /// 我的 > 外观 > 跟随系统颜色设置. Turning it on remembers the current
     /// manual light/dark choice (restored when turned off); off restores it.
     func setFollowsSystem(_ follows: Bool) {
@@ -103,9 +111,12 @@ final class AppState {
             notice = "登录已过期，请重新登录"
             route = .login
         case .notLoggedIn:
+            // 清会话但不强制踢回登录页:登录页「跳过」会以未登录状态进入
+            // 主界面(先配置 Cookie 云端同步再登录),此时任何请求都会得到
+            // notLoggedIn——踢回会让跳过形同虚设。已登录用户登录失效时
+            // 同样只会看到提示,不会被自动弹回。
             api.clearSession()
-            notice = "登录已失效，请重新登录"
-            route = .login
+            notice = "请先登录，可在「我的」页配置登录信息"
         default:
             break
         }

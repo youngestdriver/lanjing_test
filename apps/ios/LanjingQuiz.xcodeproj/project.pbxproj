@@ -36,6 +36,7 @@
 		68A0FA342355B6C7EC368DCA /* StatsBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41CCFA5640772DFD243BEBC9 /* StatsBarView.swift */; };
 		69330D04DC599C2AAB4EA065 /* ExamResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD9AB71084CA7A4EAC46020 /* ExamResult.swift */; };
 		6AD00D5B4692A7949C1D95E4 /* MockUpstreamServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36B9621AFDF6F5E55AA17502 /* MockUpstreamServer.swift */; };
+		B6CFCDF487415215FD1C31B5 /* SkipLoginFlowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A298A10CA147F52FD72A8DC /* SkipLoginFlowUITests.swift */; };
 		6C54A1D7CEA3983FA7290682 /* QuizLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39E06A0C03D389B8FD615F7D /* QuizLogicTests.swift */; };
 		6F368E7E1EBFF45A10CFD7BB /* OptionRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A379D8F9B0C242F2ABE001B0 /* OptionRowView.swift */; };
 		741E447E0B5AFD95BFE8CBB1 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 537D051E4644236232756CB3 /* Extensions.swift */; };
@@ -46,6 +47,7 @@
 		82CF707AF0A66AD6EB1D3040 /* RichHTMLContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56AA693D7FFFB20B8364E9F5 /* RichHTMLContent.swift */; };
 		83C250B31AF7514A40DBD9AC /* QuestionTimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D0EF14F9E652B9F68490FB0 /* QuestionTimerView.swift */; };
 		882F6DC46B63BC8A42815F75 /* SessionExpiryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 615EE3D6375CB52ADD9D0984 /* SessionExpiryTests.swift */; };
+		DED0A6BBCF06B9CFAFC44756 /* SkipLoginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 149FAB96CD1A951A461C0264 /* SkipLoginTests.swift */; };
 		89393C557CD8AE5A45084240 /* PracticeSubcategoryListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F72732D56A7058AD72078B70 /* PracticeSubcategoryListView.swift */; };
 		8A9AACD2DC27FA2774D2F4AF /* CookieStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C66501C84823829FBA3D384 /* CookieStore.swift */; };
 		8E994024B48D95DEC0D64390 /* CookieCloudCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6913CBFD4AD1D569021F5032 /* CookieCloudCrypto.swift */; };
@@ -138,6 +140,7 @@
 		33F905DFA804D34FFB20F66C /* PracticeBankViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeBankViewModel.swift; sourceTree = "<group>"; };
 		34E242E150FF74041E7BA8E5 /* Question.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Question.swift; sourceTree = "<group>"; };
 		36B9621AFDF6F5E55AA17502 /* MockUpstreamServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockUpstreamServer.swift; sourceTree = "<group>"; };
+		4A298A10CA147F52FD72A8DC /* SkipLoginFlowUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkipLoginFlowUITests.swift; sourceTree = "<group>"; };
 		37D041F47271D626E7EE60A4 /* HashingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HashingTests.swift; sourceTree = "<group>"; };
 		39E06A0C03D389B8FD615F7D /* QuizLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuizLogicTests.swift; sourceTree = "<group>"; };
 		3FF8A6A6942613932FF28BD0 /* BankQuestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankQuestion.swift; sourceTree = "<group>"; };
@@ -155,6 +158,7 @@
 		5F6C6C27825F5D58D42C0322 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		5FF5AB4B1C7BCE1D1BA79FA0 /* BankStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankStorageTests.swift; sourceTree = "<group>"; };
 		615EE3D6375CB52ADD9D0984 /* SessionExpiryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionExpiryTests.swift; sourceTree = "<group>"; };
+		149FAB96CD1A951A461C0264 /* SkipLoginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkipLoginTests.swift; sourceTree = "<group>"; };
 		6188CFE56F186CCECDC684FA /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
 		6665ACEC7ADB34A675333AB2 /* LanjingQuiz.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LanjingQuiz.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		67F512FD68645C1849B92BDF /* BankLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankLogic.swift; sourceTree = "<group>"; };
@@ -206,6 +210,7 @@
 			isa = PBXGroup;
 			children = (
 				36B9621AFDF6F5E55AA17502 /* MockUpstreamServer.swift */,
+				4A298A10CA147F52FD72A8DC /* SkipLoginFlowUITests.swift */,
 				E6AC6144CF6B87E67A637A1F /* PracticeFlowUITests.swift */,
 			);
 			path = LanjingQuizUITests;
@@ -245,6 +250,7 @@
 				9C954373DE3BE9D911769696 /* ResultPageParserTests.swift */,
 				9EDCC049B5A9A32493EF2075 /* RichHTMLContentTests.swift */,
 				615EE3D6375CB52ADD9D0984 /* SessionExpiryTests.swift */,
+				149FAB96CD1A951A461C0264 /* SkipLoginTests.swift */,
 			);
 			path = LanjingQuizTests;
 			sourceTree = "<group>";
@@ -612,6 +618,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				6AD00D5B4692A7949C1D95E4 /* MockUpstreamServer.swift in Sources */,
+				B6CFCDF487415215FD1C31B5 /* SkipLoginFlowUITests.swift in Sources */,
 				C3956E80C719138DA82AD9E0 /* PracticeFlowUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -639,6 +646,7 @@
 				EBDB2C43C92A408E4A0ED570 /* ResultPageParserTests.swift in Sources */,
 				C5047112E513B1B1AA2E68B5 /* RichHTMLContentTests.swift in Sources */,
 				882F6DC46B63BC8A42815F75 /* SessionExpiryTests.swift in Sources */,
+				DED0A6BBCF06B9CFAFC44756 /* SkipLoginTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
