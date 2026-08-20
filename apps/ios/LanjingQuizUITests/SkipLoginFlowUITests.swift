@@ -43,8 +43,7 @@ final class SkipLoginFlowUITests: XCTestCase {
 
         // 上次运行可能遗留开启状态(配置持久化):先归零再测
         if (toggle.value as? String) == "1" {
-            let switchKnob = toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5))
-            switchKnob.tap()
+            setSwitch(toggle, to: "0")
             XCTAssertTrue(serverField.waitForNonExistence(timeout: 3), "关闭 toggle 后输入框应消失")
         }
 
@@ -52,10 +51,8 @@ final class SkipLoginFlowUITests: XCTestCase {
         XCTAssertFalse(serverField.exists, "未开启时不应显示服务器地址输入框")
         XCTAssertFalse(uuidField.exists, "未开启时不应显示 UUID 输入框")
 
-        // 开启 toggle → 输入框出现。整个行(toggle 元素 frame 含 label)点击
-        // 不切换,直接点右侧开关部分。
-        let switchKnob = toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5))
-        switchKnob.tap()
+        // 开启 toggle → 输入框出现
+        setSwitch(toggle, to: "1")
         let toggleValue = toggle.value as? String
         XCTAssertEqual(toggleValue, "1", "toggle 未切换(当前 value: \(toggleValue ?? "nil"))")
         XCTAssertTrue(serverField.waitForExistence(timeout: 5), "开启后服务器地址输入框未出现")
@@ -71,5 +68,22 @@ final class SkipLoginFlowUITests: XCTestCase {
         XCTAssertTrue(goLogin.waitForExistence(timeout: 5), "「去登录」按钮缺失")
         goLogin.tap()
         XCTAssertTrue(app.buttons["password-login-entry"].waitForExistence(timeout: 5), "「去登录」未回到登录页")
+    }
+
+    /// 不同 iOS 版本的 SwiftUI Toggle 行布局不同(开关位置、行可点击区域),
+    /// 单一点击方式会在部分环境失效(Xcode 16/iOS 18 与新版模拟器行为
+    /// 不一致)。依次尝试整行点击与多个开关位置坐标,直到 value 达到目标。
+    private func setSwitch(_ toggle: XCUIElement, to target: String) {
+        if (toggle.value as? String) == target { return }
+        let attempts: [() -> Void] = [
+            { toggle.tap() },
+            { toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap() },
+            { toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.5)).tap() },
+            { toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() },
+        ]
+        for attempt in attempts {
+            if (toggle.value as? String) == target { return }
+            attempt()
+        }
     }
 }
