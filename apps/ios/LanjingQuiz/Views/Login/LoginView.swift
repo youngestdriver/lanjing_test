@@ -182,15 +182,25 @@ struct LoginView: View {
 
             Spacer()
 
-            Button("帮助") {
-                presentInfo(
-                    title: "登录帮助",
-                    message: "请输入注册手机号和密码。如果忘记密码，请联系管理员重置。"
-                )
+            if showBackButton {
+                Button("帮助") {
+                    presentInfo(
+                        title: "登录帮助",
+                        message: "请输入注册手机号和密码。如果忘记密码，请联系管理员重置。"
+                    )
+                }
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(.secondary)
+                .buttonStyle(.plain)
+            } else {
+                Button("跳过") {
+                    appState.skipLogin()
+                }
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(.secondary)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("skip-login")
             }
-            .font(.system(size: 18, weight: .medium))
-            .foregroundStyle(.secondary)
-            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 8)
