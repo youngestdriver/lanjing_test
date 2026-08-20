@@ -226,7 +226,9 @@ final class MockUpstreamServer: @unchecked Sendable {
     }
     """
 
-    /// Answer-card HTML: one section + 3 questions in the section.
+    /// Answer-card HTML: one section + 5 questions in the section (q1–q3
+    /// 成语辨析, q4 short / q5 long 虚词辨析 — the latter pair feeds the
+    /// 题干高度 regression UI test).
     private static func examStartHTML(examInfoId: String) -> String {
         """
         <!DOCTYPE html>
@@ -242,6 +244,8 @@ final class MockUpstreamServer: @unchecked Sendable {
             <a href="#1"><div class="question_cbox"><span>1</span><span questionsId="q1" uuId="u1"></span></div></a>
             <a href="#2"><div class="question_cbox"><span>2</span><span questionsId="q2" uuId="u2"></span></div></a>
             <a href="#3"><div class="question_cbox"><span>3</span><span questionsId="q3" uuId="u3"></span></div></a>
+            <a href="#4"><div class="question_cbox"><span>4</span><span questionsId="q4" uuId="u4"></span></div></a>
+            <a href="#5"><div class="question_cbox"><span>5</span><span questionsId="q5" uuId="u5"></span></div></a>
           </div>
         </div>
         </body>
@@ -249,15 +253,21 @@ final class MockUpstreamServer: @unchecked Sendable {
         """
     }
 
-    /// 3 questions — all classified 成语辨析 by the rule engine, so the
-    /// subcategory 成语辨析 holds the whole batch (the quiz loop then runs
-    /// through all three). Classifier coverage of other types lives in the
-    /// unit tests.
+    /// 5 questions. q1–q3 classify 成语辨析 (analysis contains 成语) and form
+    /// the existing 3-question quiz loop; q4 (short) and q5 (a deliberately
+    /// LONG 题干) classify 虚词辨析 via "关联词" — the 虚词辨析 rule runs
+    /// before 成语辨析 in the 言语理解|逻辑填空 table, and neither contains
+    /// the word 成语. q4 first / q5 second keeps every quiz-page control
+    /// on-screen for the height-regression UI test (问题 1): the short 题干
+    /// renders ~30pt, the long 题干 (20 paragraphs) ~1000pt. Classifier
+    /// coverage of other types lives in the unit tests.
     private static let questionBatchJSON = """
     [
       {"_id":"q1","question":"<p>依次填入最恰当的一项是</p>","answer1":"<p>A. 栩栩如生</p>","answer2":"<p>B. 绘声绘色</p>","answer3":"<p>C. 惟妙惟肖</p>","answer4":"<p>D. 活灵活现</p>","key1":"1","key2":"0","key3":"0","key4":"0","test_ans":"","test_ans_right":"A","analysis":"<p>填入成语“栩栩如生”，形容非常逼真</p>"},
       {"_id":"q2","question":"<p>依次填入最恰当的一项是</p>","answer1":"<p>A. 虽然…但是</p>","answer2":"<p>B. 因为…所以</p>","answer3":"<p>C. 不但…而且</p>","answer4":"<p>D. 要么…要么</p>","key1":"1","key2":"0","key3":"0","key4":"0","test_ans":"","test_ans_right":"A","analysis":"<p>成语“一蹴而就”，意思是轻而易举</p>"},
-      {"_id":"q3","question":"<p>第一空与“情怀”搭配的词语是</p>","answer1":"<p>A. 树立</p>","answer2":"<p>B. 建立</p>","answer3":"<p>C. 培养</p>","answer4":"<p>D. 塑造</p>","key1":"1","key2":"0","key3":"0","key4":"0","test_ans":"","test_ans_right":"A","analysis":"<p>成语“积重难返”，指长期形成的问题</p>"}
+      {"_id":"q3","question":"<p>第一空与“情怀”搭配的词语是</p>","answer1":"<p>A. 树立</p>","answer2":"<p>B. 建立</p>","answer3":"<p>C. 培养</p>","answer4":"<p>D. 塑造</p>","key1":"1","key2":"0","key3":"0","key4":"0","test_ans":"","test_ans_right":"A","analysis":"<p>成语“积重难返”，指长期形成的问题</p>"},
+      {"_id":"q4","question":"<p>下列各句中，关联词使用最恰当的一项是</p>","answer1":"<p>A. 既然他已经尽力，就应当给予肯定</p>","answer2":"<p>B. 不但他认真学习，而且成绩很好</p>","answer3":"<p>C. 因为下雨，但是比赛照常进行</p>","answer4":"<p>D. 只要努力，所以一定能成功</p>","key1":"1","key2":"0","key3":"0","key4":"0","test_ans":"","test_ans_right":"A","analysis":"<p>本题考查关联词的搭配使用，正确句子应保持关联词成对使用</p>"},
+      {"_id":"q5","question":"<p>阅读下面的文段，完成下列各题。</p><p>转折关系，是复句中一种非常重要的逻辑关系，它表示分句之间意思相反或者相对。</p><p>后一个分句不是顺着前一个分句的意思说下去，而是转到相反或相对的方向上去。</p><p>表示转折关系的常用关联词有：虽然……但是、尽管……可是、然而、却、不过、只是等。</p><p>例如“虽然天气很冷，但是他依然坚持晨跑”，前一分句说出一个事实，后一分句则转向相反的一面。</p><p>递进关系则不同，它表示后一分句的意思比前一分句更进一步，程度更深、范围更广。</p><p>表示递进关系的常用关联词有：不但……而且、不仅……还、尚且……何况、甚至等。</p><p>例如“他不但学习成绩优异，而且积极参加各种社会活动”，后一分句对前一分句作了进一步的补充。</p><p>因果关系表示前一分句是原因，后一分句是结果，或者反过来由果溯因。</p><p>表示因果关系的常用关联词有：因为……所以、由于……因此、之所以……是因为、既然……就等。</p><p>例如“因为他平时训练刻苦，所以这次比赛取得了优异的成绩”，前因后果，逻辑清楚。</p><p>并列关系表示几个分句分别说明相关的几件事，或者描述同一事物的几个方面。</p><p>表示并列关系的常用关联词有：既……又、一边……一边、一方面……另一方面、不是……而是等。</p><p>条件关系表示前一分句提出一个条件，后一分句说明满足这个条件后产生的结果。</p><p>表示条件关系的常用关联词有：只要……就、只有……才、无论……都、除非……否则等。</p><p>选择关系表示从几个分句所述的事项中选择一项，表示选择的常用关联词有：或者……或者、是……还是、宁可……也不等。</p><p>假设关系表示前一分句提出假设，后一分句说明这一假设实现后将会产生的结果。</p><p>表示假设关系的常用关联词有：如果……就、假如……那么、即使……也、要是……便等。</p><p>在一段文字中，正确使用关联词能够让语句之间的逻辑关系更加清晰，表达更加准确。</p><p>使用关联词时要注意搭配成对，不能混淆不同关系类型的关联词，否则会造成语病。</p><p>例如把“虽然”和“而且”搭配在一起使用，就属于典型的关联词搭配错误，需要特别注意。</p>","answer1":"<p>A. 转折</p>","answer2":"<p>B. 递进</p>","answer3":"<p>C. 因果</p>","answer4":"<p>D. 并列</p>","key1":"1","key2":"0","key3":"0","key4":"0","test_ans":"","test_ans_right":"A","analysis":"<p>本题考查关联词关系的辨析，转折关系与并列关系需要区分清楚</p>"}
     ]
     """
 }

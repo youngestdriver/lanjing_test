@@ -13,11 +13,12 @@ struct PracticeCategoryListView: View {
             Section {
                 ForEach(BankLogic.categories, id: \.self) { category in
                     let count = vm.meta?.counts?[category] ?? 0
+                    let answered = vm.answeredCount(category: category)
                     NavigationLink(value: PracticeRoute.subcategories(category: category)) {
                         HStack {
                             Text(category)
                             Spacer()
-                            Text("\(count) 题")
+                            Text(answered > 0 ? "\(answered)/\(count)" : "\(count) 题")
                                 .foregroundStyle(.secondary)
                         }
                     }

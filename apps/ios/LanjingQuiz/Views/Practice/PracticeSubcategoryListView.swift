@@ -19,7 +19,9 @@ struct PracticeSubcategoryListView: View {
                         HStack {
                             Text(group.name)
                             Spacer()
-                            Text("\(group.count) 题")
+                            // 需求 4:做过的题型显示做题进度 x/xx,否则显示题量。
+                            let answered = vm.answeredCount(category: category, subCategory: group.name)
+                            Text(answered > 0 ? "\(answered)/\(group.count)" : "\(group.count) 题")
                                 .foregroundStyle(.secondary)
                         }
                     }

@@ -1,0 +1,85 @@
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.hilt)
+    kotlin("kapt")
+}
+
+// 版本号可由 CI 覆盖(release.yml android-apk producer):
+//   ./gradlew assembleRelease -PversionName=1.1.0 -PversionCode=10100
+val releaseVersionName = project.findProperty("versionName")?.toString()?.takeIf { it.isNotBlank() } ?: "1.0"
+val releaseVersionCode = project.findProperty("versionCode")?.toString()?.toIntOrNull() ?: 1
+
+android {
+    namespace = "com.qzh.lanjingquiz"
+    compileSdk = 35
+    defaultConfig {
+        applicationId = "com.qzh.lanjingquiz"
+        minSdk = 26
+        targetSdk = 35
+        versionCode = releaseVersionCode
+        versionName = releaseVersionName
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "API_BASE_URL", "\"https://test.lanjingweike.com\"")
+    }
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug") // 未签名发布版可安装;正式签名 T7 接线
+        }
+        // 本地手动冒烟可用 -PmockBaseUrl=http://127.0.0.1:port 覆盖 debug 的 API_BASE_URL;
+        // 仪器化 UI 测试走 TestConfig intent extra(动态端口,见 TestConfig.kt),不依赖此属性。
+        debug {
+            val mock = providers.gradleProperty("mockBaseUrl")
+            if (mock.isPresent) {
+                buildConfigField("String", "API_BASE_URL", "\"${mock.get()}\"")
+            } else {
+                buildConfigField("String", "API_BASE_URL", "\"https://test.lanjingweike.com\"")
+            }
+        }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = "17" }
+    buildFeatures { compose = true; buildConfig = true }
+    testOptions { unitTests.isReturnDefaultValues = true }
+}
+
+kapt { correctErrorTypes = true }
+
+dependencies {
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.activity.compose)
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.ui.graphics)
+    implementation(libs.compose.ui.tooling.preview)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.material.icons)
+    implementation(libs.hilt.android)
+    kapt(libs.hilt.compiler)
+    implementation(libs.hilt.navigation.compose)
+    implementation(libs.okhttp)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.security.crypto)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.mockwebserver)
+
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.espresso.core)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    androidTestImplementation(libs.mockwebserver)
+    androidTestImplementation(libs.androidx.test.core)
+    debugImplementation(libs.compose.ui.test.manifest)
+    debugImplementation(libs.compose.ui.tooling)
+}

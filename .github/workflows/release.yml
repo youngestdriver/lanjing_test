@@ -27,6 +27,9 @@ name: Release
 #      secrets are configured; that job self-skips otherwise.
 #   4. 题库快照 — only when include_bank=true AND the data exists in the
 #      workspace (it does not in CI; see the bank-snapshot job).
+#   5. Android 未签名 release APK — always built (unsigned release 可直接安装,
+#      与 ios-unsigned 同语义);版本号取自发布 tag,versionCode 按
+#      major*10000+minor*100+patch 派生(-PversionName/-PversionCode 注入)。
 #
 # iOS signing secrets (add in repo Settings → Secrets and variables → Actions
 # when you have an Apple Developer certificate):
@@ -377,6 +380,43 @@ jobs:
           path: "${{ runner.temp }}/assets"
           if-no-files-found: error
 
+  # Always built: unsigned release APK。未配置签名 secrets,未签名 release 为交付物
+  # (构建用 debug 签名,可直接安装;与 ios-unsigned 同语义,正式签名后续接线)。
+  android-apk:
+    name: Android 未签名 APK
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.10.2
+
+      # 版本来自 release tag(去 v 前缀);versionCode 派生 = major*10000+minor*100+patch。
+      # build.gradle.kts 读取 -PversionName/-PversionCode(缺省回退 1.0/1)。
+      - name: Build unsigned release APK
+        working-directory: apps/android
+        run: |
+          ver="${{ needs.version.outputs.version }}"; ver="${ver#v}"
+          ./gradlew assembleRelease -PversionName="$ver" \
+            -PversionCode="$(echo "$ver" | awk -F. '{print $1*10000+$2*100+$3}')" --no-daemon
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: apps/android/LanjingQuiz/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
   # Signed ADHOC ipa, opt-in via the include_ipa input (job-level `if` cannot
   # read secrets/env, so the decision comes from the dispatch inputs). The
   # first step fails fast with a clear message when the signing secrets are
@@ -496,7 +536,7 @@ jobs:
 
   release:
     name: 创建 Release
-    needs: [version, web-desktop-services, web-desktop-windows, web-desktop-macos, web-desktop-linux, ios-unsigned, ios-ipa, bank-snapshot]
+    needs: [version, web-desktop-services, web-desktop-windows, web-desktop-macos, web-desktop-linux, ios-unsigned, ios-ipa, bank-snapshot, android-apk]
     if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     permissions:
@@ -517,6 +557,11 @@ jobs:
                 "${{ runner.temp }}"/assets/LanjingQuiz-server-arm64.exe \
                 "${{ runner.temp }}"/assets/server-darwin-arm64 \
                 "${{ runner.temp }}"/assets/server-darwin-x64
+          # android-apk 的 apk 改名为平台化名称(LanjingQuiz-android-<version>.apk)
+          for f in "${{ runner.temp }}"/assets/*.apk; do
+            [ -f "$f" ] || continue
+            mv "$f" "${{ runner.temp }}"/assets/LanjingQuiz-android-${{ needs.version.outputs.version }}.apk
+          done
           assets=()
           for f in "${{ runner.temp }}"/assets/*; do
             [ -f "$f" ] && assets+=("$f")
