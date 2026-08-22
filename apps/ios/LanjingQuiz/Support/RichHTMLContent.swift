@@ -60,7 +60,9 @@ struct RichHTMLContent: View {
     /// Drops the trailing `<p>…</p>` / `<div>…</div>` block whose rendered text
     /// is empty (whitespace / `&nbsp;` / filler tags only); nil when the tail
     /// carries content or the structure is malformed.
-    private static func strippingTrailingEmptyBlock(from html: String) -> String? {
+    /// `nonisolated`: the type is implicitly @MainActor (View conformance),
+    /// but stripTrailingFiller is nonisolated and calls this helper.
+    private nonisolated static func strippingTrailingEmptyBlock(from html: String) -> String? {
         let ns = html as NSString
         let pClose = ns.range(of: "</p>", options: [.backwards, .caseInsensitive])
         let divClose = ns.range(of: "</div>", options: [.backwards, .caseInsensitive])
