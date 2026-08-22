@@ -47,6 +47,7 @@ lipo -create "$TMPB/launcher-arm64" "$TMPB/launcher-x64" \
 
 # Icon + metadata
 cp "$ROOT/assets/desktop/status-icon.png" "$APP/Contents/Resources/status-icon.png"
+cp "$ROOT/assets/desktop/icon.icns" "$APP/Contents/Resources/icon.icns"
 cp "$ROOT/apps/desktop/macos/Info.plist" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
 

@@ -1,4 +1,4 @@
-const CACHE="quiz-v5";
+const CACHE="quiz-v6";
 const SHELL=["/","/manifest.json","/styles.css","/js/quiz-core.js","/js/practice-core.js","/js/practice.js","/js/app.js","/icon-192.png","/icon-512.png"];
 
 self.addEventListener("install",e=>{

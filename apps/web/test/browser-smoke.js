@@ -9,6 +9,7 @@ const { chromium } = require("playwright-core");
 const WEB_DIR = path.resolve(__dirname, "..");
 const PORT = 43129;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
+const SERVICE_WORKER_CACHE = "quiz-v6";
 
 function chromeExecutable() {
   const candidates = [
@@ -95,15 +96,15 @@ async function verifyOfflineShell(browser) {
     }
 
     const shell = ["/", "/manifest.json", "/styles.css", "/js/quiz-core.js", "/js/app.js", "/icon-192.png", "/icon-512.png"];
-    const cacheReport = await page.evaluate(async (paths) => {
+    const cacheReport = await page.evaluate(async ({ paths, cacheName: expectedCache }) => {
       const cacheNames = await caches.keys();
-      const cacheName = cacheNames.find((name) => name === "quiz-v5");
+      const cacheName = cacheNames.find((name) => name === expectedCache);
       if (!cacheName) return { cacheName: null, missing: paths };
       const cache = await caches.open(cacheName);
       const matches = await Promise.all(paths.map((path) => cache.match(path)));
       return { cacheName, missing: paths.filter((path, index) => !matches[index]) };
-    }, shell);
-    assert.equal(cacheReport.cacheName, "quiz-v5");
+    }, { paths: shell, cacheName: SERVICE_WORKER_CACHE });
+    assert.equal(cacheReport.cacheName, SERVICE_WORKER_CACHE);
     assert.deepEqual(cacheReport.missing, []);
 
     await context.setOffline(true);
