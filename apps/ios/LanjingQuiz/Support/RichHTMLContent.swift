@@ -35,7 +35,7 @@ struct RichHTMLContent: View {
     /// stem and the options. Only the tail is stripped: interior blank
     /// paragraphs, a trailing `<br>` inside a paragraph that carries words, and
     /// the answer blanks inside the question text are preserved.
-    nonisolated static func stripTrailingFiller(_ html: String) -> String {
+    static func stripTrailingFiller(_ html: String) -> String {
         var result = html
         while true {
             let before = result
@@ -60,9 +60,11 @@ struct RichHTMLContent: View {
     /// Drops the trailing `<p>…</p>` / `<div>…</div>` block whose rendered text
     /// is empty (whitespace / `&nbsp;` / filler tags only); nil when the tail
     /// carries content or the structure is malformed.
-    /// `nonisolated`: the type is implicitly @MainActor (View conformance),
-    /// but stripTrailingFiller is nonisolated and calls this helper.
-    private nonisolated static func strippingTrailingEmptyBlock(from html: String) -> String? {
+    /// Kept implicitly @MainActor alongside stripTrailingFiller: under Swift 6
+    /// strict concurrency the CI build failed to resolve a `nonisolated`
+    /// member from this implicitly-isolated static (the whole View type is
+    /// @MainActor), so the pair intentionally shares the type's isolation.
+    private static func strippingTrailingEmptyBlock(from html: String) -> String? {
         let ns = html as NSString
         let pClose = ns.range(of: "</p>", options: [.backwards, .caseInsensitive])
         let divClose = ns.range(of: "</div>", options: [.backwards, .caseInsensitive])
