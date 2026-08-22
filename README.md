@@ -2,7 +2,9 @@
 
 [![CI Web](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-web.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-web.yml)
 [![CI iOS](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-ios.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-ios.yml)
+[![CI Android](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-android.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-android.yml)
 [![CI Bank](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-bank.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-bank.yml)
+[![Release](https://github.com/youngestdriver/lanjing_test/actions/workflows/release.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/release.yml)
 
 面向蓝鲸微课考试流程的第三方学习客户端。本仓库按应用维护 Web/PWA、原生 iOS 与原生安卓三套独立实现。三端现已覆盖同一组核心考试流程，但仍拥有各自的网络层、会话存储、界面代码和测试体系，不共享运行时或业务实现。
 
@@ -319,7 +321,7 @@ xcodebuild \
 
 ### GitHub Actions
 
-持续集成拆分为三个 workflow，在推送到 `main` 或创建目标为 `main` 的 PR 时运行；每个 workflow 都会执行一个轻量的改动检测 job（`dorny/paths-filter`），与检测范围不匹配时实际构建 job 会被跳过：
+持续集成拆分为四个 workflow，在推送到 `main` 或创建目标为 `main` 的 PR 时运行；每个 workflow 都会执行一个轻量的改动检测 job（`dorny/paths-filter`），与检测范围不匹配时实际构建 job 会被跳过：
 
 - [`ci-web.yml`](.github/workflows/ci-web.yml)（`Node`）：当改动涉及 `apps/web/`、`docs/`、`README.md` 或该 workflow 自身时运行 Node job；Ubuntu、Node 22、依赖安装、JavaScript 语法检查、51 项单元与安全测试、mock API 浏览器回归和 `/api/status` smoke test
 - [`ci-ios.yml`](.github/workflows/ci-ios.yml)（`iOS`）：当改动涉及 `apps/ios/` 或该 workflow 自身时运行 iOS job；macOS 15、Xcode 16.4、动态选择可用 iPhone 模拟器并运行测试
