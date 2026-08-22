@@ -84,4 +84,78 @@ class HtmlRendererTest {
         assertTrue(doc.contains("* { background-color: transparent !important; color: inherit !important; }"))
         assertTrue(doc.contains("""font: 14px/1.55 sans-serif"""))
     }
+
+    // ---- stripTrailingFiller:上游富文本在可见内容末尾追加的空填充块 ----
+
+    /** 真实样本:题干以 <p><br/></p> 结尾(题面与选项间的大空白根因,iOS 用户报告)。 */
+    @Test fun `strips real sample trailing empty paragraph`() {
+        val style = "box-sizing: border-box; font-family: -apple-system; padding: 0px; line-height: 2rem; color: rgb(60, 70, 79); font-size: 16px"
+        assertEquals(
+            "<p style=\"$style\">这段文字意在强调（ ）。</p>",
+            HtmlRenderer.stripTrailingFiller("<p style=\"$style\">这段文字意在强调（ ）。</p><p><br/></p>"),
+        )
+    }
+
+    @Test fun `strips consecutive empty paragraphs`() {
+        assertEquals("<p>甲</p>", HtmlRenderer.stripTrailingFiller("<p>甲</p><p><br/></p><p>&nbsp;</p>"))
+    }
+
+    @Test fun `strips trailing break tags`() {
+        assertEquals("<p>甲</p>", HtmlRenderer.stripTrailingFiller("<p>甲</p><br><br/>"))
+    }
+
+    @Test fun `strips trailing nbsp runs`() {
+        assertEquals("<p>甲</p>", HtmlRenderer.stripTrailingFiller("<p>甲</p>&nbsp;&nbsp;"))
+    }
+
+    @Test fun `strips trailing whitespace`() {
+        assertEquals("<p>甲</p>", HtmlRenderer.stripTrailingFiller("<p>甲</p>\n \t"))
+    }
+
+    @Test fun `strips empty paragraph with nested empty span`() {
+        assertEquals("<p>甲</p>", HtmlRenderer.stripTrailingFiller("<p>甲</p><p><span>&nbsp;</span></p>"))
+    }
+
+    @Test fun `strips empty div block`() {
+        assertEquals("<p>甲</p>", HtmlRenderer.stripTrailingFiller("<p>甲</p><div><br/></div>"))
+    }
+
+    @Test fun `strips uppercase filler tags`() {
+        assertEquals("<P>甲</P>", HtmlRenderer.stripTrailingFiller("<P>甲</P><P><BR/></P>"))
+    }
+
+    @Test fun `document template injects stripped html`() {
+        val doc = HtmlRenderer.document("<p>hi</p><p><br/></p>", fontSizePx = 17, dark = false)
+        assertTrue(doc.contains("<body><p>hi</p></body>"))
+    }
+
+    @Test fun `keeps trailing br inside non-empty paragraph`() {
+        assertEquals("<p>甲<br>乙</p>", HtmlRenderer.stripTrailingFiller("<p>甲<br>乙</p>"))
+    }
+
+    @Test fun `keeps trailing image`() {
+        assertEquals("<p>甲</p><img src=\"/x.png\">", HtmlRenderer.stripTrailingFiller("<p>甲</p><img src=\"/x.png\">"))
+    }
+
+    @Test fun `keeps interior blank paragraphs`() {
+        assertEquals("<p>甲</p><p><br/></p><p>乙</p>", HtmlRenderer.stripTrailingFiller("<p>甲</p><p><br/></p><p>乙</p>"))
+    }
+
+    @Test fun `keeps image inside trailing paragraph`() {
+        val html = """<p>看图</p><p><img src="/x.png"></p>"""
+        assertEquals(html, HtmlRenderer.stripTrailingFiller(html))
+    }
+
+    @Test fun `keeps table inside trailing block`() {
+        val html = "<p>甲</p><table><tr><td>乙</td></tr></table>"
+        assertEquals(html, HtmlRenderer.stripTrailingFiller(html))
+    }
+
+    @Test fun `keeps answer blank inside paragraph`() {
+        assertEquals("<p>甲（&nbsp;&nbsp;）。</p>", HtmlRenderer.stripTrailingFiller("<p>甲（&nbsp;&nbsp;）。</p>"))
+    }
+
+    @Test fun `filler-only document empties`() {
+        assertEquals("", HtmlRenderer.stripTrailingFiller("<p><br/></p><p>&nbsp;</p>"))
+    }
 }

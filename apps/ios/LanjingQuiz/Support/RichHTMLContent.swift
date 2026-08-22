@@ -28,6 +28,85 @@ struct RichHTMLContent: View {
         case image(URL)
     }
 
+    /// Upstream rich-text editors append filler blocks after the visible
+    /// text (`<p><br/></p>`, `<p>&nbsp;</p>`, stray `<br>`, `&nbsp;`/whitespace
+    /// runs). The browser renders them as full blank lines, pushing the options
+    /// and analysis down by a per-question amount — the varying gap between the
+    /// stem and the options. Only the tail is stripped: interior blank
+    /// paragraphs, a trailing `<br>` inside a paragraph that carries words, and
+    /// the answer blanks inside the question text are preserved.
+    nonisolated static func stripTrailingFiller(_ html: String) -> String {
+        var result = html
+        while true {
+            let before = result
+            result = result.replacingOccurrences(
+                of: #"(?is)(?:&nbsp;|\s)+$"#,
+                with: "",
+                options: .regularExpression
+            )
+            result = result.replacingOccurrences(
+                of: #"(?is)<br\s*/?>(?:&nbsp;|\s)*$"#,
+                with: "",
+                options: .regularExpression
+            )
+            if let stripped = strippingTrailingEmptyBlock(from: result) {
+                result = stripped
+            }
+            if result == before { break }
+        }
+        return result
+    }
+
+    /// Drops the trailing `<p>…</p>` / `<div>…</div>` block whose rendered text
+    /// is empty (whitespace / `&nbsp;` / filler tags only); nil when the tail
+    /// carries content or the structure is malformed.
+    private static func strippingTrailingEmptyBlock(from html: String) -> String? {
+        let ns = html as NSString
+        let pClose = ns.range(of: "</p>", options: [.backwards, .caseInsensitive])
+        let divClose = ns.range(of: "</div>", options: [.backwards, .caseInsensitive])
+        let useDiv = divClose.location != NSNotFound
+            && (pClose.location == NSNotFound || divClose.location > pClose.location)
+        if pClose.location == NSNotFound && divClose.location == NSNotFound { return nil }
+        let close = useDiv ? divClose : pClose
+        let tag = useDiv ? "div" : "p"
+        // Latest open tag of this kind before the close. The lookahead keeps
+        // </p>, <pre>, <picture> etc. from matching.
+        guard let openRegex = try? NSRegularExpression(
+            pattern: "<\(tag)(?=[\\s>])",
+            options: [.caseInsensitive]
+        ), let open = openRegex.matches(in: html, range: NSRange(location: 0, length: close.location)).last
+        else { return nil }
+        // Open tag must actually terminate before the close tag.
+        let afterOpen = open.range.location + open.range.length
+        let openEnd = ns.range(
+            of: ">",
+            options: [],
+            range: NSRange(location: afterOpen, length: close.location - afterOpen)
+        )
+        guard openEnd.location != NSNotFound else { return nil }
+        let content = ns.substring(with: NSRange(
+            location: openEnd.location + 1,
+            length: close.location - openEnd.location - 1
+        ))
+        // Filler spans/breaks are invisible alone, but images, tables, media
+        // etc. render real content — such blocks are never filler.
+        let hasVisualContent = content.range(
+            of: #"(?i)<(?:img|picture|svg|canvas|iframe|embed|object|video|audio|table|math|input|textarea|select|hr|form)\b"#,
+            options: .regularExpression
+        ) != nil
+        let text = content
+            .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "&nbsp;", with: " ")
+            .replacingOccurrences(of: "&#160;", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.isEmpty, !hasVisualContent else { return nil }
+        let block = NSRange(
+            location: open.range.location,
+            length: close.location + close.length - open.range.location
+        )
+        return ns.replacingCharacters(in: block, with: "")
+    }
+
     /// Split HTML into alternating text / image segments.
     nonisolated static func segments(from html: String) -> [Segment] {
         let ns = html as NSString
@@ -174,7 +253,7 @@ private struct InlineHTMLWebView: UIViewRepresentable {
         }
         \(colorRule)
         </style></head>
-        <body>\(html)</body>
+        <body>\(stripTrailingFiller(html))</body>
         <script>
         (() => {
             const report = () => {
