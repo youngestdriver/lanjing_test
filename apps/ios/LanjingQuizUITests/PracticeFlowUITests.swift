@@ -5,7 +5,7 @@ import XCTest
 /// whole 机考题库 → 分类 (counts from the local bank) → 题型 → 答题 → 完成,
 /// plus the 5 issue regressions: wrong-option marking, 答题卡 jump, 题干高度,
 /// mid-run persistence across relaunch and full-screen quiz page.
-/// Hermetic: runs in CI without any local server.
+/// Hermetic: requires no local server.
 ///
 /// Setup happens inline in the test method (not in setUp/tearDown): those
 /// lifecycle overrides are nonisolated on older XCTest SDKs, which would
