@@ -16,6 +16,7 @@
 		149C47CC26407B6918E663C5 /* QuizView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C32D95BC3642037D78B8341 /* QuizView.swift */; };
 		1E6FEB92778220DA344414D4 /* PracticeBankViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D2E8D2729A582B391B3A839 /* PracticeBankViewModelTests.swift */; };
 		AB1C0DE1234567890123456B /* ExamListViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1C0DE1234567890123456A /* ExamListViewModelTests.swift */; };
+		AB1C0DE1234567890123456F /* AppStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1C0DE1234567890123456E /* AppStateTests.swift */; };
 		1E9207B9E37308356A32B207 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B6C0CB47C05234693836A37 /* RootView.swift */; };
 		20EE6B46B6AEE5FB6B7AFD66 /* AnswerDotGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82A1BDA41976EE6D7B42DA31 /* AnswerDotGrid.swift */; };
 		23B57501204B215210E0976F /* PracticeBankViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33F905DFA804D34FFB20F66C /* PracticeBankViewModel.swift */; };
@@ -134,6 +135,7 @@
 		2D0EF14F9E652B9F68490FB0 /* QuestionTimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuestionTimerView.swift; sourceTree = "<group>"; };
 		2D2E8D2729A582B391B3A839 /* PracticeBankViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeBankViewModelTests.swift; sourceTree = "<group>"; };
 		AB1C0DE1234567890123456A /* ExamListViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExamListViewModelTests.swift; sourceTree = "<group>"; };
+		AB1C0DE1234567890123456E /* AppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateTests.swift; sourceTree = "<group>"; };
 		2D3CA1090761016E6D779447 /* QuestionClassifierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuestionClassifierTests.swift; sourceTree = "<group>"; };
 		2D6B481FC05585B2110A8B19 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		2E6F97D0273040C8E0A2C306 /* PracticeSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeSessionStore.swift; sourceTree = "<group>"; };
@@ -247,6 +249,7 @@
 				E21335F7B31985CE3647EE6E /* LoginFormTests.swift */,
 				2D2E8D2729A582B391B3A839 /* PracticeBankViewModelTests.swift */,
 				AB1C0DE1234567890123456A /* ExamListViewModelTests.swift */,
+				AB1C0DE1234567890123456E /* AppStateTests.swift */,
 				E4DB5CFB75C79185F8AB7512 /* PracticeProgressStoreTests.swift */,
 				F6D8FFB1EA1CBFDCFC515882 /* PracticeSessionTests.swift */,
 				B49E295DDA6EFC32D2143147 /* PracticeUpstreamMappingTests.swift */,
@@ -646,6 +649,7 @@
 				9F233F588C9ACD522BF61132 /* LoginFormTests.swift in Sources */,
 				1E6FEB92778220DA344414D4 /* PracticeBankViewModelTests.swift in Sources */,
 				AB1C0DE1234567890123456B /* ExamListViewModelTests.swift in Sources */,
+				AB1C0DE1234567890123456F /* AppStateTests.swift in Sources */,
 				0ABCEE9F033ADFBBB6B0478D /* PracticeProgressStoreTests.swift in Sources */,
 				642054B71EAF86E39A0EE05A /* PracticeSessionTests.swift in Sources */,
 				CCF5A21E9BFD0B8AE9E5674E /* PracticeUpstreamMappingTests.swift in Sources */,

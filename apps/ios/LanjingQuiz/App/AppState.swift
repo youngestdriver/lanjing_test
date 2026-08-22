@@ -64,7 +64,11 @@ final class AppState {
         }
         #endif
         let hasSession = await cookieCloudSync.pullAndApplyIfNeeded()
-        route = hasSession ? .examList : .login
+        // 启动导入决定的是初始路由:导入(最长 4 秒)期间用户已点「跳过」
+        // 或已完成登录时,不再覆盖用户的选择。
+        if route == .login {
+            route = hasSession ? .examList : .login
+        }
     }
 
     /// After a successful login: publish the new session to the cloud and
