@@ -74,8 +74,16 @@ struct LoginView: View {
                 Spacer(minLength: 62)
 
                 VStack(spacing: 18) {
-                    WhaleLineIcon(color: loginBlue)
-                        .frame(width: 132, height: 102)
+                    // 登录页展示应用图标(与主屏幕图标同款)。AppIcon 编译产物
+                    // 不能按名加载(UIImage(named: "AppIcon") 为 nil),故引用
+                    // AppIconLogo.imageset 的同副本——替换 AppIcon 时需同步。
+                    // 底图无透明圆角,按 iOS 图标圆角比例(~22.4%)裁出圆角。
+                    Image("AppIconLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 132, height: 132)
+                        .clipShape(RoundedRectangle(cornerRadius: 30))
+                        .accessibilityHidden(true)
 
                     Text("蓝鲸助手")
                         .font(.system(size: 34, weight: .bold, design: .rounded))
@@ -375,137 +383,5 @@ private struct LoginPillButtonStyle: ButtonStyle {
             .background(color.opacity(configuration.isPressed ? 0.82 : 1), in: Capsule())
             .scaleEffect(configuration.isPressed ? 0.985 : 1)
             .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
-    }
-}
-
-private struct WhaleLineIcon: View {
-    let color: Color
-
-    var body: some View {
-        ZStack {
-            WhaleBodyLineShape()
-                .stroke(color, style: StrokeStyle(lineWidth: 3.2, lineCap: .round, lineJoin: .round))
-
-            WhaleTailLineShape()
-                .stroke(color, style: StrokeStyle(lineWidth: 3.2, lineCap: .round, lineJoin: .round))
-
-            WhaleFlipperLineShape()
-                .stroke(color, style: StrokeStyle(lineWidth: 2.8, lineCap: .round, lineJoin: .round))
-
-            WhaleSpoutLineShape()
-                .stroke(color, style: StrokeStyle(lineWidth: 2.8, lineCap: .round, lineJoin: .round))
-
-            Circle()
-                .fill(color)
-                .frame(width: 5, height: 5)
-                .offset(x: -43, y: -12)
-        }
-        .accessibilityHidden(true)
-    }
-}
-
-private struct WhaleBodyLineShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        let w = rect.width
-        let h = rect.height
-        var path = Path()
-
-        path.move(to: CGPoint(x: w * 0.06, y: h * 0.52))
-        path.addCurve(
-            to: CGPoint(x: w * 0.28, y: h * 0.17),
-            control1: CGPoint(x: w * 0.05, y: h * 0.31),
-            control2: CGPoint(x: w * 0.13, y: h * 0.16)
-        )
-        path.addCurve(
-            to: CGPoint(x: w * 0.70, y: h * 0.22),
-            control1: CGPoint(x: w * 0.43, y: h * 0.05),
-            control2: CGPoint(x: w * 0.62, y: h * 0.08)
-        )
-        path.addCurve(
-            to: CGPoint(x: w * 0.82, y: h * 0.52),
-            control1: CGPoint(x: w * 0.80, y: h * 0.28),
-            control2: CGPoint(x: w * 0.83, y: h * 0.40)
-        )
-        path.addCurve(
-            to: CGPoint(x: w * 0.62, y: h * 0.76),
-            control1: CGPoint(x: w * 0.81, y: h * 0.66),
-            control2: CGPoint(x: w * 0.72, y: h * 0.75)
-        )
-        path.addCurve(
-            to: CGPoint(x: w * 0.27, y: h * 0.86),
-            control1: CGPoint(x: w * 0.52, y: h * 0.91),
-            control2: CGPoint(x: w * 0.36, y: h * 0.93)
-        )
-        path.addCurve(
-            to: CGPoint(x: w * 0.06, y: h * 0.52),
-            control1: CGPoint(x: w * 0.10, y: h * 0.77),
-            control2: CGPoint(x: w * 0.04, y: h * 0.64)
-        )
-
-        return path
-    }
-}
-
-private struct WhaleTailLineShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        let w = rect.width
-        let h = rect.height
-        var path = Path()
-
-        path.move(to: CGPoint(x: w * 0.76, y: h * 0.50))
-        path.addCurve(
-            to: CGPoint(x: w * 0.96, y: h * 0.27),
-            control1: CGPoint(x: w * 0.85, y: h * 0.43),
-            control2: CGPoint(x: w * 0.91, y: h * 0.28)
-        )
-        path.addCurve(
-            to: CGPoint(x: w * 0.91, y: h * 0.50),
-            control1: CGPoint(x: w * 0.97, y: h * 0.37),
-            control2: CGPoint(x: w * 0.96, y: h * 0.47)
-        )
-        path.addCurve(
-            to: CGPoint(x: w * 0.98, y: h * 0.72),
-            control1: CGPoint(x: w * 0.95, y: h * 0.54),
-            control2: CGPoint(x: w * 0.98, y: h * 0.64)
-        )
-        path.addCurve(
-            to: CGPoint(x: w * 0.76, y: h * 0.50),
-            control1: CGPoint(x: w * 0.93, y: h * 0.78),
-            control2: CGPoint(x: w * 0.84, y: h * 0.59)
-        )
-
-        return path
-    }
-}
-
-private struct WhaleFlipperLineShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.width * 0.40, y: rect.height * 0.70))
-        path.addCurve(
-            to: CGPoint(x: rect.width * 0.20, y: rect.height * 0.98),
-            control1: CGPoint(x: rect.width * 0.35, y: rect.height * 0.83),
-            control2: CGPoint(x: rect.width * 0.23, y: rect.height * 0.97)
-        )
-        return path
-    }
-}
-
-private struct WhaleSpoutLineShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.width * 0.34, y: rect.height * 0.18))
-        path.addCurve(
-            to: CGPoint(x: rect.width * 0.23, y: rect.height * 0.02),
-            control1: CGPoint(x: rect.width * 0.32, y: rect.height * 0.10),
-            control2: CGPoint(x: rect.width * 0.26, y: rect.height * 0.06)
-        )
-        path.move(to: CGPoint(x: rect.width * 0.38, y: rect.height * 0.17))
-        path.addCurve(
-            to: CGPoint(x: rect.width * 0.48, y: rect.height * 0.02),
-            control1: CGPoint(x: rect.width * 0.39, y: rect.height * 0.08),
-            control2: CGPoint(x: rect.width * 0.45, y: rect.height * 0.06)
-        )
-        return path
     }
 }
