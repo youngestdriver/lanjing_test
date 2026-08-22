@@ -33,3 +33,9 @@ test("status-icon.png is a PNG", () => {
   const data = fs.readFileSync(path.join(assetsDir, "status-icon.png"));
   assert.equal(data.toString("hex", 0, 8), "89504e470d0a1a0a");
 });
+
+test("macOS app icon is an ICNS container", () => {
+  const data = fs.readFileSync(path.join(assetsDir, "icon.icns"));
+  assert.equal(data.toString("ascii", 0, 4), "icns");
+  assert.equal(data.readUInt32BE(4), data.length, "ICNS header records the full file size");
+});
