@@ -2,8 +2,9 @@ import XCTest
 
 /// 登录页「跳过」流程:未登录直接进入主界面并落在「我的」tab;Cookie 云端
 /// 同步未开启时不显示配置输入框,开启后显示;「去登录」可回到登录页。
-/// 与 PracticeFlowUITests 不同,本流程不启动 mock 上游——全程无登录请求,
-/// 考试列表的 notLoggedIn 只会弹横幅,不会把用户踢回登录页(正是跳过成立的前提)。
+/// 与 PracticeFlowUITests 不同,本流程不启动 mock 上游——全程无登录请求;
+/// 以未登录状态进入主界面后,考试列表与练习 tab 均显示「需要登录」占位
+/// (去登录回登录页),不会因无会话请求被踢回登录页(正是跳过成立的前提)。
 @MainActor
 final class SkipLoginFlowUITests: XCTestCase {
 
@@ -28,6 +29,17 @@ final class SkipLoginFlowUITests: XCTestCase {
         // 跳过 → 「我的」tab,显示「未登录」
         let notLoggedIn = app.staticTexts["未登录"]
         XCTAssertTrue(notLoggedIn.waitForExistence(timeout: 10), "跳过后未落在「我的」tab(未登录 label 缺失)")
+
+        // 考试列表 tab:未登录应显示「需要登录」占位(与练习页一致),而不是
+        // 网络错误文本/被踢回登录页。
+        let examsTab = app.tabBars.buttons["考试列表"]
+        XCTAssertTrue(examsTab.waitForExistence(timeout: 5), "考试列表 tab 缺失")
+        examsTab.tap()
+        XCTAssertTrue(app.staticTexts["需要登录"].waitForExistence(timeout: 5), "未登录时考试列表页缺少「需要登录」占位")
+        XCTAssertTrue(app.buttons["去登录"].exists, "「需要登录」占位缺少去登录按钮")
+        // 回到「我的」tab 继续后续断言
+        app.tabBars.buttons["我的"].tap()
+        XCTAssertTrue(notLoggedIn.waitForExistence(timeout: 5), "回到「我的」tab 后未登录 label 缺失")
 
         // List 懒加载:先滚动到 Cookie 云端同步 Section 使其渲染,再断言输入框状态
         let toggle = app.switches["Cookie 云端同步"]

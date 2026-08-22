@@ -23,7 +23,9 @@ struct ExamListView: View {
 
     private func content(_ vm: ExamListViewModel) -> some View {
         Group {
-            if vm.isLoading && vm.exams.isEmpty {
+            if vm.needsLogin {
+                NeedsLoginPlaceholder(description: "考试题目直接从蓝鲸平台获取，登录后才能使用。")
+            } else if vm.isLoading && vm.exams.isEmpty {
                 ProgressView()
             } else if let errorMessage = vm.errorMessage, vm.exams.isEmpty {
                 VStack(spacing: 16) {
