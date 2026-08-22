@@ -60,10 +60,6 @@ struct RichHTMLContent: View {
     /// Drops the trailing `<p>…</p>` / `<div>…</div>` block whose rendered text
     /// is empty (whitespace / `&nbsp;` / filler tags only); nil when the tail
     /// carries content or the structure is malformed.
-    /// Kept implicitly @MainActor alongside stripTrailingFiller: under Swift 6
-    /// strict concurrency the CI build failed to resolve a `nonisolated`
-    /// member from this implicitly-isolated static (the whole View type is
-    /// @MainActor), so the pair intentionally shares the type's isolation.
     private static func strippingTrailingEmptyBlock(from html: String) -> String? {
         let ns = html as NSString
         let pClose = ns.range(of: "</p>", options: [.backwards, .caseInsensitive])
@@ -257,7 +253,7 @@ private struct InlineHTMLWebView: UIViewRepresentable {
         }
         \(colorRule)
         </style></head>
-        <body>\(stripTrailingFiller(html))</body>
+        <body>\(RichHTMLContent.stripTrailingFiller(html))</body>
         <script>
         (() => {
             const report = () => {
