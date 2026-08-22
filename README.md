@@ -1,9 +1,5 @@
 # 蓝鲸答题助手
 
-[![CI Web](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-web.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-web.yml)
-[![CI iOS](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-ios.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-ios.yml)
-[![CI Android](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-android.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-android.yml)
-[![CI Bank](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-bank.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/ci-bank.yml)
 [![Release](https://github.com/youngestdriver/lanjing_test/actions/workflows/release.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/release.yml)
 
 面向蓝鲸微课考试流程的第三方学习客户端。本仓库按应用维护 Web/PWA、原生 iOS 与原生安卓三套独立实现。三端现已覆盖同一组核心考试流程，但仍拥有各自的网络层、会话存储、界面代码和测试体系，不共享运行时或业务实现。
@@ -48,8 +44,8 @@ Web 版必须启动 `apps/web/server.js`。iOS 与安卓版直接访问上游，
 | 会话持久化 | 进程级全局 Cookie，写入权限为 `0600` 的本地文件 | Cookie 存入 Keychain，会话失效时统一清理并返回登录页 |
 | 练习刷题 | 首次使用直连蓝鲸平台爬取全部机考题库到本地（.local/practice，逐卷进度与断点续爬），按 大类→题型细分 两级分类离线刷题，组合题材料渲染、按大类随机顺序；我的页提供 更新题库/删除题库/爬取日志导出 | 与 Web 对齐的完整练习页（首次直连爬取、断点续爬、原子更新、删除、日志导出） |
 | 云端会话同步 | 可选启用 CookieCloud 同步：登录后自动上传、启动时拉取、设置中手动同步（协议与官方扩展兼容） | 可选启用 CookieCloud 同步：登录后自动上传、启动时拉取、"我的"中手动同步（同一协议） |
-| 自动化验证 | 78 项 Node 单元测试 + 真实 Chrome + mock API 的浏览器回归；无真实上游 E2E | 13 个 XCTest 套件、130 项单元测试；练习流程 UI 测试基于进程内 mock 上游（`LANJING_BASE_URL`），CI 内全自动运行；尚无真机或真实上游 E2E |
-| 原生安卓 | — | Kotlin/Compose 原生客户端：考试/练习/CookieCloud 与 iOS 逐字对齐（见设计文档）；UI 测试在 CI 模拟器上运行（进程内 mock 上游，不触真实服务） |
+| 自动化验证 | 78 项 Node 单元测试 + 真实 Chrome + mock API 的浏览器回归；无真实上游 E2E | 13 个 XCTest 套件、130 项单元测试；练习流程 UI 测试基于进程内 mock 上游（`LANJING_BASE_URL`）；尚无真机或真实上游 E2E |
+| 原生安卓 | — | Kotlin/Compose 原生客户端：考试/练习/CookieCloud 与 iOS 逐字对齐（见设计文档）；UI 测试可在本地模拟器上运行（进程内 mock 上游，不触真实服务） |
 
 Web 与 iOS 登录后都以“考试列表 / 练习 / 我的”组织一级导航；主题、自动下一题、Cookie 云端同步和退出登录集中在“我的”，局域网访问开关仅 Web 提供。Web 额外提供桌面浏览器入口、响应式布局、触控和键盘答题以及可安装的 PWA 应用壳，iOS 提供原生分页手势、iPad 键盘导航、原生富文本容器和系统级会话存储。Web 与 iOS 的“练习”页**首次使用直连蓝鲸平台爬取全部机考题库题目并保存在本地**（Web 存于 `apps/web/.local/practice`；每个分类一个 JSONL，与收集器 `apps/bank/data` 同格式；每卷爬取进度写入 meta.json，中断后从断点续爬），之后离线按 一级分类（大类）→ 二级分类（题型细分）聚合刷题，题型由本地规则引擎分类，答案只在本机判分、不提交上游；爬取每张“新开”卷会创建一次上游作答并自动结束（消耗尝试次数），不再依赖局域网题库下载。Web 的“我的”页提供 更新题库（重爬全部试卷并原子替换）/删除题库/爬取日志导出。
 
@@ -130,7 +126,7 @@ cd apps/ios
 xcodegen generate
 ```
 
-生成后必须检查 Git diff，确认 `project.yml` 与已提交的 `.xcodeproj` 变化符合预期。当前 CI 直接使用已提交工程，不负责验证两者完全一致。
+生成后必须检查 Git diff，确认 `project.yml` 与已提交的 `.xcodeproj` 变化符合预期。发布 workflow 直接使用已提交工程，不负责验证两者完全一致。
 
 签名团队通过环境变量注入，**不提交具体的 Team ID**（它是与开发者账号关联的个人信息，历史提交中出现过的 ID 不应继续出现在新提交中）：
 
@@ -138,7 +134,7 @@ xcodegen generate
 DEVELOPMENT_TEAM=XXXXXX xcodegen generate
 ```
 
-未设置时生成的工程不含团队 ID，模拟器构建和 CI（`CODE_SIGNING_ALLOWED=NO`）不受影响；真机运行前在 Xcode 的 Signing & Capabilities 中选择团队即可。另外，Xcode 打开工程时可能自动向 `.xcodeproj/project.pbxproj` 写回签名团队、格式规范化等本地改动——提交前用 `git status` 检查该文件，仅包含这类本地改动的差异应当丢弃（`git checkout -- apps/ios/LanjingQuiz.xcodeproj/project.pbxproj`），不要提交。
+未设置时生成的工程不含团队 ID，模拟器构建（`CODE_SIGNING_ALLOWED=NO`）不受影响；真机运行前在 Xcode 的 Signing & Capabilities 中选择团队即可。另外，Xcode 打开工程时可能自动向 `.xcodeproj/project.pbxproj` 写回签名团队、格式规范化等本地改动——提交前用 `git status` 检查该文件，仅包含这类本地改动的差异应当丢弃（`git checkout -- apps/ios/LanjingQuiz.xcodeproj/project.pbxproj`），不要提交。
 
 完整的构建说明、用户流程和 iOS 架构见 [apps/ios/README.md](apps/ios/README.md)。
 
@@ -234,9 +230,6 @@ npm --prefix apps/bank run export
 
 ```text
 .
-├── .github/workflows/ci-web.yml    # Web 持续集成（路径检测 + 条件跳过）
-├── .github/workflows/ci-ios.yml    # iOS 持续集成（路径检测 + 条件跳过）
-├── .github/workflows/ci-bank.yml   # 题库工具持续集成（路径检测 + 条件跳过）
 ├── apps/
 │   ├── bank/                       # 独立题库工具（收集/子分类/导出 CLI + 直连上游客户端）
 │   │   ├── lib/                    # 收集器核心、子分类规则、导出、上游解析与直连客户端
@@ -271,7 +264,7 @@ npm --prefix apps/bank run export
 └── README.md
 ```
 
-## 验证与 CI
+## 本地验证
 
 ### Node
 
@@ -290,7 +283,7 @@ npm --prefix apps/bank test
 
 题库工具测试（`apps/bank/test/`）覆盖：收集器的卷名分类匹配、section 清洗（去"(共N题…)"后缀）、题卡位置关联、记录 schema（单选/多选/兜底答案/填空）、考试选择策略（pendingSubmit 优先、目标卷过滤、`wfs=0` 只读收集、强制 `--exam`）、502 交卷验证（重拉列表判定 wfs 翻回）、"未创建的作答绝不提交"保护、跨轮去重与 resume、损坏尾行容错、空闲/上限/会话失效停止；直连上游客户端的登录全流程（JSESSIONID 引导、表单编码、会话落盘）、登录失败、未登录拦截、会话过期（`onlineStatus:"0"` 与重定向到登录页两种识别）、cookie jar 合并与失效（`max-age=0` 删除）、幂等读取的重试语义；以及直连客户端 + stub 上游的端到端收集（新卷流程、JSON 成功交卷、进行中卷只读收集、非目标卷不进入、收集不扰动客户端已存会话）。题库子分类测试覆盖 HTML 剥离与实体解码、各 section 规则命中、优先级（意图先于主旨、削弱先于翻译）、兜底类、特有题型与资料分析 section 即子类（HTML 既定分类原样回显）、字段保真与幂等重写，以及全库 dry-run（其他 <5%，无 bank 文件时自动跳过）。
 
-启动服务后，还可按“快速开始”中的命令请求 `/api/status`；CI 会执行同样的无副作用 HTTP smoke test。
+启动服务后，还可按“快速开始”中的命令请求 `/api/status`，执行无副作用的 HTTP smoke test。
 
 ### iOS
 
@@ -319,19 +312,6 @@ xcodebuild \
 
 确认放弃考试或交卷会修改真实上游状态，不应把这些操作加入无人值守 smoke test。
 
-### GitHub Actions
-
-持续集成拆分为四个 workflow，在推送到 `main` 或创建目标为 `main` 的 PR 时运行；每个 workflow 都会执行一个轻量的改动检测 job（`dorny/paths-filter`），与检测范围不匹配时实际构建 job 会被跳过：
-
-- [`ci-web.yml`](.github/workflows/ci-web.yml)（`Node`）：当改动涉及 `apps/web/`、`docs/`、`README.md` 或该 workflow 自身时运行 Node job；Ubuntu、Node 22、依赖安装、JavaScript 语法检查、51 项单元与安全测试、mock API 浏览器回归和 `/api/status` smoke test
-- [`ci-ios.yml`](.github/workflows/ci-ios.yml)（`iOS`）：当改动涉及 `apps/ios/` 或该 workflow 自身时运行 iOS job；macOS 15、Xcode 16.4、动态选择可用 iPhone 模拟器并运行测试
-- [`ci-android.yml`](.github/workflows/ci-android.yml)（`Android`）：当改动涉及 `apps/android/` 或该 workflow 自身时运行；`android` job 在 Ubuntu 上跑单元测试与 assembleDebug，`android-ui` job 在 API 35 模拟器上跑仪器化 UI 测试（进程内 mock 上游，不触真实服务）
-- [`ci-bank.yml`](.github/workflows/ci-bank.yml)（`Bank`）：当改动涉及 `apps/bank/` 或该 workflow 自身时运行 Bank job；Ubuntu、Node 22，题库工具零 npm 依赖所以无需安装，直接跑语法检查与题库测试（收集器、直连上游客户端、子分类、导出；全库 dry-run 在无本地数据时自动跳过）
-
-workflow 本身始终运行（而不是在事件级用 `paths` 过滤）：GitHub 只对**被跳过的 job** 自动放行 required check，对因路径过滤而从未运行的 workflow 不会放行——那样纯 Web、纯 iOS 或纯题库的 PR 会永远卡在分支保护上。不匹配任何检测范围时（例如仅修改 `.github/` 下其他文件）三个构建 job 都会被跳过，`Node`、`iOS` 与 `Bank` 检查自动通过。
-
-这些检查验证基础构建、单元测试和本地浏览器流程，不等同于真实账号、真实上游、真机、签名或归档验证。
-
 ### 发布 (Release)
 
 [`release.yml`](.github/workflows/release.yml) 在**每次 push 到 `main` 时自动发布**（版本号自动取最新 tag 的 patch +1），也可手动触发（Actions 页 → Release → Run workflow，或 `gh workflow run release.yml -f version=v0.1.0`），生成产物并创建带附件的 GitHub Release：
@@ -354,7 +334,7 @@ workflow 本身始终运行（而不是在事件级用 `paths` 过滤）：GitHu
 - **Android 未签名 APK**：始终构建（`assembleRelease`，未签名 release 可直接安装）；版本号取自发布 tag（versionCode 按 `major×10000+minor×100+patch` 派生）；
 - **iOS 未签名 ipa**：始终构建（`CODE_SIGNING_ALLOWED=NO`），附安装说明——配合 Sideloadly/AltStore 用免费 Apple ID 签名后装真机（7 天续签一次）；
 - **iOS 签名 ipa（ADHOC）**：仅当配置了签名 secrets（`IOS_CERT_BASE64`、`IOS_CERT_PASSWORD`、`IOS_PROVISIONING_BASE64`、`DEVELOPMENT_TEAM`）时才会构建并签名，否则自动跳过；
-- **题库快照**：默认关闭的保留位（`include_bank` 输入，仅手动运行时可用）——题库数据因版权问题被 gitignore，不在 CI 工作区；如需附带，可在私有仓库纳入数据，或本地打包后 `gh release upload <tag> 题库导出-*.zip`。
+- **题库快照**：默认关闭的保留位（`include_bank` 输入，仅手动运行时可用）——题库数据因版权问题被 gitignore，不在发布工作区；如需附带，可在私有仓库纳入数据，或本地打包后 `gh release upload <tag> 题库导出-*.zip`。
 
 ## 开发流程
 
@@ -363,8 +343,10 @@ workflow 本身始终运行（而不是在事件级用 `paths` 过滤）：GitHu
 1. 从最新 `main` 创建短期分支，例如 `feat/web-multi-select` 或 `fix/ios-session`。
 2. 一个分支只处理一个明确变更。
 3. 通过 Pull Request 合回 `main`。
-4. 等待 `Node` 与 `iOS` CI 通过后再合并。
+4. 无需等待 CI 检查；合并后 `main` 的 push 会自动触发 Release workflow。
 5. 合并后删除短期分支。
+
+如果 GitHub 仓库设置中还保留旧的 `Node`、`iOS`、`Android` 或 `Bank` required check，请一并从分支保护规则中移除。
 
 不要提交以下本地数据或产物：
 
@@ -373,7 +355,7 @@ workflow 本身始终运行（而不是在事件级用 `paths` 过滤）：GitHu
 - Xcode `xcuserdata/`、DerivedData 和本地构建目录
 - `.ipa`、归档包和其他发布制品
 
-iOS 安装包应通过受控的 Release、TestFlight 或 CI artifact 分发，而不是提交到 Git 历史。
+iOS 安装包应通过受控的 Release、TestFlight 或发布产物分发，而不是提交到 Git 历史。
 
 ## 安全与限制
 
@@ -394,7 +376,7 @@ iOS 安装包应通过受控的 Release、TestFlight 或 CI artifact 分发，�
 - [本地 API 与上游映射](docs/web-api.md)
 - [原生 iOS 构建、架构与验证](apps/ios/README.md)
 - [原生安卓构建、架构与验证](apps/android/README.md)
-- [Web 持续集成](.github/workflows/ci-web.yml)、[iOS 持续集成](.github/workflows/ci-ios.yml)、[安卓持续集成](.github/workflows/ci-android.yml)、[题库工具持续集成](.github/workflows/ci-bank.yml) 与 [发布 workflow](.github/workflows/release.yml)
+- [发布 workflow](.github/workflows/release.yml)
 
 ## 许可与免责声明
 
