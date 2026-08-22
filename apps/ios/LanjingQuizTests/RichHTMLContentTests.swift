@@ -86,4 +86,89 @@ final class RichHTMLContentTests: XCTestCase {
         }
         XCTAssertEqual(url.absoluteString, "https://test.lanjingweike.com/up.png")
     }
+
+    // MARK: - stripTrailingFiller (题面与选项间的空白, 根因 = 尾部 <p><br/></p>)
+
+    /// 真实样本:上游题干以 <p><br/></p> 结尾。
+    func testStripTrailingFillerRealSample() {
+        let style = "box-sizing: border-box; font-family: -apple-system; padding: 0px; line-height: 2rem; color: rgb(60, 70, 79); font-size: 16px"
+        let text = "<p style=\"\(style)\">这段文字意在强调（ ）。</p>"
+        XCTAssertEqual(RichHTMLContent.stripTrailingFiller(text + "<p><br/></p>"), text)
+    }
+
+    func testStripTrailingFillerConsecutiveEmptyParagraphs() {
+        XCTAssertEqual(
+            RichHTMLContent.stripTrailingFiller("<p>甲</p><p><br/></p><p>&nbsp;</p>"),
+            "<p>甲</p>"
+        )
+    }
+
+    func testStripTrailingFillerBreakTags() {
+        XCTAssertEqual(RichHTMLContent.stripTrailingFiller("<p>甲</p><br><br/>"), "<p>甲</p>")
+    }
+
+    func testStripTrailingFillerNbspRuns() {
+        XCTAssertEqual(RichHTMLContent.stripTrailingFiller("<p>甲</p>&nbsp;&nbsp;"), "<p>甲</p>")
+    }
+
+    func testStripTrailingFillerWhitespace() {
+        XCTAssertEqual(RichHTMLContent.stripTrailingFiller("<p>甲</p>\n \t"), "<p>甲</p>")
+    }
+
+    func testStripTrailingFillerNestedEmptySpan() {
+        XCTAssertEqual(
+            RichHTMLContent.stripTrailingFiller("<p>甲</p><p><span>&nbsp;</span></p>"),
+            "<p>甲</p>"
+        )
+    }
+
+    func testStripTrailingFillerEmptyDivBlock() {
+        XCTAssertEqual(RichHTMLContent.stripTrailingFiller("<p>甲</p><div><br/></div>"), "<p>甲</p>")
+    }
+
+    func testStripTrailingFillerUppercaseTags() {
+        XCTAssertEqual(RichHTMLContent.stripTrailingFiller("<P>甲</P><P><BR/></P>"), "<P>甲</P>")
+    }
+
+    func testStripTrailingFillerKeepsBreakInsideParagraph() {
+        XCTAssertEqual(
+            RichHTMLContent.stripTrailingFiller("<p>甲<br>乙</p>"),
+            "<p>甲<br>乙</p>"
+        )
+    }
+
+    func testStripTrailingFillerKeepsTrailingImage() {
+        XCTAssertEqual(
+            RichHTMLContent.stripTrailingFiller(#"<p>甲</p><img src="/x.png">"#),
+            #"<p>甲</p><img src="/x.png">"#
+        )
+    }
+
+    func testStripTrailingFillerKeepsInteriorBlankParagraphs() {
+        XCTAssertEqual(
+            RichHTMLContent.stripTrailingFiller("<p>甲</p><p><br/></p><p>乙</p>"),
+            "<p>甲</p><p><br/></p><p>乙</p>"
+        )
+    }
+
+    func testStripTrailingFillerKeepsImageInsideTrailingParagraph() {
+        let html = #"<p>看图</p><p><img src="/x.png"></p>"#
+        XCTAssertEqual(RichHTMLContent.stripTrailingFiller(html), html)
+    }
+
+    func testStripTrailingFillerKeepsTableInsideTrailingBlock() {
+        let html = "<p>甲</p><table><tr><td>乙</td></tr></table>"
+        XCTAssertEqual(RichHTMLContent.stripTrailingFiller(html), html)
+    }
+
+    func testStripTrailingFillerKeepsAnswerBlank() {
+        XCTAssertEqual(
+            RichHTMLContent.stripTrailingFiller("<p>甲（&nbsp;&nbsp;）。</p>"),
+            "<p>甲（&nbsp;&nbsp;）。</p>"
+        )
+    }
+
+    func testStripTrailingFillerEmptiesFillerOnlyDocument() {
+        XCTAssertEqual(RichHTMLContent.stripTrailingFiller("<p><br/></p><p>&nbsp;</p>"), "")
+    }
 }

@@ -20,6 +20,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const bank = require("../../bank/lib/question-bank");
 const classifier = require("../../bank/lib/question-classifier");
+const { stripTrailingFiller } = require("./clean-html");
 
 const STEPS = { PAPER_LIST: "paperList", ENTER: "enter", SAVE: "save", END_ATTEMPT: "endAttempt", SKIP: "skip" };
 const OUTCOMES = { SUCCESS: "success", FAILURE: "failure", SKIPPED: "skipped" };
@@ -38,6 +39,22 @@ function withAnswerLetters(dto) {
   }
   if (letters.length) dto._answers = letters;
   return dto;
+}
+
+/** The upstream editor appends render-only filler blocks (<p><br/></p>) after
+ *  the visible text; strip at crawl time so stored bank records — and every
+ *  client that renders them — show stems/options/analysis gap-free.
+ *  Idempotent: cleaning clean HTML is a no-op. */
+function stripFiller(dto) {
+  if (!dto || typeof dto !== "object") return dto;
+  const cleaned = { ...dto };
+  cleaned.question = stripTrailingFiller(dto.question || "");
+  if (dto.parent_info != null) cleaned.parent_info = stripTrailingFiller(dto.parent_info);
+  for (let i = 1; i <= 4; i += 1) {
+    if (dto[`answer${i}`] != null) cleaned[`answer${i}`] = stripTrailingFiller(dto[`answer${i}`]);
+  }
+  if (dto.analysis != null) cleaned.analysis = stripTrailingFiller(dto.analysis);
+  return cleaned;
 }
 
 function makeLogEntry({ paperId = null, paperName, step, outcome, message = null }) {
@@ -112,7 +129,7 @@ async function crawlAllPapers(api, { bankDir, targets = bank.TARGET_CATEGORIES, 
     let records;
     try {
       const entered = await api.enter(paper);
-      const dtos = (await api.fetchQuestions(entered)).map(withAnswerLetters);
+      const dtos = (await api.fetchQuestions(entered)).map(withAnswerLetters).map(stripFiller);
       const category = bank.matchCategory(paper.name, targets);
       records = bank.joinQuestions(dtos, entered.questionStates)
         .filter((joined) => !seenIds.has(String(joined.question._id)))

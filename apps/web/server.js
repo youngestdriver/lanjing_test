@@ -9,6 +9,7 @@ const {
   parseResultHtml,
   detectSessionExpiry,
 } = require("./lib/parsers");
+const { stripTrailingFiller } = require("./lib/clean-html");
 const cookiecloud = require("./lib/cookiecloud");
 
 // LANJING_BASE_URL exists so tests can point the upstream at an unreachable
@@ -1078,6 +1079,14 @@ async function fetchAllQuestions(examResultsId, examInfoId, testIds, uuid, state
     }
     if (!Array.isArray(data)) throw httpError(502, "Upstream returned an invalid question batch");
     for (const q of data) {
+      // The upstream editor appends render-only filler blocks (<p><br/></p>)
+      // after the visible text — strip at the source so the SPA's stem,
+      // options and analysis render without the per-question gap.
+      q.question = stripTrailingFiller(q.question || "");
+      for (let i = 1; i <= 4; i += 1) {
+        q[`answer${i}`] = stripTrailingFiller(q[`answer${i}`] || "");
+      }
+      if (q.analysis) q.analysis = stripTrailingFiller(q.analysis);
       const map = { key1: "A", key2: "B", key3: "C", key4: "D" };
       const correctKeys = [];
       for (const [k, v] of Object.entries(map)) {
