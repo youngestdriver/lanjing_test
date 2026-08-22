@@ -85,16 +85,7 @@ struct PracticeBankView: View {
     }
 
     private var needsLoginView: some View {
-        ContentUnavailableView {
-            Label("需要登录", systemImage: "person.crop.circle.badge.exclamationmark")
-        } description: {
-            Text("练习题目直接从蓝鲸平台获取，登录后才能使用。")
-        } actions: {
-            Button("去登录") {
-                appState.route = .login
-            }
-            .buttonStyle(.borderedProminent)
-        }
+        NeedsLoginPlaceholder(description: "练习题目直接从蓝鲸平台获取，登录后才能使用。")
     }
 
     private func failedView(_ message: String) -> some View {

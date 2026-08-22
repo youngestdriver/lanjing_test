@@ -8,6 +8,7 @@ final class ExamListViewModel {
     var grouped: [(style: String, exams: [Exam])] = []
     var isLoading = false
     var errorMessage: String?
+    var needsLogin = false
 
     private let appState: AppState
     /// Exam IDs whose current server state has just been ended locally. A stale
@@ -21,6 +22,17 @@ final class ExamListViewModel {
     func load() async {
         isLoading = true
         defer { isLoading = false }
+        // 与练习页一致:未登录(登录页「跳过」进入主界面)时直接显示
+        // 「需要登录」占位,不发起请求——无 sessionId 时上游会以登录页/重定向
+        // 响应,旧实现只弹网络错误横幅,既占位又无去登录入口。
+        guard appState.api.hasSession else {
+            needsLogin = true
+            exams = []
+            grouped = []
+            errorMessage = nil
+            return
+        }
+        needsLogin = false
         do {
             let list = try await appState.api.examList()
             apply(list.exams)
