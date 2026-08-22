@@ -41,9 +41,9 @@ cd apps/android
 - **单元测试不触真实上游**,不依赖任何本地服务,提交前必须全绿。
 - **UI 测试(ExamFlowUiTest / PracticeFlowUiTest)封闭运行**:进程内 MockWebServer
   (MockUpstreamServer)复刻全部考试与练习路由与 wfs 语义,base URL 经测试 intent extra
-  注入(TestConfig),**绝不访问真实上游**;CI 的 `android-ui` job 在 API 35 模拟器上执行。
+  注入(TestConfig),**绝不访问真实上游**。
 - 常用:`./gradlew clean testDebugUnitTest assembleDebug assembleRelease assembleDebugAndroidTest`
-  (全量验证,见仓库根 README「验证与 CI」)。
+  (全量验证,见仓库根 README「本地验证」)。
 
 ## 目录结构
 
