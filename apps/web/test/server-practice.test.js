@@ -17,7 +17,10 @@ const EXAM_HTML = `<script>var exam_results_id='er1';var exam_info_id='1';var uu
 <a href="#q1"><div class="question_cbox" questionsId="q1" uuId="u1"><span>1</span></div></a>`;
 
 // ---- stub upstream ----
-const stubState = { questionAnswer: "1", questionText: "<p>题干</p>", endingHits: 0 };
+// The upstream editor appends filler blocks after the visible content; both
+// the exam payload and the practice-crawl pipeline must strip them (the
+// stem/option/analysis fields below carry the trailing-junk samples).
+const stubState = { questionAnswer: "1", questionText: "<p>题干</p><p><br/></p>", endingHits: 0 };
 const stub = http.createServer((req, res) => {
   const url = new URL(req.url, "http://127.0.0.1");
   if (req.method === "GET" && url.pathname === "/login/account/login/1") {
@@ -67,8 +70,10 @@ const stub = http.createServer((req, res) => {
       : { key1: "1", key2: "0", key3: "0", key4: "0" };
     return res.end(JSON.stringify([{
       _id: "q1", ...flags,
-      question: stubState.questionText, answer1: "选项A", answer2: "选项B", answer3: "选项C", answer4: "选项D",
-      analysis: "解析", parent_info: "", test_ans_right: "",
+      question: stubState.questionText,
+      answer1: "<p>选项A</p><p><br/></p>", answer2: "<p>选项B</p>",
+      answer3: "<p>选项C</p><p><br/></p><p>&nbsp;</p>", answer4: "<p>选项D</p>",
+      analysis: "<p>解析</p><p><br/></p>", parent_info: "", test_ans_right: "",
     }]));
   }
   if (req.method === "POST" && url.pathname === "/exam/get_remian_time") {
@@ -213,6 +218,12 @@ test("full crawl flow: login → crawl → populated bank → categories/log", a
   assert.equal(record.category, "言语理解");
   assert.equal(record.subCategory, "实词辨析");
   assert.equal(record.answer, "A");
+  // Trailing filler blocks are stripped at crawl time, so stored records
+  // (and the practice SPA rendering them) show clean stems/options/analysis.
+  assert.equal(record.question, "<p>题干</p>");
+  assert.equal(record.options[0], "<p>选项A</p>");
+  assert.equal(record.options[2], "<p>选项C</p>");
+  assert.equal(record.analysis, "<p>解析</p>");
 
   const unknown = await request("/api/practice/categories/" + encodeURIComponent("不存在"));
   assert.equal(unknown.status, 404);
@@ -221,6 +232,21 @@ test("full crawl flow: login → crawl → populated bank → categories/log", a
   assert.equal(logResponse.status, 200);
   assert.ok(logResponse.text.includes("题库爬取日志"));
   assert.match(logResponse.headers["content-disposition"] || "", /filename\*=UTF-8''/);
+});
+
+test("exam question payload strips the trailing filler blocks", async () => {
+  await login();
+  const enter = await request("/api/exams/1/enter", { method: "POST", body: "{}" });
+  assert.equal(enter.status, 200, enter.text);
+
+  const payload = JSON.parse((await request("/api/exams/1/questions")).text);
+  assert.equal(payload.questions.length, 1);
+  const q = payload.questions[0];
+  assert.equal(q.question, "<p>题干</p>");
+  assert.equal(q.answer1, "<p>选项A</p>");
+  assert.equal(q.answer2, "<p>选项B</p>");
+  assert.equal(q.answer3, "<p>选项C</p>");
+  assert.equal(q.analysis, "<p>解析</p>");
 });
 
 test("resume crawl skips crawled papers", async () => {
