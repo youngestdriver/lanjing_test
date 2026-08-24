@@ -1,6 +1,10 @@
 import SwiftUI
 
 struct LoginView: View {
+    /// 开屏判定形态:只显示居中 logo(布局与完整登录页一致,其余元素
+    /// 隐藏占位),start() 决定路由后由 RootView 换到完整登录页或首页。
+    var isLaunching = false
+
     @Environment(AppState.self) private var appState
     @State private var vm: LoginViewModel?
     @State private var screen: LoginScreen = .landing
@@ -9,6 +13,8 @@ struct LoginView: View {
     @State private var isInfoPresented = false
     @State private var infoTitle = ""
     @State private var infoMessage = ""
+    /// 开屏形态的 logo 入场动画开关(opacity 0→1 + 轻微放大)。
+    @State private var showLogo = false
     @FocusState private var focusedField: LoginField?
 
     private let loginBlue = Color(hex: 0x4169F5)
@@ -38,7 +44,14 @@ struct LoginView: View {
             }
         }
         .animation(.easeInOut(duration: 0.24), value: screen)
+        .onAppear {
+            guard isLaunching, !showLogo else { return }
+            withAnimation(.easeOut(duration: 0.4)) { showLogo = true }
+        }
         .task {
+            // 开屏判定由 AppState.start() 负责(含云端导入与路由决定),
+            // 此形态不创建 VM、不重复导入。
+            guard !isLaunching else { return }
             if vm == nil {
                 vm = LoginViewModel(appState: appState)
             }
@@ -69,7 +82,7 @@ struct LoginView: View {
     private var landingPage: some View {
         GeometryReader { proxy in
             VStack(spacing: 0) {
-                topBar(showBackButton: false)
+                topBar(showBackButton: false, showSkip: !isLaunching)
 
                 Spacer(minLength: 62)
 
@@ -84,37 +97,45 @@ struct LoginView: View {
                         .frame(width: 132, height: 132)
                         .clipShape(RoundedRectangle(cornerRadius: 30))
                         .accessibilityHidden(true)
-
-                    Text("蓝鲸助手")
-                        .font(.system(size: 34, weight: .bold, design: .rounded))
-                        .foregroundStyle(loginBlue)
+                        // 开屏入场:淡入 + 轻微放大。完整登录页(含密码页返回)
+                        // 不参与动画,始终原样显示。
+                        .opacity(isLaunching ? (showLogo ? 1 : 0) : 1)
+                        .scaleEffect(isLaunching ? (showLogo ? 1 : 0.94) : 1)
                 }
 
                 Spacer(minLength: 118)
 
-                Button {
-                    guard agreedToTerms else {
-                        presentInfo(
-                            title: "请先同意协议",
-                            message: "登录前请阅读并同意用户协议与隐私政策。"
-                        )
-                        return
+                // 开屏阶段隐藏但保留占位:布局与完整登录页完全一致,切到
+                // 完整页时 logo 位置不动,其余元素原位显现。opacity 不影响
+                // 布局;同时禁点击、移出辅助功能,避免开屏期被误触。
+                Group {
+                    Button {
+                        guard agreedToTerms else {
+                            presentInfo(
+                                title: "请先同意协议",
+                                message: "登录前请阅读并同意用户协议与隐私政策。"
+                            )
+                            return
+                        }
+                        withAnimation(.easeInOut(duration: 0.24)) {
+                            screen = .password
+                        }
+                    } label: {
+                        Label("密码登录", systemImage: "lock.fill")
+                            .font(.system(size: 19, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 58)
                     }
-                    withAnimation(.easeInOut(duration: 0.24)) {
-                        screen = .password
-                    }
-                } label: {
-                    Label("密码登录", systemImage: "lock.fill")
-                        .font(.system(size: 19, weight: .semibold))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 58)
-                }
-                .buttonStyle(LoginPillButtonStyle(color: loginBlue))
-                .accessibilityIdentifier("password-login-entry")
+                    .buttonStyle(LoginPillButtonStyle(color: loginBlue))
+                    .accessibilityIdentifier("password-login-entry")
 
-                agreementRow
-                    .padding(.top, 30)
-                    .padding(.bottom, 14)
+                    agreementRow
+                        .padding(.top, 30)
+                        .padding(.bottom, 14)
+                }
+                .opacity(isLaunching ? 0 : 1)
+                .allowsHitTesting(!isLaunching)
+                .accessibilityHidden(isLaunching)
             }
             .padding(.horizontal, 32)
             .frame(minHeight: proxy.size.height)
@@ -163,7 +184,7 @@ struct LoginView: View {
     }
 
     @ViewBuilder
-    private func topBar(showBackButton: Bool) -> some View {
+    private func topBar(showBackButton: Bool, showSkip: Bool = true) -> some View {
         HStack {
             if showBackButton {
                 Button {
@@ -200,7 +221,7 @@ struct LoginView: View {
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(.secondary)
                 .buttonStyle(.plain)
-            } else {
+            } else if showSkip {
                 Button("跳过") {
                     appState.skipLogin()
                 }

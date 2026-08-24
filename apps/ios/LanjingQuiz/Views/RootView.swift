@@ -14,10 +14,22 @@ struct RootView: View {
         ZStack {
             ZStack {
                 switch appState.route {
+                case .launching:
+                    // 开屏判定:仅 logo 的登录页雏形。start() 完成后一次
+                    // 性切到首页或完整登录页,不再先亮登录页再跳走。id 固定
+                    // 分支身份:切到 .login 分支必然重建 LoginView(重新触发
+                    // .task 做云端兜底重试)。
+                    // .transition 与 AppState.start() 里的 withAnimation 配合:
+                    // 开屏页淡出、目标页淡入;其他路由写入无动画,过渡不生效。
+                    LoginView(isLaunching: true)
+                        .id("launching")
+                        .transition(.opacity)
                 case .login:
                     LoginView()
+                        .transition(.opacity)
                 case .examList:
                     HomeTabView(selectedTab: $selectedTab)
+                        .transition(.opacity)
                 case .quiz(let exam):
                     QuizView(exam: exam)
                 case .result(let result):

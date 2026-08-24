@@ -1,17 +1,21 @@
 import Foundation
 import Observation
+import SwiftUI
 
 @MainActor
 @Observable
 final class AppState {
     enum Route: Equatable {
+        /// 开屏判定:仅显示 logo 的登录页雏形,start() 完成前不走完整登录页,
+        /// 避免「先停在登录页,再突然进首页」的闪现。
+        case launching
         case login
         case examList
         case quiz(Exam)
         case result(ExamResult)
     }
 
-    var route: Route = .login
+    var route: Route = .launching
     var theme: Theme
     var autoAdvanceOnCorrect: Bool {
         didSet {
@@ -45,10 +49,15 @@ final class AppState {
         self.autoAdvanceOnCorrect = QuizSettings.loadAutoAdvanceOnCorrect()
     }
 
+    /// 开屏 logo 页最短停留时长:即使判定瞬时完成(未配置 CookieCloud /
+    /// 无有效 cookie),也要等满这个时长再切到首页或登录页,保证开屏动画
+    /// 完整呈现。判定耗时(最长 4 秒)叠加其上,取两者较晚者。
+    static let minimumLaunchDuration = Duration.seconds(1.5)
+
     /// Launch path: import a cloud session (when CookieCloud sync is enabled)
     /// before deciding the route, so a fresh device with a cloud session
     /// lands on the exam list without logging in again.
-    func start() async {
+    func start(minimumLaunchDuration: Duration = AppState.minimumLaunchDuration) async {
         #if DEBUG
         // UI-testing hook: wipe the local bank so the practice crawl runs
         // deterministically on every test execution (the argument is never
@@ -63,11 +72,25 @@ final class AppState {
             try? await practiceProgressStore.clear()
         }
         #endif
+        let clock = ContinuousClock()
+        let launchStart = clock.now
         let hasSession = await cookieCloudSync.pullAndApplyIfNeeded()
-        // 启动导入决定的是初始路由:导入(最长 4 秒)期间用户已点「跳过」
-        // 或已完成登录时,不再覆盖用户的选择。
-        if route == .login {
-            route = hasSession ? .examList : .login
+        // 开屏动画最短停留:判定已完成但还没到最短时长时补足等待——
+        // 没填服务器 / 无有效 cookie 时同样等满 minimumLaunchDuration
+        // 再进入下一页,避免 logo 页一闪而过。
+        let remaining = minimumLaunchDuration - (clock.now - launchStart)
+        if remaining > .zero {
+            try? await Task.sleep(for: remaining)
+        }
+        // 启动导入决定的是初始路由:判定期间用户不可交互,完成后一次性
+        // 落到首页或登录页——不再先显示登录页再跳走。withAnimation 让
+        // RootView 的 logo 页淡出、下一页淡入(其他路由写入如 finishLogin/
+        // logout/过期踢回不带动画,不受影响)。仅当仍处于 .launching 时写
+        // 路由(测试可先调 skipLogin,不覆盖其选择)。
+        if route == .launching {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                route = hasSession ? .examList : .login
+            }
         }
     }
 

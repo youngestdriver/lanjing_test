@@ -9,7 +9,7 @@ final class SkipLoginTests: XCTestCase {
     @MainActor
     func testSkipLoginRoutesToExamList() {
         let appState = AppState()
-        XCTAssertEqual(appState.route, .login)
+        XCTAssertEqual(appState.route, .launching, "开屏初始应处于 launching 判定态,而不是直接亮登录页")
         appState.skipLogin()
         XCTAssertEqual(appState.route, .examList)
     }
