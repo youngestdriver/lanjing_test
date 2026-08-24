@@ -12,9 +12,10 @@ enum PracticeRoute: Hashable {
 struct PracticeBankView: View {
     @Environment(AppState.self) private var appState
     @State private var vm: PracticeBankViewModel?
+    @State private var path: [PracticeRoute] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 switch vm?.phase ?? .idle {
                 case .idle:
@@ -30,6 +31,11 @@ struct PracticeBankView: View {
                 }
             }
             .navigationTitle("练习")
+            // 收藏/练习页全屏需要隐藏 Tab 栏,但按目标页放置 .toolbar(.hidden)
+            // 只在 pop 转场结束后才恢复 Tab 栏,造成"返回列表后导航栏过一会
+            // 才出现"的空白。改为路径驱动:path 变化瞬间便触发显隐,恢复与
+            // pop 转场同步进行。
+            .toolbar(path.isEmpty ? .automatic : .hidden, for: .tabBar)
             // Native push/pop via NavigationLink values — the system back
             // button and swipe-back work at every level.
             .navigationDestination(for: PracticeRoute.self) { route in

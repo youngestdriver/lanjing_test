@@ -47,7 +47,12 @@ final class PracticeFlowUITests: XCTestCase {
         // Subcategory list groups the crawled questions by 题型细分.
         let subRow = app.staticTexts["成语辨析"]
         XCTAssertTrue(subRow.waitForExistence(timeout: 10), "subcategory list is blank — no rows appeared")
+        waitForHittable(subRow)
         subRow.tap()
+
+        // 需求:进入题库后隐藏底部导航栏;返回大类列表时自动恢复。
+        XCTAssertTrue(waitForDisappearance(app.tabBars.buttons["我的"], timeout: 5),
+                      "tab bar still visible on the subcategory list")
 
         // Quiz screen: the first question header must appear.
         let header = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 1/'")).firstMatch
@@ -86,9 +91,12 @@ final class PracticeFlowUITests: XCTestCase {
         // the subcategory list returns to the tab root.
         let subListBar = app.navigationBars["言语理解"] // the subcategory list's title is the category name
         XCTAssertTrue(subListBar.waitForExistence(timeout: 5), "subcategory list never reappeared")
+        // 刚返回到题库页:Tab 栏应保持隐藏(与进入题库后的状态一致)。
+        XCTAssertTrue(waitForDisappearance(app.tabBars.buttons["练习"], timeout: 5),
+                      "tab bar visible on the subcategory list after returning from the quiz")
         tapBackButton(in: subListBar)
         let profileTab = app.tabBars.buttons["我的"]
-        XCTAssertTrue(profileTab.waitForExistence(timeout: 5), "tab bar never reappeared")
+        XCTAssertTrue(profileTab.waitForExistence(timeout: 5), "tab bar never reappeared after popping to the category root")
         profileTab.tap()
 
         let updateButton = app.buttons["更新题库"]
