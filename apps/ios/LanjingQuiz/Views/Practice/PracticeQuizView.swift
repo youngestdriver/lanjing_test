@@ -36,10 +36,8 @@ struct PracticeQuizView: View {
         }
         .navigationTitle("\(vm.session?.subCategory ?? subCategory)")
         .navigationBarTitleDisplayMode(.inline)
-        // 问题 4: the quiz page is pushed within the tab's NavigationStack —
-        // hide the tab bar so practice (and its summary) is full screen; the
-        // tab bar returns automatically when popped back.
-        .toolbar(.hidden, for: .tabBar)
+        // Tab 栏显隐由 PracticeBankView 按导航路径统一驱动
+        // (path.isEmpty ? .automatic : .hidden)——见该文件注释。
         .task {
             // Resume a persisted run of this subcategory when it matches the
             // current bank (question-ID set check), otherwise start fresh.
