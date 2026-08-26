@@ -48,9 +48,10 @@ struct LoginView: View {
             guard isLaunching, !showLogo else { return }
             withAnimation(.easeOut(duration: 0.4)) { showLogo = true }
         }
-        .task {
-            // 开屏判定由 AppState.start() 负责(含云端导入与路由决定),
-            // 此形态不创建 VM、不重复导入。
+        // id 随 isLaunching 重启:开屏形态直接返回(导入由 AppState.start()
+        // 负责);判定完成切到完整登录页时再跑——创建 VM 并做云端兜底重试
+        // (慢服务器下登录页可自动跳进首页)。
+        .task(id: isLaunching) {
             guard !isLaunching else { return }
             if vm == nil {
                 vm = LoginViewModel(appState: appState)
@@ -221,7 +222,9 @@ struct LoginView: View {
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(.secondary)
                 .buttonStyle(.plain)
-            } else if showSkip {
+            } else {
+                // 开屏阶段隐藏但保留占位:进入登录页时与其余元素一起淡入。
+                // topBar 高度由左侧 50x50 占位决定,不渲染/渲染隐藏布局一致。
                 Button("跳过") {
                     appState.skipLogin()
                 }
@@ -229,6 +232,9 @@ struct LoginView: View {
                 .foregroundStyle(.secondary)
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("skip-login")
+                .opacity(showSkip ? 1 : 0)
+                .allowsHitTesting(showSkip)
+                .accessibilityHidden(!showSkip)
             }
         }
         .frame(maxWidth: .infinity)
