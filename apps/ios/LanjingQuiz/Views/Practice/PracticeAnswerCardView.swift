@@ -1,67 +1,42 @@
 import SwiftUI
 
-/// 练习答题卡 overlay: jump-to-any-question dot grid. Mirrors the exam
-/// AnswerCardSheet's look but has no sections and no submission — practice
-/// has neither. Tapping a dot calls `vm.jumpTo`; like the exam, the card
-/// stays open and is dismissed by 完成 or the dim mask. The target question's
-/// per-question state lives in `session.answers`, so nothing is lost when
-/// jumping (问题 5).
+/// 练习答题卡 sheet: jump-to-any-question dot grid. 与考试 AnswerCardSheet
+/// 完全同构(NavigationStack + inline 标题 + 右上「完成」+ .medium/.large
+/// detents);练习无 section(镜像考试单 section 时 SectionTabsView 不渲染)、
+/// 无交卷。点圆点只跳转、卡片保持打开,由「完成」/下滑关闭 —— 与考试一致;
+/// 每题状态在 session.answers,跳转不丢(问题 5)。
 ///
-/// Presented as an overlay, NOT a `.sheet`: presenting a sheet from a view
-/// whose tab bar is hidden (`.toolbar(.hidden, for: .tabBar)`) silently does
-/// nothing on iOS 17 (known bug, no official fix), and the tab bar must stay
-/// hidden for the full-screen 问题 4 contract.
+/// 呈现历史:练习页需隐藏 tab bar(iOS 17 下从该层级 present sheet 是已知
+/// bug,sheet 静默不出现)曾改为 overlay(commit 6c42862)。现按产品要求
+/// 复刻考试的 sheet 呈现,在 iOS 26/27 上实测可用;若 iOS 17 设备复现失败,
+/// 回退方案是把 sheet 挂到更外层呈现容器(RootView 层),而不是回到 overlay。
 struct PracticeAnswerCardView: View {
     let vm: PracticeBankViewModel
-    let onClose: () -> Void
+    @Environment(\.dismiss) private var dismiss
 
     private var session: PracticeSession? { vm.session }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            Color.black.opacity(0.35)
-                .ignoresSafeArea()
-                .onTapGesture(perform: onClose)
-            VStack(spacing: 0) {
-                header
+        NavigationStack {
+            Group {
                 if let session {
                     grid(session)
+                } else {
+                    Spacer()
                 }
             }
-            .frame(maxWidth: .infinity)
-            .frame(maxHeight: 480)
-            .background(Color(.systemBackground))
-            // 面板形态与考试答题卡对齐:全宽贴底、仅顶部圆角(DS.radiusLG)。
-            .clipShape(UnevenRoundedRectangle(
-                topLeadingRadius: DS.radiusLG,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: DS.radiusLG
-            ))
-        }
-        // NOTE: no accessibilityIdentifier on this ZStack — SwiftUI propagates
-        // a container's identifier to EVERY descendant, overwriting the grid's
-        // own "practice-answer-card-grid" (UI tests scope on that ScrollView).
-        .transition(.move(edge: .bottom).combined(with: .opacity))
-    }
-
-    /// 标题栏模拟考试 sheet 的导航栏:居中标题 + 右侧「完成」。完成按钮带
-    /// 独立 identifier — 遮罩下层的题目页还有自己的「完成/下一题」按钮,
-    /// 按标签查询会歧义。
-    private var header: some View {
-        ZStack {
-            Text("答题卡")
-                .font(.system(size: 17, weight: .heavy))
-            HStack {
-                Spacer()
-                Button("完成") { onClose() }
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(DS.blue)
-                    .accessibilityIdentifier("practice-answer-card-close")
+            .navigationTitle("答题卡")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    // 独立 identifier —— 遮罩下层的题目页还有自己的
+                    // 「完成/下一题」按钮,按标签查询会歧义(与测试对齐)。
+                    Button("完成") { dismiss() }
+                        .accessibilityIdentifier("practice-answer-card-close")
+                }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .presentationDetents([.medium, .large])
     }
 
     private func grid(_ session: PracticeSession) -> some View {
@@ -73,7 +48,7 @@ struct PracticeAnswerCardView: View {
                             .id(index)
                     }
                 }
-                .padding(16)
+                .padding()
             }
             .onChange(of: vm.session?.index) { _, newIndex in
                 guard let newIndex else { return }
@@ -90,7 +65,7 @@ struct PracticeAnswerCardView: View {
             ? session.answers[index]
             : PracticeSession.PracticeAnswer()
         let isCurrent = index == session.index
-        // 与考试一致:跳转后卡片保持打开,由「完成」或遮罩关闭。
+        // 与考试一致:跳转后卡片保持打开,由「完成」或下滑关闭。
         return Button {
             vm.jumpTo(index)
         } label: {
