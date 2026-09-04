@@ -199,6 +199,10 @@ final class MockUpstreamServer: @unchecked Sendable {
             return ("200 OK", "", Data(questionBatchJSON.utf8))
         case ("GET", "/exam/exam_ending"):
             return ("200 OK", "", Data("{\"code\":10000,\"success\":true}".utf8))
+        // 1x1 PNG:练习 q1 题图(验证首屏门控图片预取 + data URI 嵌入渲染)。
+        // 相对路径按 LANJING_BASE_URL 解析 → 指回本 mock。
+        case ("GET", "/static/quiz-q1.png"):
+            return ("200 OK", "", Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==") ?? Data())
         default:
             return ("404 Not Found", "", Data("not found".utf8))
         }
@@ -263,7 +267,7 @@ final class MockUpstreamServer: @unchecked Sendable {
     /// coverage of other types lives in the unit tests.
     private static let questionBatchJSON = """
     [
-      {"_id":"q1","question":"<p>依次填入最恰当的一项是</p>","answer1":"<p>A. 栩栩如生</p>","answer2":"<p>B. 绘声绘色</p>","answer3":"<p>C. 惟妙惟肖</p>","answer4":"<p>D. 活灵活现</p>","key1":"1","key2":"0","key3":"0","key4":"0","test_ans":"","test_ans_right":"A","analysis":"<p>填入成语“栩栩如生”，形容非常逼真</p>"},
+      {"_id":"q1","question":"<p>依次填入最恰当的一项是</p><img src='/static/quiz-q1.png'>","answer1":"<p>A. 栩栩如生</p>","answer2":"<p>B. 绘声绘色</p>","answer3":"<p>C. 惟妙惟肖</p>","answer4":"<p>D. 活灵活现</p>","key1":"1","key2":"0","key3":"0","key4":"0","test_ans":"","test_ans_right":"A","analysis":"<p>填入成语“栩栩如生”，形容非常逼真</p>"},
       {"_id":"q2","question":"<p>依次填入最恰当的一项是</p>","answer1":"<p>A. 虽然…但是</p>","answer2":"<p>B. 因为…所以</p>","answer3":"<p>C. 不但…而且</p>","answer4":"<p>D. 要么…要么</p>","key1":"1","key2":"0","key3":"0","key4":"0","test_ans":"","test_ans_right":"A","analysis":"<p>成语“一蹴而就”，意思是轻而易举</p>"},
       {"_id":"q3","question":"<p>第一空与“情怀”搭配的词语是</p>","answer1":"<p>A. 树立</p>","answer2":"<p>B. 建立</p>","answer3":"<p>C. 培养</p>","answer4":"<p>D. 塑造</p>","key1":"1","key2":"0","key3":"0","key4":"0","test_ans":"","test_ans_right":"A","analysis":"<p>成语“积重难返”，指长期形成的问题</p>"},
       {"_id":"q4","question":"<p>下列各句中，关联词使用最恰当的一项是</p>","answer1":"<p>A. 既然他已经尽力，就应当给予肯定</p>","answer2":"<p>B. 不但他认真学习，而且成绩很好</p>","answer3":"<p>C. 因为下雨，但是比赛照常进行</p>","answer4":"<p>D. 只要努力，所以一定能成功</p>","key1":"1","key2":"0","key3":"0","key4":"0","test_ans":"","test_ans_right":"A","analysis":"<p>本题考查关联词的搭配使用，正确句子应保持关联词成对使用</p>"},

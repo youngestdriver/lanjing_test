@@ -24,7 +24,14 @@ struct PracticeQuizView: View {
                 if session.isFinished {
                     summaryCard(session)
                 } else if let question {
-                    quizContent(session, question)
+                    // 首屏门控:当前题图片预取就绪才渲染答题页(进入即完整,
+                    // 不再"空白页突然长出")——vm.entryPhase 在 resumeOrStart
+                    // 内被 await 推进,此期间保持加载动画。
+                    if vm.entryPhase == .ready {
+                        quizContent(session, question)
+                    } else {
+                        loadingPlaceholder
+                    }
                 }
             } else if vm.phase != .ready {
                 // Bank became unavailable mid-session — the bank view's phase
