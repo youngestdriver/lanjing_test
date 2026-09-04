@@ -41,7 +41,8 @@ import com.qzh.lanjingquiz.UI.DSRed
 
 /**
  * 练习答题卡 overlay(iOS PracticeAnswerCardView 移植;overlay 非 sheet):
- * 统计行 + 7 列 dot 网格,**无 section、无交卷**。点 dot → vm.goTo + 关闭;
+ * 7 列 dot 网格,**无 section、无交卷**。与考试一致:点 dot → vm.goTo,卡片
+ * 保持打开,由「完成」/遮罩关闭;统计在底栏,卡内不再重复。
  * dot 36dp:答对绿/答错红/未答灰、当前 3dp 蓝圈、无答案已答橙边;自动滚动当前题居中。
  */
 @Composable
@@ -73,7 +74,8 @@ fun PracticeAnswerCard(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .height(420.dp)
+                // 与考试 AnswerCard 一致的高度 480dp
+                .height(480.dp)
                 .testTag("practice-answer-card-panel"),
         ) {
             Column {
@@ -88,18 +90,6 @@ fun PracticeAnswerCard(
                     TextButton(onClick = onClose, modifier = Modifier.testTag("practice-answer-card-close")) {
                         Text("完成", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = DSBlue)
                     }
-                }
-                // 答对/答错/未答统计(由 answers 派生,永不漂移)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFFF2F2F2))
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    CardStat("${current.rightCount}", "✓", DSAccent)
-                    CardStat("${current.wrongCount}", "✗", DSRed)
-                    CardStat("${current.questions.size - current.answeredCount}", "○", Color(0xFF8E8E93))
                 }
                 // 自动滚动当前题居中
                 LaunchedEffect(page) {
@@ -121,23 +111,13 @@ fun PracticeAnswerCard(
                             answer = current.answers.getOrNull(index) ?: PracticeAnswer(),
                             number = index + 1,
                             isCurrent = index == page,
-                            onClick = {
-                                vm.goTo(index)
-                                onClose()
-                            },
+                            // 与考试一致:跳转后卡片保持打开,由「完成」/遮罩关闭
+                            onClick = { vm.goTo(index) },
                         )
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun CardStat(text: String, glyph: String, color: Color) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(glyph, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = color)
-        Text(text, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = color)
     }
 }
 

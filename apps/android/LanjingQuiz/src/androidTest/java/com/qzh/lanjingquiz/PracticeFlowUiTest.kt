@@ -101,6 +101,60 @@ class PracticeFlowUiTest {
         composeRule.onNodeWithText("正确答案：A").assertIsDisplayed()   // 已答状态恢复
     }
 
+    /**
+     * 答题卡与考试一致:点圆点跳转后卡片保持打开(不再点即关),跳转后再点
+     * 另一圆点仍生效,「完成」/遮罩关闭卡片。结束回到第 1 题 —— 同一模拟器
+     * 多次运行时,遗留会话不会破坏 fullPracticeFlow 依赖的入口状态。
+     */
+    @Test
+    fun answerCardKeepsOpenAfterDotJump() {
+        TestConfig.mockBaseUrl = server.baseUrl()
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val intent = Intent(context, MainActivity::class.java)
+            .putExtra(TestConfig.EXTRA_MOCK_BASE_URL, server.baseUrl())
+        ActivityScenario.launch<MainActivity>(intent)
+        loginIfNeeded()
+
+        composeRule.onNodeWithText("练习").performClick()
+        composeRule.waitUntil(timeoutMillis = 60_000) {
+            composeRule.onAllNodesWithText("言语理解").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText("言语理解").performClick()
+        composeRule.waitUntil(timeoutMillis = 15_000) {
+            composeRule.onAllNodesWithText("其他").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText("其他").performClick()
+        composeRule.waitUntil(timeoutMillis = 15_000) {
+            composeRule.onAllNodesWithText("第 1/4 题").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        // 打开答题卡 → 网格出现
+        composeRule.onNodeWithTag("practice-answer-card-btn").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag("practice-answer-card-grid").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        // 点第 3 题圆点:跳转成功且卡片保持打开(与考试一致)
+        composeRule.onNodeWithTag("practice-dot-3").performClick()
+        composeRule.waitUntil(timeoutMillis = 15_000) {
+            composeRule.onAllNodesWithText("第 3/4 题").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("practice-answer-card-grid").assertIsDisplayed()
+
+        // 卡片打开时再点第 1 题回到开头(结束保持第 1 题,入口状态稳定)
+        composeRule.onNodeWithTag("practice-dot-1").performClick()
+        composeRule.waitUntil(timeoutMillis = 15_000) {
+            composeRule.onAllNodesWithText("第 1/4 题").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("practice-answer-card-grid").assertIsDisplayed()
+
+        // 「完成」关闭卡片
+        composeRule.onNodeWithTag("practice-answer-card-close").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag("practice-answer-card-grid").fetchSemanticsNodes().isEmpty()
+        }
+    }
+
     /** 已登录(会话残留)→ 直接等首页;未登录 → 走登录流程。 */
     private fun loginIfNeeded() {
         composeRule.waitUntil(timeoutMillis = 15_000) {
