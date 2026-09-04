@@ -60,7 +60,7 @@ enum QuestionClassifier: Sendable {
         ],
         "言语理解|语句表达": [
             Rule(name: "病句辨析", patterns: ["语病|病句|搭配不当|成分残缺|句式杂糅|语序不当|成分赘余|结构混乱|歧义|标点"]),
-            Rule(name: "错别字", patterns: ["错字|错别字"]),
+            // 错别字 rule removed (全库 1 题,不足独立成行;无规则可归纳 → 其他).
             Rule(name: "语句排序", patterns: ["排序|最连贯|语序|确定首句|对比选项|重新排列"]),
             Rule(name: "接语选择", patterns: ["接语|接下来|下文"]),
             Rule(name: "词语填空", patterns: ["填入.*最恰当|横线处.*(词语|成语)|词语.*使用|依次.*最恰当"]),
@@ -85,22 +85,24 @@ enum QuestionClassifier: Sendable {
             Rule(name: "年龄问题", patterns: ["年龄|岁"]),
             Rule(name: "日期与周期", patterns: ["星期|周几|闰年|日期|每月|当月|周期|循环|工作日|休息日|连续.*天"]),
             Rule(name: "钟表问题", patterns: ["钟表|时针|分针|钟面|敲钟|挂钟"]),
-            Rule(name: "植树与间隔", patterns: ["植树|种树|栽树|电线杆|间隔|两端都|棵"]),
+            // 收紧:裸"植树/间隔/棵/棵数"会误伤非间隔题(树苗配比、客房隔间)。
+            // 只留明确的植树/间隔题面,其余落入和差倍比与方程。鸡兔同笼规则
+            // 已去除(全库 1 题,由方程类兜底)。
+            Rule(name: "植树与间隔", patterns: ["植树问题|两端(都|均).{0,4}(种|栽)|间隔数|电线杆|每隔.{0,3}(种|栽)|路边.{0,3}(种|栽)|路旁.{0,3}(种|栽)"]),
             Rule(name: "牛吃草问题", patterns: ["牛吃草|牧草|长草|吃草"]),
             Rule(name: "平均数问题", patterns: ["平均分|平均数|平均成绩|总平均"]),
-            Rule(name: "鸡兔同笼", patterns: ["鸡兔|头.*脚|脚.*头"]),
             Rule(name: "容斥问题", patterns: ["都不|既.*又|参加.*(和|与).*(又|都)|至少.*人"]),
             Rule(name: "极值与构造", patterns: ["最大|最小|最多|最少|保证|至少需要"]),
             Rule(name: "整除与余数", patterns: ["整除|因数|质数|公约数|公倍数|被.*除"]),
         ],
         "数字运算|数字运算": [
-            Rule(name: "定义新运算", patterns: ["定义.*新运算|规定.*运算|新运算|定义.*运算"]),
             // 方程 before 巧算: "解方程…则x的值为" must not fall to 巧算's "的值为".
+            // 定义新运算/数列与规律 rules removed (两型全库合计 2~3 题均是
+            // 方程类题面,依题面归入方程与比例/方程与和差倍比)。
             Rule(name: "方程与比例", patterns: ["方程|的解|设.*为|比.*多|比.*少|比例|之比"]),
             Rule(name: "巧算与速算", patterns: ["计算|的值为|的值是|简便|估算|整数部分|尾数|巧算|结果"]),
             Rule(name: "整除与余数", patterns: ["整除|余数|除以|被.*除|倍数特征|因数|质数"]),
             Rule(name: "数位与数字", patterns: ["三位数|两位数|四位数|个位|十位|百位|位数|数字|页码|书页|号码|数位"]),
-            Rule(name: "数列与规律", patterns: ["第.*个数|规律|数列|依次"]),
         ],
         "逻辑推理|逻辑判断": [
             // 削弱/加强/真假 must precede 翻译: scenario stems embed "如果…那么".
@@ -112,13 +114,13 @@ enum QuestionClassifier: Sendable {
             ]),
             Rule(name: "翻译推理", patterns: ["翻译题干|如果.*那么|只有.*才|除非|当且仅当|充分条件|必要条件|假言"]),
             Rule(name: "结论推出", patterns: ["可以推出|由此可知|推出|推断出|由此可以|可推知|日常|得出结论"]),
-            Rule(name: "评价型", patterns: ["推理方式|逻辑错误|最为接近|最相近|类似|与题干|论证.*(有效|无效)|实验方法"]),
+            // 评价型 rule removed (全库 1 题,无规则可归纳 → 其他).
         ],
         "逻辑推理|图形推理": [
             Rule(name: "空间重构", patterns: ["空间重构|折纸|展开|折叠|视图|三视图|表面|相邻面|截面|立体|相对面|骰子"]),
             Rule(name: "属性规律", patterns: ["属性规律|对称|曲直|开闭|封闭性|开放图形|封闭区域|生活化图形"]),
             Rule(name: "位置规律", patterns: ["位置规律|旋转|平移|翻转|移动|位置|间隔|字母|顺(逆)时针"]),
-            Rule(name: "样式规律", patterns: ["样式规律|求同|求异|叠加|黑白运算|去同存异|去异存同|图形间关系"]),
+            Rule(name: "样式规律", patterns: ["样式规律|求同|求异|叠加|黑白运算|去同存异|去异存同|图形间关系|与众不同"]),
             Rule(name: "数量规律", patterns: ["数量规律|面数量|线数量|点数量|角数量|元素|笔画|面的个数|线条|个数|汉字|包含数字"]),
         ],
         "逻辑推理|类比推理": [
@@ -126,9 +128,11 @@ enum QuestionClassifier: Sendable {
             Rule(name: "逻辑关系", patterns: ["种属|组成|包含|对应|因果|并列|交叉|属种|组成关系"]),
             Rule(name: "语法关系", patterns: ["词性|动宾|主谓|偏正|语法|成语结构|名词|形容词|修饰|主宾"]),
         ],
-        "逻辑推理|定义判断": [
-            Rule(name: "多定义", patterns: ["多定义|两个定义|包含.*定义|①②"]),
-        ],
+        // 定义判断 only has 多定义/单定义 two flavors; with the 多定义 rule
+        // gone (全库 1 题), everything falls to the 定义判断 fallback — the key
+        // must stay present (empty rules → fallback; a missing key returns nil
+        // and misroutes to 其他).
+        "逻辑推理|定义判断": [],
     ]
 
     // Residual class when no rule matches, per section.
@@ -137,7 +141,7 @@ enum QuestionClassifier: Sendable {
         "数字运算|数量关系": "和差倍比与方程",
         "数字运算|数字运算": "方程与和差倍比",
         "数字运算|数字推理": "多级数列",
-        "逻辑推理|定义判断": "单定义",
+        "逻辑推理|定义判断": "定义判断",
     ]
 
     // ---------- HTML stripping ----------

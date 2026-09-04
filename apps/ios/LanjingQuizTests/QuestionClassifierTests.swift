@@ -44,9 +44,10 @@ final class QuestionClassifierTests: XCTestCase {
         XCTAssertEqual(rec("言语理解", "阅读理解", "这段文字主要说明的是……意在强调……"), "意图推断")
     }
 
-    func test语句表达病句错别字排序接语词语填空衔接() {
+    func test语句表达病句排序接语词语填空衔接() {
         XCTAssertEqual(rec("言语理解", "语句表达", "下列各句中，没有语病的一句是"), "病句辨析")
-        XCTAssertEqual(rec("言语理解", "语句表达", "下列句子中没有错别字的是"), "错别字")
+        // 错别字规则已删(全库 1 题,不足独立成行) — 无规则可归纳 → 其他。
+        XCTAssertEqual(rec("言语理解", "语句表达", "下列句子中没有错别字的是"), "其他")
         XCTAssertEqual(rec("言语理解", "语句表达", "将以上6个句子重新排列，语序正确的是"), "语句排序")
         XCTAssertEqual(rec("言语理解", "语句表达", "这段文字接下来最可能讲的是"), "接语选择")
         XCTAssertEqual(rec("言语理解", "语句表达", "依次填入下列横线处的词语，最恰当的一组是"), "词语填空")
@@ -86,9 +87,10 @@ final class QuestionClassifierTests: XCTestCase {
         XCTAssertEqual(rec("数字运算", "数量关系", "甲有100元，乙有60元，甲给乙多少元后两人一样多"), "和差倍比与方程") // fallback
     }
 
-    func test数字运算定义新运算巧算整除数位方程() {
-        XCTAssertEqual(rec("数字运算", "数字运算", "定义一种新的运算a※b=2a+b，则3※4的值为"), "定义新运算")
-        XCTAssertEqual(rec("数字运算", "数字运算", "规定一种新运算a△b=3a-2b，则5△2=？"), "定义新运算")
+    func test数字运算巧算整除数位方程() {
+        // 定义新运算规则已删(全库 2 题,均为解方程类) — 依题面归入巧算/兜底。
+        XCTAssertEqual(rec("数字运算", "数字运算", "定义一种新的运算a※b=2a+b，则3※4的值为"), "巧算与速算")
+        XCTAssertEqual(rec("数字运算", "数字运算", "规定一种新运算a△b=3a-2b，则5△2=？"), "方程与和差倍比")
         XCTAssertEqual(rec("数字运算", "数字运算", "计算：9999×9999的值为"), "巧算与速算")
         XCTAssertEqual(rec("数字运算", "数字运算", "一个数除以7余3，除以5余2，这个数最小是"), "整除与余数")
         XCTAssertEqual(rec("数字运算", "数字运算", "一个两位数，个位数字是十位数字的2倍，这个数可能是"), "数位与数字")
@@ -117,7 +119,9 @@ final class QuestionClassifierTests: XCTestCase {
         XCTAssertEqual(rec("逻辑推理", "图形推理", "观察图形规律", "元素组成相同，优先考虑位置规律，图形顺时针旋转"), "位置规律")
         XCTAssertEqual(rec("逻辑推理", "图形推理", "观察图形规律", "考虑样式规律，去同存异"), "样式规律")
         XCTAssertEqual(rec("逻辑推理", "图形推理", "观察图形规律", "考虑数量规律，每个图形均由3个圆组成"), "数量规律")
-        XCTAssertEqual(rec("逻辑推理", "图形推理", "与众不同的图形是", ""), "其他")
+        // 找不同 stem 归入图形间关系/样式规律;完全无提示的题干 → 其他。
+        XCTAssertEqual(rec("逻辑推理", "图形推理", "与众不同的图形是", ""), "样式规律")
+        XCTAssertEqual(rec("逻辑推理", "图形推理", "观察图形，选择符合要求的", ""), "其他")
     }
 
     func test类比推理语义逻辑语法关系() {
@@ -126,9 +130,10 @@ final class QuestionClassifierTests: XCTestCase {
         XCTAssertEqual(rec("逻辑推理", "类比推理", "（）对于认真相当于对于负责", "词性均为形容词"), "语法关系")
     }
 
-    func test定义判断多定义单定义() {
-        XCTAssertEqual(rec("逻辑推理", "定义判断", "根据上述定义", "多定义题"), "多定义")
-        XCTAssertEqual(rec("逻辑推理", "定义判断", "根据上述定义，下列不属于训练的是"), "单定义") // fallback
+    func test定义判断统一归定义判断() {
+        // 多定义规则已删(全库 1 题);section 只剩兜底,统一为 section 名。
+        XCTAssertEqual(rec("逻辑推理", "定义判断", "根据上述定义", "多定义题"), "定义判断")
+        XCTAssertEqual(rec("逻辑推理", "定义判断", "根据上述定义，下列不属于训练的是"), "定义判断") // fallback
     }
 
     // MARK: - 资料分析
