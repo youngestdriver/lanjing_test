@@ -45,16 +45,11 @@ struct PracticeQuizView: View {
             // mid-run and re-entering continues where it left off (问题 3).
             await vm.resumeOrStart(category: category, subCategory: subCategory)
         }
-        // 答题卡 is an overlay, NOT a sheet: presenting a sheet from a view
-        // with a hidden tab bar silently fails on iOS 17 (known bug), so the
-        // card overlays the full-screen page instead.
-        .overlay {
-            if showAnswerCard {
-                PracticeAnswerCardView(vm: vm, onClose: { showAnswerCard = false })
-                    .zIndex(5)
-            }
+        // 答题卡与考试同款:sheet 呈现(.medium/.large detents),不再用 overlay
+        // (iOS 17 隐藏 tab bar 层级 sheet 的已知 bug 见 PracticeAnswerCardView 注释)。
+        .sheet(isPresented: $showAnswerCard) {
+            PracticeAnswerCardView(vm: vm)
         }
-        .animation(.easeInOut(duration: 0.25), value: showAnswerCard)
     }
 
     private var loadingPlaceholder: some View {

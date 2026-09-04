@@ -459,11 +459,10 @@ final class PracticeFlowUITests: XCTestCase {
         return !element.exists
     }
 
-    /// Opens the answer-card overlay and returns its dot grid (the ScrollView
-    /// carrying the "1".."n" buttons). The card is an overlay, not a sheet —
-    /// sheet + hidden tab bar is an iOS 17 bug. On failure the accessibility
-    /// tree is dumped so the CI log shows whether the overlay failed to
-    /// render or the query itself was wrong.
+    /// Opens the answer-card sheet (exam-parity presentation, .medium/.large
+    /// detents) and returns its dot grid (the ScrollView carrying the "1".."n"
+    /// buttons). On failure the accessibility tree is dumped so the CI log
+    /// shows whether the sheet failed to render or the query was wrong.
     private func openAnswerCard(_ app: XCUIApplication) -> XCUIElement {
         let button = app.buttons["答题卡"]
         XCTAssertTrue(button.waitForExistence(timeout: 5), "答题卡 button missing")
