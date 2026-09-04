@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// 练习答题卡 overlay: stats row + jump-to-any-question dot grid. Mirrors
-/// the exam AnswerCardSheet's look but has no sections and no submission —
-/// practice has neither. Tapping a dot calls `vm.jumpTo` and closes the
-/// card; the target question's per-question state lives in `session.answers`,
-/// so nothing is lost when jumping (问题 5).
+/// 练习答题卡 overlay: jump-to-any-question dot grid. Mirrors the exam
+/// AnswerCardSheet's look but has no sections and no submission — practice
+/// has neither. Tapping a dot calls `vm.jumpTo`; like the exam, the card
+/// stays open and is dismissed by 完成 or the dim mask. The target question's
+/// per-question state lives in `session.answers`, so nothing is lost when
+/// jumping (问题 5).
 ///
 /// Presented as an overlay, NOT a `.sheet`: presenting a sheet from a view
 /// whose tab bar is hidden (`.toolbar(.hidden, for: .tabBar)`) silently does
@@ -24,16 +25,19 @@ struct PracticeAnswerCardView: View {
             VStack(spacing: 0) {
                 header
                 if let session {
-                    statsBar(session)
                     grid(session)
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(maxHeight: 420)
+            .frame(maxHeight: 480)
             .background(Color(.systemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .padding(.horizontal, 8)
-            .padding(.bottom, 8)
+            // 面板形态与考试答题卡对齐:全宽贴底、仅顶部圆角(DS.radiusLG)。
+            .clipShape(UnevenRoundedRectangle(
+                topLeadingRadius: DS.radiusLG,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: DS.radiusLG
+            ))
         }
         // NOTE: no accessibilityIdentifier on this ZStack — SwiftUI propagates
         // a container's identifier to EVERY descendant, overwriting the grid's
@@ -41,38 +45,23 @@ struct PracticeAnswerCardView: View {
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
+    /// 标题栏模拟考试 sheet 的导航栏:居中标题 + 右侧「完成」。完成按钮带
+    /// 独立 identifier — 遮罩下层的题目页还有自己的「完成/下一题」按钮,
+    /// 按标签查询会歧义。
     private var header: some View {
-        HStack {
+        ZStack {
             Text("答题卡")
-                .font(.system(size: 16, weight: .heavy))
-            Spacer()
-            Button("完成") { onClose() }
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(DS.blue)
+                .font(.system(size: 17, weight: .heavy))
+            HStack {
+                Spacer()
+                Button("完成") { onClose() }
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(DS.blue)
+                    .accessibilityIdentifier("practice-answer-card-close")
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .overlay(alignment: .bottom) { Divider() }
-    }
-
-    /// 答对 / 答错 / 未答 counters — derived from session.answers, so the
-    /// card statistics never drift from the summary.
-    private func statsBar(_ session: PracticeSession) -> some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 10) {
-                Label("\(session.rightCount)", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(DS.accent)
-                Label("\(session.wrongCount)", systemImage: "xmark.circle.fill")
-                    .foregroundStyle(DS.red)
-                Label("\(session.questions.count - session.answeredCount)", systemImage: "circle")
-                    .foregroundStyle(.secondary)
-            }
-            .font(.system(size: 13, weight: .bold))
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color(.secondarySystemBackground))
     }
 
     private func grid(_ session: PracticeSession) -> some View {
@@ -101,9 +90,9 @@ struct PracticeAnswerCardView: View {
             ? session.answers[index]
             : PracticeSession.PracticeAnswer()
         let isCurrent = index == session.index
+        // 与考试一致:跳转后卡片保持打开,由「完成」或遮罩关闭。
         return Button {
             vm.jumpTo(index)
-            onClose()
         } label: {
             // Accessible label is the 1-based number ("1".."n") — UI tests
             // can scope card.buttons["3"] without colliding with letters.

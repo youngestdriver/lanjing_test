@@ -153,7 +153,7 @@ final class PracticeFlowUITests: XCTestCase {
         XCTAssertFalse(app.buttons["option-A-wrong"].exists, "unselected correct row must not be marked")
 
         // 问题 5: the answer card overlay opens, all dots render, tapping a
-        // dot jumps the header (and closes the card).
+        // dot jumps the header. 与考试一致:跳转后卡片保持打开,由「完成」关闭。
         let dots = openAnswerCard(app)
         for dot in ["1", "2", "3"] {
             XCTAssertTrue(dots.buttons[dot].waitForExistence(timeout: 5), "answer card dot \(dot) missing")
@@ -162,15 +162,16 @@ final class PracticeFlowUITests: XCTestCase {
 
         let header3 = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 3/'")).firstMatch
         XCTAssertTrue(header3.waitForExistence(timeout: 5), "jump to question 3 did not move the header")
-        XCTAssertTrue(waitForDisappearance(dots, timeout: 5), "answer card did not dismiss")
+        XCTAssertTrue(dots.waitForExistence(timeout: 2), "answer card dismissed after dot tap — 考试式卡片应保持打开")
         // 问题 4 stays fixed after a jump.
         XCTAssertTrue(waitForDisappearance(profileTab, timeout: 5), "tab bar reappeared after jump")
 
-        let dots2 = openAnswerCard(app)
-        dots2.buttons["2"].tap()
+        // 卡片保持打开时再点另一圆点仍可跳转。
+        dots.buttons["2"].tap()
         let header2 = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 2/'")).firstMatch
         XCTAssertTrue(header2.waitForExistence(timeout: 5), "jump to question 2 did not move the header")
-        XCTAssertTrue(waitForDisappearance(dots2, timeout: 5), "answer card did not dismiss")
+        XCTAssertTrue(dots.waitForExistence(timeout: 2), "answer card dismissed after second dot tap")
+        closeAnswerCard(app, dots: dots)
 
         // Finish the run to leave a clean persisted state.
         answerCurrentQuestion(app, letter: "A", advance: "下一题")
@@ -226,7 +227,8 @@ final class PracticeFlowUITests: XCTestCase {
         dots.buttons["1"].tap()
         let header1 = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 1/'")).firstMatch
         XCTAssertTrue(header1.waitForExistence(timeout: 5), "jump back to question 1 did not move the header")
-        XCTAssertTrue(waitForDisappearance(dots, timeout: 5), "answer card did not dismiss")
+        XCTAssertTrue(dots.waitForExistence(timeout: 2), "answer card dismissed after dot tap — 考试式卡片应保持打开")
+        closeAnswerCard(app, dots: dots)
         XCTAssertTrue(waitForElement(questionWebView, shorterThan: 200, timeout: 10),
                       "short question kept the previous long height (问题 1)")
         XCTAssertLessThan(questionWebView.frame.height, longHeight * 0.6,
@@ -472,6 +474,17 @@ final class PracticeFlowUITests: XCTestCase {
             XCTAssertTrue(dots.exists, "answer card grid never appeared")
         }
         return dots
+    }
+
+    /// Exam-parity close: dot taps keep the card open, so tests dismiss it via
+    /// the header's 完成. That button carries its own identifier — page-level
+    /// 完成 buttons stay in the tree behind the overlay, so label queries
+    /// would be ambiguous.
+    private func closeAnswerCard(_ app: XCUIApplication, dots: XCUIElement) {
+        let close = app.buttons["practice-answer-card-close"]
+        XCTAssertTrue(close.waitForExistence(timeout: 5), "answer card close button missing")
+        close.tap()
+        XCTAssertTrue(waitForDisappearance(dots, timeout: 5), "answer card did not dismiss after 完成")
     }
 
     /// Taps the nav bar's back button, waiting for it to exist first (pop
