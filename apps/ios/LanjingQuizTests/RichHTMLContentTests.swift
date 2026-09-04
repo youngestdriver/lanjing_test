@@ -171,4 +171,88 @@ final class RichHTMLContentTests: XCTestCase {
     func testStripTrailingFillerEmptiesFillerOnlyDocument() {
         XCTAssertEqual(RichHTMLContent.stripTrailingFiller("<p><br/></p><p>&nbsp;</p>"), "")
     }
+
+    // MARK: - estimatedHeight (首帧高度估算:量高回调前的近似高度,避免 1pt 空白)
+
+    func testEstimatedHeightEmptyIsMinimal() {
+        XCTAssertGreaterThan(RichHTMLContent.estimatedHeight(html: "", fontSize: 17), 0)
+        XCTAssertLessThan(RichHTMLContent.estimatedHeight(html: "", fontSize: 17), 60)
+    }
+
+    func testEstimatedHeightGrowsWithText() {
+        let short = RichHTMLContent.estimatedHeight(html: "甲乙", fontSize: 17)
+        let longHtml = "<p>\(String(repeating: "甲乙丙丁戊己庚辛壬癸", count: 12))</p>"
+        let long = RichHTMLContent.estimatedHeight(html: longHtml, fontSize: 17)
+        XCTAssertGreaterThan(long, short)
+    }
+
+    func testEstimatedHeightIgnoresTags() {
+        XCTAssertEqual(
+            RichHTMLContent.estimatedHeight(html: "<p>甲乙</p>", fontSize: 17),
+            RichHTMLContent.estimatedHeight(html: "甲乙", fontSize: 17)
+        )
+        XCTAssertEqual(
+            RichHTMLContent.estimatedHeight(html: "<span style=\"color:red\">甲</span><br>乙", fontSize: 17),
+            RichHTMLContent.estimatedHeight(html: "甲乙", fontSize: 17)
+        )
+    }
+
+    func testEstimatedHeightFontSizeScales() {
+        let html = "这段文字意在强调什么"
+        XCTAssertGreaterThan(
+            RichHTMLContent.estimatedHeight(html: html, fontSize: 20),
+            RichHTMLContent.estimatedHeight(html: html, fontSize: 14)
+        )
+    }
+
+    // MARK: - HTMLHeightCache(进程内量高缓存)
+
+    func testHeightCacheMiss() {
+        HTMLHeightCache.reset()
+        XCTAssertNil(HTMLHeightCache.height(for: "<p>甲</p>", fontSize: 17))
+    }
+
+    func testHeightCacheSetThenHit() {
+        HTMLHeightCache.reset()
+        HTMLHeightCache.setHeight(123, for: "<p>甲</p>", fontSize: 17)
+        XCTAssertEqual(HTMLHeightCache.height(for: "<p>甲</p>", fontSize: 17), 123)
+    }
+
+    func testHeightCacheKeyedByFontSize() {
+        HTMLHeightCache.reset()
+        HTMLHeightCache.setHeight(100, for: "<p>甲</p>", fontSize: 17)
+        XCTAssertNil(HTMLHeightCache.height(for: "<p>甲</p>", fontSize: 15))
+    }
+
+    // MARK: - localizedImageTags(预取图片以 data URI 嵌入,渲染必然命中)
+
+    func testLocalizedImageTagsReplacesCachedSrc() {
+        let html = #"<p>看图</p><img src="https://files.example.com/x.png">"#
+        let local = RichHTMLContent.localizedImageTags(html) { _ in Data([0x89, 0x50, 0x4E, 0x47]) }
+        XCTAssertTrue(local.contains("data:image/png;base64,iVBORw"))
+        XCTAssertFalse(local.contains("files.example.com"))
+    }
+
+    func testLocalizedImageTagsKeepsMissingSrc() {
+        let html = #"<img src="https://files.example.com/not.png">"#
+        let local = RichHTMLContent.localizedImageTags(html) { _ in nil }
+        XCTAssertEqual(local, html)
+    }
+
+    func testLocalizedImageTagsResolvesRelativeSrcAgainstBase() {
+        let html = #"<img src="/upload/rel.png">"#
+        var seen: [URL] = []
+        let local = RichHTMLContent.localizedImageTags(html) { url in
+            seen.append(url)
+            return Data([0x89, 0x50, 0x4E, 0x47])
+        }
+        XCTAssertEqual(seen.first?.absoluteString, "https://test.lanjingweike.com/upload/rel.png")
+        XCTAssertTrue(local.contains("data:image/png;base64,iVBORw"))
+    }
+
+    func testLocalizedImageTagsKeepsNonImageTags() {
+        let html = #"<p>文字 <b>加粗</b></p><img src="https://files.example.com/x.png">"#
+        let local = RichHTMLContent.localizedImageTags(html) { _ in Data([0x89, 0x50, 0x4E, 0x47]) }
+        XCTAssertTrue(local.contains("<b>加粗</b>"))
+    }
 }
