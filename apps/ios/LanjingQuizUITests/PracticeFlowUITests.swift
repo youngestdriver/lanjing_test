@@ -530,5 +530,20 @@ final class PracticeFlowUITests: XCTestCase {
         let submit = app.buttons["password-login-submit"]
         XCTAssertTrue(submit.waitForExistence(timeout: 5), "login button missing")
         submit.tap()
+
+        // 登录后的「保存密码?」自动填充提示(每台模拟器首次登录必弹,可能
+        // 挡住后续控件:元素在 a11y 树里存在但 isHittable 为 false)。iOS 27
+        // 上它是系统进程承载的 Sheet,标签用全角「?」——不一定叫 Alert,
+        // 问号也不一定是半角,所以按前缀匹配、Sheet/Alert、app/springboard
+        // 四路都查,命中即点「以后」静默关掉;未弹出时快速跳过。
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let savePrompt = NSPredicate(format: "label BEGINSWITH '保存密码'")
+        for target in [app.sheets, app.alerts, springboard.sheets, springboard.alerts] {
+            let prompt = target.matching(savePrompt).firstMatch
+            if prompt.waitForExistence(timeout: 5) {
+                prompt.buttons["以后"].tap()
+                break
+            }
+        }
     }
 }

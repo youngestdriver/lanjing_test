@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F00100000000000000000001 /* BankDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00100000000000000000011 /* BankDatabase.swift */; };
+		F00100000000000000000002 /* QuestionImageSchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00100000000000000000012 /* QuestionImageSchemeHandler.swift */; };
 		0750D6F6977341749D0F1B17 /* Question.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34E242E150FF74041E7BA8E5 /* Question.swift */; };
 		0ABCEE9F033ADFBBB6B0478D /* PracticeProgressStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4DB5CFB75C79185F8AB7512 /* PracticeProgressStoreTests.swift */; };
 		0C66E3A25774391E8339400C /* Formatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0364F22B8201AF3CC52F19FE /* Formatters.swift */; };
@@ -116,6 +118,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		F00100000000000000000011 /* BankDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankDatabase.swift; sourceTree = "<group>"; };
+		F00100000000000000000012 /* QuestionImageSchemeHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuestionImageSchemeHandler.swift; sourceTree = "<group>"; };
 		0207640E6EAE653501D0A7EF /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		0364F22B8201AF3CC52F19FE /* Formatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatters.swift; sourceTree = "<group>"; };
 		05796CE89C2C81EA0EC1B8D5 /* CookieCloudClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieCloudClient.swift; sourceTree = "<group>"; };
@@ -302,6 +306,8 @@
 		7CC3999B7F25663DA2A274D0 /* Support */ = {
 			isa = PBXGroup;
 			children = (
+				F00100000000000000000011 /* BankDatabase.swift */,
+				F00100000000000000000012 /* QuestionImageSchemeHandler.swift */,
 				67F512FD68645C1849B92BDF /* BankLogic.swift */,
 				B4ECDFAEED262D32F8A3FE69 /* BankStorage.swift */,
 				6913CBFD4AD1D569021F5032 /* CookieCloudCrypto.swift */,
@@ -563,6 +569,8 @@
 				20EE6B46B6AEE5FB6B7AFD66 /* AnswerDotGrid.swift in Sources */,
 				DA2584EE3EB69E5E4D829AF4 /* AppState.swift in Sources */,
 				B65EAB393CCB414D16019BE3 /* BankLogic.swift in Sources */,
+				F00100000000000000000001 /* BankDatabase.swift in Sources */,
+				F00100000000000000000002 /* QuestionImageSchemeHandler.swift in Sources */,
 				A676E4995FDABDEF04219645 /* BankMeta.swift in Sources */,
 				F4DC9BB1A5B5D9D85028D8F6 /* BankQuestion.swift in Sources */,
 				598BF1122D52ACB166C160EA /* BankStorage.swift in Sources */,
@@ -715,6 +723,7 @@
 		8224AEA241A45E98E0FDF978 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -731,6 +740,7 @@
 		8C621AF54B2FF07E60951241 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;

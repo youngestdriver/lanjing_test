@@ -10,17 +10,45 @@ struct RichHTMLContent: View {
     var allowsTextSelection = true
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(AppState.self) private var appState
     @State private var contentHeight: CGFloat = 1
+    @State private var didFinishInitialLayout = false
 
     var body: some View {
-        InlineHTMLWebView(
-            html: html,
-            fontSize: fontSize,
-            dark: colorScheme == .dark,
-            allowsTextSelection: allowsTextSelection,
-            contentHeight: $contentHeight
-        )
-        .frame(height: contentHeight)
+        ZStack(alignment: .topLeading) {
+            InlineHTMLWebView(
+                html: appState.bankDatabase.map { database in
+                    database.localizeHTML(html)
+                } ?? html,
+                fontSize: fontSize,
+                dark: colorScheme == .dark,
+                allowsTextSelection: allowsTextSelection,
+                contentHeight: $contentHeight,
+                database: appState.bankDatabase,
+                onInitialLayout: { didFinishInitialLayout = true }
+            )
+            .frame(height: contentHeight)
+            .opacity(didFinishInitialLayout ? 1 : 0)
+
+            if !didFinishInitialLayout {
+                VStack(alignment: .leading, spacing: 8) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.secondary.opacity(0.12))
+                        .frame(height: max(18, fontSize * 1.2))
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.secondary.opacity(0.10))
+                        .frame(height: max(18, fontSize * 1.2))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .redacted(reason: .placeholder)
+            }
+        }
+        .frame(minHeight: didFinishInitialLayout ? contentHeight : max(48, fontSize * 2.8))
+        .transaction { $0.animation = nil }
+        .onChange(of: html) { _, _ in
+            didFinishInitialLayout = false
+            contentHeight = 1
+        }
     }
 
     enum Segment {
@@ -176,13 +204,21 @@ private struct InlineHTMLWebView: UIViewRepresentable {
     let dark: Bool
     let allowsTextSelection: Bool
     @Binding var contentHeight: CGFloat
+    let database: BankDatabase?
+    let onInitialLayout: () -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(contentHeight: $contentHeight)
+        Coordinator(contentHeight: $contentHeight, onInitialLayout: onInitialLayout)
     }
 
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
+        if let database {
+            configuration.setURLSchemeHandler(
+                QuestionImageSchemeHandler(database: database),
+                forURLScheme: "lanjing-image"
+            )
+        }
         configuration.userContentController.add(context.coordinator, name: "contentHeight")
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
@@ -260,12 +296,22 @@ private struct InlineHTMLWebView: UIViewRepresentable {
                 const height = Math.ceil(document.documentElement.scrollHeight);
                 window.webkit.messageHandlers.contentHeight.postMessage(height);
             };
-            new ResizeObserver(report).observe(document.body);
-            document.querySelectorAll('img').forEach(image => {
-                image.addEventListener('load', report);
-                image.addEventListener('error', report);
+            const images = Array.from(document.images);
+            const settle = image => image.complete ? Promise.resolve() : new Promise(resolve => {
+                const done = () => resolve();
+                image.addEventListener('load', done, { once: true });
+                image.addEventListener('error', done, { once: true });
             });
-            window.addEventListener('load', report);
+            // Do not reveal the native view until image dimensions are known.
+            Promise.all(images.map(settle)).then(() => {
+                requestAnimationFrame(() => {
+                    window.webkit.messageHandlers.contentHeight.postMessage({
+                        height: Math.ceil(document.documentElement.scrollHeight),
+                        initial: true
+                    });
+                    new ResizeObserver(report).observe(document.body);
+                });
+            });
             report();
         })();
         </script></html>
@@ -276,17 +322,30 @@ private struct InlineHTMLWebView: UIViewRepresentable {
         @Binding var contentHeight: CGFloat
         var lastDocument: String?
 
-        init(contentHeight: Binding<CGFloat>) {
+        let onInitialLayout: () -> Void
+
+        init(contentHeight: Binding<CGFloat>, onInitialLayout: @escaping () -> Void) {
             _contentHeight = contentHeight
+            self.onInitialLayout = onInitialLayout
         }
 
         func userContentController(
             _ userContentController: WKUserContentController,
             didReceive message: WKScriptMessage
         ) {
-            guard message.name == "contentHeight",
-                  let height = message.body as? NSNumber else { return }
-            let measuredHeight = max(1, CGFloat(truncating: height))
+            guard message.name == "contentHeight" else { return }
+            if let payload = message.body as? [String: Any],
+               let rawHeight = payload["height"] as? NSNumber {
+                if payload["initial"] as? Bool == true { onInitialLayout() }
+                update(CGFloat(truncating: rawHeight))
+                return
+            }
+            guard let height = message.body as? NSNumber else { return }
+            update(CGFloat(truncating: height))
+        }
+
+        private func update(_ rawHeight: CGFloat) {
+            let measuredHeight = max(1, rawHeight)
             if abs(contentHeight - measuredHeight) > 0.5 {
                 contentHeight = measuredHeight
             }

@@ -32,6 +32,7 @@ final class AppState {
     /// 练习进度注册表(Application Support/LanjingQuiz/practice-progress.json),
     /// 与 sessionStore 同注入模式。
     let practiceProgressStore: FileManagerPracticeProgressStore
+    let bankDatabase: BankDatabase?
     /// Bumped whenever the local bank is deleted (我的 > 删除题库) so every
     /// PracticeBankViewModel instance (练习 tab and 我的 tab create their own)
     /// resets and re-crawls on its next appearance.
@@ -39,12 +40,17 @@ final class AppState {
 
     init(api: APIClient = APIClient(), bankStorage: BankStorage = FileManagerBankStorage(),
          practiceSessionStore: FileManagerPracticeSessionStore = FileManagerPracticeSessionStore(),
-         practiceProgressStore: FileManagerPracticeProgressStore = FileManagerPracticeProgressStore()) {
+         practiceProgressStore: FileManagerPracticeProgressStore = FileManagerPracticeProgressStore(),
+         bankDatabase: BankDatabase? = nil) {
         self.api = api
         self.cookieCloudSync = CookieCloudSync(cookieStore: api.cookieStore)
         self.bankStorage = bankStorage
         self.practiceSessionStore = practiceSessionStore
         self.practiceProgressStore = practiceProgressStore
+        // nil → 创建真实磁盘库(生产默认)。测试必须显式传 inMemory 库:
+        // 单元测试宿主与 UI 测试共用同一沙盒容器,真实库会跨运行残留并
+        // 互相污染。
+        self.bankDatabase = bankDatabase ?? (try? BankDatabase())
         self.theme = Theme.load()
         self.autoAdvanceOnCorrect = QuizSettings.loadAutoAdvanceOnCorrect()
     }
@@ -64,6 +70,7 @@ final class AppState {
         // passed in production builds).
         if ProcessInfo.processInfo.arguments.contains("-reset-bank") {
             try? bankStorage.removeAll()
+            try? bankDatabase?.resetAll()
             // Also drop any persisted practice run: otherwise a stale archive
             // from the previous test execution resumes at question 2/3 and
             // breaks "第 1/" assertions.
@@ -162,6 +169,7 @@ final class AppState {
     /// too — double insurance.)
     func deleteBank() {
         try? bankStorage.removeAll()
+        try? bankDatabase?.resetAll()
         bankResetVersion += 1
         notice = "题库已删除，重新进入练习页会重新爬取全部试卷"
         Task { try? await practiceSessionStore.clear() }

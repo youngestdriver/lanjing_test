@@ -9,7 +9,7 @@ final class ExamListViewModelTests: XCTestCase {
     /// (无 sessionId 时上游会返回登录页 HTML,旧实现会走 sessionExpired →
     /// 被踢回登录页,与「跳过」语义冲突。)
     func testLoadWithoutSessionShowsNeedsLogin() async throws {
-        let appState = AppState()
+        let appState = AppState(bankDatabase: try! BankDatabase(inMemory: true))
         // 抹掉模拟器/Keychain 可能残留的会话,确保本次运行一定无 sessionId。
         appState.api.clearSession()
         let vm = ExamListViewModel(appState: appState)
