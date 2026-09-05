@@ -36,13 +36,6 @@ final class PracticeBankViewModel {
     /// True when the current session was resumed from disk. Shown as a one-off
     /// banner by the quiz view; consumeResumeNotice() clears it (not persisted).
     private(set) var resumedFromDisk = false
-    /// 首屏门控:preparing 时 PracticeQuizView 显示加载动画,当前题图片预取
-    /// 就绪(或无图/超时)后进入 ready 才渲染答题页 —— 进入即完整,不再
-    /// "空白页突然长出题干和选项"。
-    enum EntryPhase: Equatable { case preparing, ready }
-    private(set) var entryPhase: EntryPhase = .ready
-    /// 后台顺延预取后续题图片;重新进入/退出会取消上一个任务。
-    private var prefetchTask: Task<Void, Never>?
 
     init(appState: AppState, storage: BankStorage? = nil, facade: PracticeUpstreamClient? = nil,
          sessionStore: (any PracticeSessionStoring)? = nil,
@@ -62,13 +55,11 @@ final class PracticeBankViewModel {
     /// clears it — double insurance for the settings screen's own VM).
     /// 进度注册表同样清零:旧题 ID 无意义。
     func bankWasDeleted() {
-        prefetchTask?.cancel()
         phase = .idle
         meta = nil
         subcategories = []
         session = nil
         resumedFromDisk = false
-        entryPhase = .ready
         Task { try? await sessionStore.clear() }
         progress = [:]
         Task { try? await progressStore.clear() }
@@ -166,82 +157,16 @@ final class PracticeBankViewModel {
             ? BankLogic.shuffledKeepingGroups(questions, seed: UInt64.random(in: .min ... .max))
             : questions
         let saved = await sessionStore.load()
-        let didResume: Bool
         if let resume = BankLogic.resumeCandidate(saved: saved, category: category, subCategory: subCategory,
                                                   ordered: ordered) {
             session = resume
             resumedFromDisk = true
-            didResume = true
-        } else {
-            session = PracticeSession(category: category, subCategory: subCategory, questions: ordered)
-            resumedFromDisk = false
-            didResume = false
-            persist()
+            return true
         }
-        if let session {
-            await prepareEntry(for: session)
-        }
-        return didResume
-    }
-
-    // MARK: - 首屏门控 + 图片预取
-
-    /// 门控:当前题图片预取就绪(单图超时 3s 兜底,无图题直接放行),随后
-    /// 返回给视图 —— 期间 PracticeQuizView 显示加载动画。之后后台顺延预取
-    /// 剩余题目,不阻塞翻页。
-    private func prepareEntry(for session: PracticeSession) async {
-        prefetchTask?.cancel()
-        entryPhase = .preparing
-        let urls = session.isFinished ? [] : imageURLs(in: session.questions[session.index])
-        let deadline = Date(timeIntervalSinceNow: 3)
-        for url in urls {
-            guard Date() < deadline else { break }
-            await fetchImage(url)
-        }
-        entryPhase = .ready
-        startBackgroundPrefetch(for: session)
-    }
-
-    private func startBackgroundPrefetch(for session: PracticeSession) {
-        prefetchTask?.cancel()
-        prefetchTask = Task { [weak self] in
-            guard let self, !session.isFinished else { return }
-            for index in (session.index + 1) ..< session.questions.count {
-                if Task.isCancelled { return }
-                for url in self.imageURLs(in: session.questions[index]) {
-                    if Task.isCancelled { return }
-                    await self.fetchImage(url)
-                }
-            }
-        }
-    }
-
-    /// 题目全部图片 URL(stem/正文/选项),复用 RichHTMLContent 的解析规则。
-    func imageURLs(in question: BankQuestion) -> [URL] {
-        var urls: [URL] = []
-        let htmls = [question.stem, question.question].compactMap { $0 } + question.options
-        for html in htmls {
-            for case .image(let url) in RichHTMLContent.segments(from: html) {
-                if !urls.contains(url) { urls.append(url) }
-            }
-        }
-        return urls
-    }
-
-    /// 预取单图到 PracticeImageStore;已有缓存或网络失败静默(动画兜底)。
-    private func fetchImage(_ url: URL) async {
-        guard PracticeImageStore.data(for: url) == nil else { return }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 3
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard (response as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty else { return }
-            PracticeImageStore.store(data, for: url)
-        } catch is CancellationError {
-            // 视图提前消失
-        } catch {
-            // 网络失败:保留原 src,量高动画兜底
-        }
+        session = PracticeSession(category: category, subCategory: subCategory, questions: ordered)
+        resumedFromDisk = false
+        persist()
+        return false
     }
 
     // MARK: - Shuffle preference (per-category, persisted independently)
@@ -266,10 +191,8 @@ final class PracticeBankViewModel {
     /// (Plain system-back / swipe-back no longer clears anything: the ID-set
     /// resumeCandidate check is what prevents stale sessions from leaking.)
     func endSession() {
-        prefetchTask?.cancel()
         session = nil
         resumedFromDisk = false
-        entryPhase = .ready
         Task { try? await sessionStore.clear() }
     }
 
