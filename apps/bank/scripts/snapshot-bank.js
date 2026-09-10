@@ -4,8 +4,11 @@
 // 零网络：只读本地 <bankDir>/*.jsonl 与 <bankDir>/images/。
 //
 // Usage: node scripts/snapshot-bank.js [--bank-dir <path>] [--out <path.zip>] [--report]
+//        node scripts/snapshot-bank.js --verify <path.zip>
 //   --report 只统计不落盘：引用图片数 / 已覆盖 / 缺失 / 题目数 / 总字节 / 各分类题数，
 //            退出码 0=全部覆盖，1=有缺失。
+//   --verify 校验一个既有 zip（CRC32 + 长度 + sha256 + manifest 与 zip 对齐），
+//            退出码 0=通过。发布流程用它校验「即将随 release 分发的那一个包」。
 
 const fs = require("node:fs");
 const path = require("node:path");
@@ -17,10 +20,11 @@ const USAGE = `用法: node scripts/snapshot-bank.js [选项]
   --bank-dir <path>  题库目录 (默认 apps/bank/data)
   --out <path.zip>   产物路径 (默认 <bank-dir>/lanjing-bank-<YYYYMMDD>.zip)
   --report           只打印统计不落盘
+  --verify <zip>     校验既有产物的完整性
   -h, --help         显示本帮助`;
 
 function parseArgs(argv) {
-  const opts = { bankDir: null, out: null, report: false };
+  const opts = { bankDir: null, out: null, report: false, verify: null };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     const value = () => argv[++i];
@@ -28,6 +32,7 @@ function parseArgs(argv) {
       case "--bank-dir": opts.bankDir = value(); break;
       case "--out": opts.out = value(); break;
       case "--report": opts.report = true; break;
+      case "--verify": opts.verify = value(); break;
       case "-h":
       case "--help":
         console.log(USAGE);
@@ -62,6 +67,22 @@ function main() {
   const opts = parseArgs(process.argv.slice(2));
   const bankDir = path.resolve(opts.bankDir || path.join(__dirname, "..", "data"));
   const outPath = path.resolve(opts.out || path.join(bankDir, `lanjing-bank-${dateStamp()}.zip`));
+
+  if (opts.verify) {
+    const target = path.resolve(opts.verify);
+    console.log(`== 校验题库快照 ==`);
+    console.log(`文件: ${target}`);
+    const result = verifySnapshotZip(target);
+    console.log(`条目: ${result.entries}`);
+    console.log(`大小: ${result.bytes} 字节 (${formatBytes(result.bytes)})`);
+    if (!result.ok) {
+      console.error(`校验失败: ${result.problems.length} 个问题`);
+      for (const problem of result.problems.slice(0, 20)) console.error(`  ${problem}`);
+      return 1;
+    }
+    console.log(`校验: ok（CRC32 / 长度 / sha256 / manifest 对齐全部一致）`);
+    return 0;
+  }
 
   if (opts.report) {
     const manifest = buildManifest(bankDir); // 缺图会抛错，走下面的 catch
