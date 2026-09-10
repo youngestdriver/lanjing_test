@@ -1,26 +1,184 @@
 import SwiftUI
 import WebKit
 
-/// Renders upstream HTML with remote images. NSAttributedString's HTML importer
-/// silently drops <img> tags (no image loading), so the HTML is split into
-/// text runs (rendered by HTMLText) and image blocks (AsyncImage).
+/// Renders upstream question HTML. NSAttributedString's HTML importer silently
+/// drops <img> tags, so blocks that carry images (formulas/charts) go through
+/// WKWebView with the image bytes inlined as data: URIs (zero network, zero
+/// custom scheme handler — see InlineHTMLWebView); text-only blocks render
+/// natively via HTMLText.
 struct RichHTMLContent: View {
     let html: String
     var fontSize: CGFloat = 17
     var allowsTextSelection = true
 
     @Environment(\.colorScheme) private var colorScheme
-    @State private var contentHeight: CGFloat = 1
+    @Environment(AppState.self) private var appState
 
     var body: some View {
-        InlineHTMLWebView(
-            html: html,
+        // 分段必须先于本地化:独立图段要拿**原始 remote URL** 去 SwiftData
+        // 取位图(本地化后 src 变成 data: URI,按 remote 键查必然落空 →
+        // 整块图永久灰条);只有混排段(整段交给 WebView)才需要 data: URI。
+        let parts = Self.contentParts(of: html) { block in
+            appState.bankDatabase?.localizeHTML(block) ?? block
+        }
+        Group {
+            // 单一段且为纯文本:直接原生渲染(与历史视觉一致)。
+            if parts.count == 1, case .text(let inner) = parts[0] {
+                HTMLText(html: Self.stripTrailingFiller(inner))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                // 段落级分段:文本段 HTMLText(原生)、独立图段 LocalBankImage
+                // (SwiftData 直出,零 WebView)、行内混排段才用 WebView——
+                // 数据库方案下图片块不再经 WebView/编码转手。
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(parts.indices, id: \.self) { index in
+                        switch parts[index] {
+                        case .text(let inner):
+                            HTMLText(html: Self.stripTrailingFiller(inner))
+                        case .image(let remoteURL):
+                            LocalBankImage(remoteURL: remoteURL)
+                        case .mixed(let inner):
+                            webViewBlock(html: inner)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        // 整体作为一个 accessibility 容器:调用点的 .accessibilityIdentifier
+        // (题干高度测试等)落在容器上(组合 frame),而不是第一个文本段。
+        .accessibilityElement(children: .contain)
+    }
+
+    // MARK: - Paragraph segmentation
+
+    enum ParagraphPart {
+        case text(String)
+        case image(String)   // 原始 remoteURL,由 resolver 从 SwiftData 解码
+        case mixed(String)   // 文字与图同行:整段交给 WebView
+    }
+
+    /// 分段 + 按段决定是否本地化。`.image` 段保留原始 remote URL(native
+    /// 图块按它查 SwiftData),`.mixed` 段整体本地化后交给 WebView;`.text`
+    /// 段不含 <img>,零成本跳过。布局上必须「先分段、后本地化」。
+    @MainActor
+    static func contentParts(
+        of html: String,
+        localize: (String) -> String
+    ) -> [ParagraphPart] {
+        paragraphParts(of: html).map { part in
+            switch part {
+            case .text(let inner): return .text(inner)
+            case .image(let remoteURL): return .image(remoteURL)
+            case .mixed(let inner): return .mixed(localize(inner))
+            }
+        }
+    }
+
+    /// 按块级标签(p/div/li)把 HTML 拆成段落,再按内容分类:
+    /// - 无图 → 文本段;
+    /// - 整段仅图(图表、整行公式)→ 独立图段;
+    /// - 图与文字同行(行内公式)→ 混排段(WebView 保真)。
+    /// 段与段之间的裸文本/残留归入文本段。
+    nonisolated static func paragraphParts(of html: String) -> [ParagraphPart] {
+        let ns = html as NSString
+        guard let blockRegex = try? NSRegularExpression(
+            pattern: #"(?is)<(?:p|div|li)\b[^>]*>.*?</(?:p|div|li)>"#
+        ) else { return [.text(html)] }
+
+        var parts: [ParagraphPart] = []
+        func appendText(_ raw: String, _ whitespaceOnly: Bool) {
+            guard !whitespaceOnly, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            parts.append(.text(raw))
+        }
+        func appendBlock(_ block: String) {
+            let imgs = BankDatabase.imageURLs(from: block)
+            guard !imgs.isEmpty else {
+                parts.append(.text(block))
+                return
+            }
+            // 块内是否还有 img 之外的文字(判定"同行混排"的关键)。
+            let withoutImgs = block.replacingOccurrences(
+                of: #"(?is)<img\b[^>]*>"#,
+                with: "",
+                options: .regularExpression
+            )
+            let strippedText = withoutImgs
+                .replacingOccurrences(of: #"<[^>]+>"#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: #"&[a-zA-Z#0-9]+;"#, with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if strippedText.isEmpty {
+                parts.append(contentsOf: imgs.map(ParagraphPart.image))
+            } else {
+                parts.append(.mixed(block))
+            }
+        }
+
+        var cursor = 0
+        let full = NSRange(location: 0, length: ns.length)
+        while let match = blockRegex.firstMatch(in: html, options: [], range: NSRange(location: cursor, length: full.length - cursor)) {
+            if match.range.location > cursor {
+                appendText(ns.substring(with: NSRange(location: cursor, length: match.range.location - cursor)), false)
+            }
+            appendBlock(ns.substring(with: match.range))
+            cursor = match.range.location + match.range.length
+        }
+        if cursor < full.length {
+            appendText(ns.substring(with: NSRange(location: cursor, length: full.length - cursor)), false)
+        }
+        return parts.isEmpty ? [.text(html)] : parts
+    }
+
+    /// 行内混排段:webView(骨架 + 估高),图片已在段落切分前的
+    /// localize 中内联为 data URI。状态按块私有(一个实例可能含多个
+    /// 混排段,骨架/高度互不干扰)。
+    private func webViewBlock(html innerHtml: String) -> some View {
+        MixedWebView(
+            html: innerHtml,
             fontSize: fontSize,
             dark: colorScheme == .dark,
-            allowsTextSelection: allowsTextSelection,
-            contentHeight: $contentHeight
+            allowsTextSelection: allowsTextSelection
         )
-        .frame(height: contentHeight)
+    }
+
+    /// 单段行内混排内容:骨架占位 + WebView,确定布局后揭示。
+    private struct MixedWebView: View {
+        let html: String
+        let fontSize: CGFloat
+        let dark: Bool
+        let allowsTextSelection: Bool
+        @State private var contentHeight: CGFloat = 1
+        @State private var didFinishInitialLayout = false
+
+        var body: some View {
+            ZStack(alignment: .topLeading) {
+                InlineHTMLWebView(
+                    html: html,
+                    fontSize: fontSize,
+                    dark: dark,
+                    allowsTextSelection: allowsTextSelection,
+                    contentHeight: $contentHeight,
+                    onInitialLayout: { didFinishInitialLayout = true }
+                )
+                .frame(height: contentHeight)
+                .opacity(didFinishInitialLayout ? 1 : 0)
+
+                if !didFinishInitialLayout {
+                    VStack(alignment: .leading, spacing: 8) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.secondary.opacity(0.12))
+                            .frame(height: max(18, fontSize * 1.2))
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.secondary.opacity(0.10))
+                            .frame(height: max(18, fontSize * 1.2))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .redacted(reason: .placeholder)
+                }
+            }
+            .frame(minHeight: didFinishInitialLayout ? contentHeight : max(48, fontSize * 2.8))
+            .transaction { $0.animation = nil }
+        }
     }
 
     enum Segment {
@@ -176,13 +334,19 @@ private struct InlineHTMLWebView: UIViewRepresentable {
     let dark: Bool
     let allowsTextSelection: Bool
     @Binding var contentHeight: CGFloat
+    let onInitialLayout: () -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(contentHeight: $contentHeight)
+        Coordinator(contentHeight: $contentHeight, onInitialLayout: onInitialLayout)
     }
 
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
+        // No custom URL scheme handler on purpose: images are inlined as
+        // data: URIs (BankDatabase.localizeHTML) before the document loads,
+        // so every WebView keeps the default configuration and they all share
+        // one WebContent process. A custom scheme handler would pin its own
+        // process per configuration — the source of the WebContent storms.
         configuration.userContentController.add(context.coordinator, name: "contentHeight")
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
@@ -260,12 +424,22 @@ private struct InlineHTMLWebView: UIViewRepresentable {
                 const height = Math.ceil(document.documentElement.scrollHeight);
                 window.webkit.messageHandlers.contentHeight.postMessage(height);
             };
-            new ResizeObserver(report).observe(document.body);
-            document.querySelectorAll('img').forEach(image => {
-                image.addEventListener('load', report);
-                image.addEventListener('error', report);
+            const images = Array.from(document.images);
+            const settle = image => image.complete ? Promise.resolve() : new Promise(resolve => {
+                const done = () => resolve();
+                image.addEventListener('load', done, { once: true });
+                image.addEventListener('error', done, { once: true });
             });
-            window.addEventListener('load', report);
+            // Do not reveal the native view until image dimensions are known.
+            Promise.all(images.map(settle)).then(() => {
+                requestAnimationFrame(() => {
+                    window.webkit.messageHandlers.contentHeight.postMessage({
+                        height: Math.ceil(document.documentElement.scrollHeight),
+                        initial: true
+                    });
+                    new ResizeObserver(report).observe(document.body);
+                });
+            });
             report();
         })();
         </script></html>
@@ -276,20 +450,62 @@ private struct InlineHTMLWebView: UIViewRepresentable {
         @Binding var contentHeight: CGFloat
         var lastDocument: String?
 
-        init(contentHeight: Binding<CGFloat>) {
+        let onInitialLayout: () -> Void
+
+        init(contentHeight: Binding<CGFloat>, onInitialLayout: @escaping () -> Void) {
             _contentHeight = contentHeight
+            self.onInitialLayout = onInitialLayout
         }
 
         func userContentController(
             _ userContentController: WKUserContentController,
             didReceive message: WKScriptMessage
         ) {
-            guard message.name == "contentHeight",
-                  let height = message.body as? NSNumber else { return }
-            let measuredHeight = max(1, CGFloat(truncating: height))
+            guard message.name == "contentHeight" else { return }
+            if let payload = message.body as? [String: Any],
+               let rawHeight = payload["height"] as? NSNumber {
+                if payload["initial"] as? Bool == true { onInitialLayout() }
+                update(CGFloat(truncating: rawHeight))
+                return
+            }
+            guard let height = message.body as? NSNumber else { return }
+            update(CGFloat(truncating: height))
+        }
+
+        private func update(_ rawHeight: CGFloat) {
+            let measuredHeight = max(1, rawHeight)
             if abs(contentHeight - measuredHeight) > 0.5 {
                 contentHeight = measuredHeight
             }
+        }
+    }
+}
+
+/// 独立图片块(图表/整行公式):本地库解码直出——零 WebView、零网络、
+/// 零 base64。解码结果由 resolver 缓存,通常一次性。大图按屏幕宽度
+/// 缩放,小图(公式/图例)保持原始尺寸不放大。
+private struct LocalBankImage: View {
+    let remoteURL: String
+    @Environment(AppState.self) private var appState
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: image.size.width)
+                    .padding(.vertical, 4)
+            } else {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.secondary.opacity(0.15))
+                    .frame(height: 44)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .task(id: remoteURL) {
+            image = appState.bankDatabase?.resolverImage(for: remoteURL)
         }
     }
 }

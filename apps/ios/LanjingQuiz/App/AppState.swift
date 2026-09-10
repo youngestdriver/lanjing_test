@@ -32,6 +32,7 @@ final class AppState {
     /// 练习进度注册表(Application Support/LanjingQuiz/practice-progress.json),
     /// 与 sessionStore 同注入模式。
     let practiceProgressStore: FileManagerPracticeProgressStore
+    let bankDatabase: BankDatabase?
     /// Bumped whenever the local bank is deleted (我的 > 删除题库) so every
     /// PracticeBankViewModel instance (练习 tab and 我的 tab create their own)
     /// resets and re-crawls on its next appearance.
@@ -39,12 +40,17 @@ final class AppState {
 
     init(api: APIClient = APIClient(), bankStorage: BankStorage = FileManagerBankStorage(),
          practiceSessionStore: FileManagerPracticeSessionStore = FileManagerPracticeSessionStore(),
-         practiceProgressStore: FileManagerPracticeProgressStore = FileManagerPracticeProgressStore()) {
+         practiceProgressStore: FileManagerPracticeProgressStore = FileManagerPracticeProgressStore(),
+         bankDatabase: BankDatabase? = nil) {
         self.api = api
         self.cookieCloudSync = CookieCloudSync(cookieStore: api.cookieStore)
         self.bankStorage = bankStorage
         self.practiceSessionStore = practiceSessionStore
         self.practiceProgressStore = practiceProgressStore
+        // nil → 创建真实磁盘库(生产默认)。测试必须显式传 inMemory 库:
+        // 单元测试宿主与 UI 测试共用同一沙盒容器,真实库会跨运行残留并
+        // 互相污染。
+        self.bankDatabase = bankDatabase ?? (try? BankDatabase())
         self.theme = Theme.load()
         self.autoAdvanceOnCorrect = QuizSettings.loadAutoAdvanceOnCorrect()
     }
@@ -64,12 +70,23 @@ final class AppState {
         // passed in production builds).
         if ProcessInfo.processInfo.arguments.contains("-reset-bank") {
             try? bankStorage.removeAll()
+            try? bankDatabase?.resetAll()
             // Also drop any persisted practice run: otherwise a stale archive
             // from the previous test execution resumes at question 2/3 and
             // breaks "第 1/" assertions.
             try? await practiceSessionStore.clear()
             // 进度注册表同样清零:入口行回到纯 "N 题" 基线(UI 测试断言)。
             try? await practiceProgressStore.clear()
+        }
+        // UI-testing hook: 从磁盘上的题库包冷启动导入,让练习流程完全不依赖
+        // 网络(不启 mock 上游、不登录)。用法:
+        //   app.launchArguments = ["-import-bank", "/abs/path/lanjing-bank-YYYYMMDD.zip"]
+        // 模拟器 App 读得到宿主路径;真机沙盒内读不到,故只在 DEBUG 生效。
+        if let flag = ProcessInfo.processInfo.arguments.firstIndex(of: "-import-bank"),
+           flag + 1 < ProcessInfo.processInfo.arguments.count,
+           let database = bankDatabase {
+            let packageURL = URL(fileURLWithPath: ProcessInfo.processInfo.arguments[flag + 1])
+            _ = try? await BankImporter.run(packageAt: packageURL, database: database, storage: bankStorage)
         }
         #endif
         let clock = ContinuousClock()
@@ -160,8 +177,16 @@ final class AppState {
     /// session; re-entering the practice tab re-crawls everything from
     /// scratch. (PracticeBankViewModel.bankWasDeleted clears the session file
     /// too — double insurance.)
+    /// 本地库被内容替换(导入题库)后通知所有题库 VM 重读——与 deleteBank 共用
+    /// 同一个信号:VM 收到后重置 phase 并 ensureBankReady()(这次会读到新库而
+    /// 不是重爬),练习会话与进度注册表随之清空(旧题 ID 已无意义)。
+    func notifyBankChanged() {
+        bankResetVersion += 1
+    }
+
     func deleteBank() {
         try? bankStorage.removeAll()
+        try? bankDatabase?.resetAll()
         bankResetVersion += 1
         notice = "题库已删除，重新进入练习页会重新爬取全部试卷"
         Task { try? await practiceSessionStore.clear() }

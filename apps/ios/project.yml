@@ -8,6 +8,9 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
+    # xcodegen 2.45 起不再输出这一项(旧工程里有),不钉住会出现 3 条
+    # "Traditional headermap style is no longer supported" 构建警告。
+    ALWAYS_SEARCH_USER_PATHS: NO
     CODE_SIGN_STYLE: Automatic
     CODE_SIGN_IDENTITY: "Apple Development"
     # Was previously only in the generated project (set via the Xcode UI);

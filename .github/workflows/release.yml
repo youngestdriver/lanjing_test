@@ -8,11 +8,11 @@ name: Release
 # Inputs (manual runs only; on push they default to false/empty):
 #   version      — tag to publish (e.g. v0.1.0); leave empty to auto-bump the
 #                  patch number of the latest tag (v0.1.0 → v0.1.1)
-#   include_bank — packages the question-bank snapshot (apps/bank/data) into
-#                  the release. Off on auto-publish: the bank data is
-#                  intentionally gitignored as upstream IP and is not present
-#                  in the CI workspace — enabling this fails fast with a
-#                  clear message unless the data is available.
+#   bank_url     — 题库包的下载地址(留空则自动取「最近一个带题库包的 release」
+#                  资产)。题库快照默认随每次 release 分发;数据本身仍不入库
+#                  (上游 IP,gitignore),CI 按 工作区 → bank_url → 历史
+#                  release 资产的顺序找来源,三条都落空就失败,绝不静默发出
+#                  一个没有题库的版本。
 #   include_ipa  — additionally build a signed ADHOC ipa (requires the
 #                  signing secrets below; fails fast with a clear message
 #                  when they are missing). The unsigned ipa is always built.
@@ -25,8 +25,8 @@ name: Release
 #      Sideloadly/AltStore (instructions attached in the release).
 #   3. iOS 签名 ipa (ADHOC) — additionally built and signed when the signing
 #      secrets are configured; that job self-skips otherwise.
-#   4. 题库快照 — only when include_bank=true AND the data exists in the
-#      workspace (it does not in CI; see the bank-snapshot job).
+#   4. 题库快照 — LanjingQuiz-bank-<version>.zip,每次发布都附带(来源解析见
+#      bank-snapshot job);附带的包会在发布前用 snapshot CLI 校验完整性。
 #   5. Android 未签名 release APK — always built (unsigned release 可直接安装,
 #      与 ios-unsigned 同语义);版本号取自发布 tag,versionCode 按
 #      major*10000+minor*100+patch 派生(-PversionName/-PversionCode 注入)。
@@ -49,11 +49,10 @@ on:
         description: "发布版本号,如 v0.1.0(留空自动 +1 patch)"
         required: false
         default: ""
-      include_bank:
-        description: "附带题库快照(公开性定论后启用)"
+      bank_url:
+        description: "题库包下载地址(留空=取最近一个带题库的 release 资产)"
         required: false
-        default: false
-        type: boolean
+        default: ""
       include_ipa:
         description: "构建并附带签名 ipa(需先配置签名 secrets)"
         required: false
@@ -500,38 +499,78 @@ jobs:
           path: "${{ runner.temp }}/ipa/*.ipa"
           if-no-files-found: error
 
-  # Reserved slot for the question-bank snapshot. The data is gitignored, so
-  # it is normally absent from the CI workspace — the job then fails with a
-  # clear message instead of silently producing an empty release. Once the
-  # public/private decision is made (see README), either commit the data into
-  # a private fork or upload the locally packaged zip manually:
-  #   zip -r 题库导出-vX.Y.Z.zip apps/bank/data
-  #   gh release upload <tag> 题库导出-vX.Y.Z.zip
+  # 题库快照:随 release 分发(iOS App 里「我的 > 题库 > 导入题库」直接吃这个包)。
+  # 数据本身仍不入库(gitignore,上游 IP),所以按下面的顺序解析来源:
+  #   1. 工作区里有 apps/bank/data     → 用 snapshot CLI 现场打包(可复现,首选)
+  #   2. 手动运行且给了 bank_url        → 直接下载
+  #   3. 否则取最近一个带题库包的 release 资产(首次需要 bootstrap 传一次)
+  # 三条都落空就 fail:宁可让发布停下,也不要静默发出一个没有题库的版本。
+  # 无论走哪条路,发布前都用 snapshot CLI 校验一遍(CRC32/长度/sha256/manifest 对齐)。
   bank-snapshot:
-    name: 题库快照 (默认关闭)
+    name: 题库快照
     needs: version
-    if: inputs.include_bank == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
 
-      - name: Verify bank data is present in the workspace
-        run: |
-          if [ ! -d apps/bank/data ] || [ -z "$(ls -A apps/bank/data 2>/dev/null)" ]; then
-            echo "::error::题库数据不在 CI 工作区(gitignore)。要么改用私有仓库并纳入数据,要么在本地打包后手动 gh release upload。"
-            exit 1
-          fi
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
 
-      - name: Package bank snapshot
+      - name: Resolve bank package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BANK_URL: ${{ inputs.bank_url }}
         run: |
-          zip -r -q "题库导出-${{ needs.version.outputs.version }}.zip" apps/bank/data
+          mkdir -p "$RUNNER_TEMP/bank"
+          if [ -d apps/bank/data ] && [ -n "$(find apps/bank/data -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]; then
+            echo "来源: 工作区 apps/bank/data(现场打包)"
+            node apps/bank/scripts/snapshot-bank.js --out "$RUNNER_TEMP/bank/lanjing-bank.zip"
+            exit 0
+          fi
+          if [ -n "$BANK_URL" ]; then
+            echo "来源: bank_url"
+            curl -fsSL "$BANK_URL" -o "$RUNNER_TEMP/bank/lanjing-bank.zip"
+            exit 0
+          fi
+          prev=""
+          while read -r tag; do
+            [ -n "$tag" ] || continue
+            if gh release view "$tag" --json assets -q '.assets[].name' | grep -qE 'bank.*\.zip$'; then
+              prev="$tag"
+              break
+            fi
+          done < <(gh release list --limit 30 --json tagName -q '.[].tagName')
+          if [ -n "$prev" ]; then
+            echo "来源: release $prev 的题库资产"
+            gh release download "$prev" --pattern '*bank*.zip' --dir "$RUNNER_TEMP/bank"
+            # 资产名可能不是 lanjing-bank.zip(历史版本),统一改名后再校验。
+            found=""
+            for f in "$RUNNER_TEMP"/bank/*.zip; do
+              [ -f "$f" ] && found="$f" && break
+            done
+            if [ -z "$found" ]; then
+              echo "::error::release $prev 里没有下到题库包"
+              exit 1
+            fi
+            [ "$found" = "$RUNNER_TEMP/bank/lanjing-bank.zip" ] || mv "$found" "$RUNNER_TEMP/bank/lanjing-bank.zip"
+            exit 0
+          fi
+          echo "::error::找不到题库包来源:工作区没有 apps/bank/data,没给 bank_url,历史 release 里也没有题库资产。先手动 bootstrap 一次:gh release upload <tag> lanjing-bank-*.zip --clobber"
+          exit 1
+
+      - name: Verify package
+        run: |
+          ls -lh "$RUNNER_TEMP/bank/lanjing-bank.zip"
+          node apps/bank/scripts/snapshot-bank.js --verify "$RUNNER_TEMP/bank/lanjing-bank.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: bank-snapshot
-          path: "题库导出-${{ needs.version.outputs.version }}.zip"
+          path: "${{ runner.temp }}/bank/lanjing-bank.zip"
           if-no-files-found: error
 
   release:
@@ -562,6 +601,11 @@ jobs:
             [ -f "$f" ] || continue
             mv "$f" "${{ runner.temp }}"/assets/LanjingQuiz-android-${{ needs.version.outputs.version }}.apk
           done
+          # 题库包同样平台化命名(bank-snapshot 的解析按 *bank*.zip 匹配)
+          if [ -f "${{ runner.temp }}/assets/lanjing-bank.zip" ]; then
+            mv "${{ runner.temp }}/assets/lanjing-bank.zip" \
+               "${{ runner.temp }}/assets/LanjingQuiz-bank-${{ needs.version.outputs.version }}.zip"
+          fi
           assets=()
           for f in "${{ runner.temp }}"/assets/*; do
             [ -f "$f" ] && assets+=("$f")

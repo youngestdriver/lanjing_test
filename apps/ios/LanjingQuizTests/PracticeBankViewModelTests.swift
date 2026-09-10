@@ -1,4 +1,5 @@
 import XCTest
+import SwiftData
 @testable import LanjingQuiz
 
 /// In-memory practice-session store: records saves/clears, can be preloaded
@@ -100,8 +101,28 @@ final class PracticeBankViewModelTests: XCTestCase {
 
     private func makeVM(storage: FakeBankStorage, sessionStore: FakePracticeSessionStore,
                         progressStore: FakePracticeProgressStore = FakePracticeProgressStore()) -> PracticeBankViewModel {
-        PracticeBankViewModel(appState: AppState(), storage: storage, sessionStore: sessionStore,
-                              progressStore: progressStore)
+        PracticeBankViewModel(appState: AppState(bankDatabase: try! BankDatabase(inMemory: true)),
+                              storage: storage, sessionStore: sessionStore,
+                              progressStore: progressStore,
+                              database: makeDatabase(categoryTexts: storage.categoryTexts))
+    }
+
+    /// In-memory SwiftData bank seeded from the JSONL fixture texts — the
+    /// crawl's replaceCurrent minus the remote-image fetch (questions + the
+    /// current version row only). Empty texts yield an empty (no version) DB,
+    /// which the VM must treat as "missing data".
+    private func makeDatabase(categoryTexts: [String: String]) -> BankDatabase {
+        let db = try! BankDatabase(inMemory: true)
+        let questions = categoryTexts.values.flatMap { BankLogic.parseJSONL($0) }
+        guard !questions.isEmpty else { return db }
+        let context = ModelContext(db.container)
+        let version = BankVersion(questionCount: questions.count, isCurrent: true)
+        context.insert(version)
+        for question in questions {
+            context.insert(try! BankQuestionRecord(from: question, versionID: version.id))
+        }
+        try! context.save()
+        return db
     }
 
     // MARK: - tapOption (问题 2 regression pins)

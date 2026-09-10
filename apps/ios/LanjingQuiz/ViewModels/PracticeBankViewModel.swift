@@ -23,6 +23,7 @@ final class PracticeBankViewModel {
     private let facade: PracticeUpstreamClient
     private let sessionStore: any PracticeSessionStoring
     private let progressStore: any PracticeProgressStoring
+    private let database: BankDatabase?
     /// 进度注册表内存副本(键 "\(category)/\(subCategory)")。
     private var progress: [String: PracticeProgress] = [:]
 
@@ -32,6 +33,12 @@ final class PracticeBankViewModel {
     var phase: Phase = .idle
     var meta: BankMeta?
     var subcategories: [(name: String, count: Int)] = []
+    /// The category `subcategories` currently describes; nil before any load.
+    /// The subcategory-list screen renders rows only when this matches its own
+    /// category — stale rows from another category never flash on entry.
+    private(set) var subcategoryCategory: String?
+    /// 题型细分列表加载中(进入题型页到读到库之间显示 loading)。
+    private(set) var isLoadingSubcategories = false
     var session: PracticeSession?
     /// True when the current session was resumed from disk. Shown as a one-off
     /// banner by the quiz view; consumeResumeNotice() clears it (not persisted).
@@ -39,12 +46,14 @@ final class PracticeBankViewModel {
 
     init(appState: AppState, storage: BankStorage? = nil, facade: PracticeUpstreamClient? = nil,
          sessionStore: (any PracticeSessionStoring)? = nil,
-         progressStore: (any PracticeProgressStoring)? = nil) {
+         progressStore: (any PracticeProgressStoring)? = nil,
+         database: BankDatabase? = nil) {
         self.appState = appState
         self.storage = storage ?? appState.bankStorage
         self.facade = facade ?? PracticeUpstreamClient(api: appState.api)
         self.sessionStore = sessionStore ?? appState.practiceSessionStore
         self.progressStore = progressStore ?? appState.practiceProgressStore
+        self.database = database ?? appState.bankDatabase
     }
 
     // MARK: - Bank availability
@@ -58,6 +67,8 @@ final class PracticeBankViewModel {
         phase = .idle
         meta = nil
         subcategories = []
+        subcategoryCategory = nil
+        isLoadingSubcategories = false
         session = nil
         resumedFromDisk = false
         Task { try? await sessionStore.clear() }
@@ -70,8 +81,18 @@ final class PracticeBankViewModel {
     /// blocks all practice UI while .downloading.
     func ensureBankReady() async {
         guard phase == .idle else { return }
-        if storage.isPopulated(), let meta = storage.loadMeta() {
-            self.meta = meta
+        // BankVersion is a SwiftData model (explicitly non-Sendable), so it
+        // must not cross the MainActor.run boundary — and the view model is
+        // already @MainActor, so the database's @MainActor accessors are
+        // callable directly.
+        if let database, let dbMeta = try? database.currentVersion() {
+            let counts = (try? database.categoryCounts()) ?? [:]
+            let papers = (try? JSONDecoder().decode([String: Bool].self,
+                                                    from: Data(dbMeta.paperProgressJSON.utf8))) ?? [:]
+            meta = BankMeta(version: 1, round: 0,
+                            lastRun: dbMeta.createdAt.ISO8601Format(),
+                            targets: BankLogic.categories,
+                            counts: counts, papers: papers)
             phase = .ready
             await loadProgressIfNeeded()
             return
@@ -99,7 +120,7 @@ final class PracticeBankViewModel {
         }
         phase = .downloading(PracticeUpstreamClient.CrawlProgress(index: 0, total: 0, paperName: ""))
         do {
-            try await facade.crawlAllPapers(storage: storage, refresh: force) { [weak self] progress in
+            try await facade.crawlAllPapers(storage: storage, database: database, refresh: force) { [weak self] progress in
                 // The facade is @MainActor, so this callback is already on it.
                 if case .downloading = self?.phase { self?.phase = .downloading(progress) }
             }
@@ -127,16 +148,37 @@ final class PracticeBankViewModel {
 
     /// Loads and groups one category's questions (called from the subcategory
     /// list's .task; navigation itself is driven by NavigationStack links).
+    /// The list is tagged with the category it describes and cleared
+    /// synchronously, so a screen for another category never renders the
+    /// previous category's rows while the async read is pending; a stale read
+    /// (superseded by a newer openCategory) is dropped.
     func openCategory(_ category: String) async {
-        guard let text = storage.loadCategoryText(category) else {
-            phase = .failed("本地题库缺少 \(category).jsonl，请在 我的 > 更新题库 重新爬取")
+        subcategoryCategory = category
+        isLoadingSubcategories = true
+        subcategories = []
+        defer {
+            if subcategoryCategory == category { isLoadingSubcategories = false }
+        }
+        guard let database else {
+            phase = .failed("数据库读取失败，请在 我的 > 更新题库 重新获取")
             return
         }
-        let questions: [BankQuestion] = await Task.detached(priority: .userInitiated) {
-            BankLogic.parseJSONL(text)
-        }.value
-        let groups = BankLogic.groupBySubcategory(questions)
-        subcategories = groups.map { (name: $0.name, count: $0.questions.count) }
+        // database.questions is @MainActor and synchronous; run it directly
+        // and only commit the result if still the requested category.
+        let result: Result<[BankQuestion], Error>
+        do {
+            result = .success(try database.questions(category: category))
+        } catch {
+            result = .failure(error)
+        }
+        guard subcategoryCategory == category else { return }
+        switch result {
+        case .success(let questions):
+            subcategories = BankLogic.groupBySubcategory(questions)
+                .map { (name: $0.name, count: $0.questions.count) }
+        case .failure:
+            phase = .failed("数据库读取失败，请在 我的 > 更新题库 重新获取")
+        }
     }
 
     /// Local-only session start (no network): parse the category file, filter
@@ -147,25 +189,27 @@ final class PracticeBankViewModel {
     /// and persisted once. Returns whether a saved run was resumed.
     @discardableResult
     func resumeOrStart(category: String, subCategory: String) async -> Bool {
-        guard let text = storage.loadCategoryText(category) else {
-            phase = .failed("本地题库缺少 \(category).jsonl，请在 我的 > 更新题库 重新爬取")
+        if let database, let questions = try? await MainActor.run(body: { try database.questions(category: category, subCategory: subCategory) }) {
+            // 空库/空类目说明数据源不可用(未爬取或 DB 被清空):绝不静默
+            // 进入空会话(会瞬间完成并让答题 UI 空转)。
+            guard !questions.isEmpty else {
+                phase = .failed("数据库读取失败，请在 我的 > 更新题库 重新获取")
+                return false
+            }
+            await loadProgressIfNeeded()
+            let ordered = shuffleEnabled(category: category)
+                ? BankLogic.shuffledKeepingGroups(questions, seed: UInt64.random(in: .min ... .max))
+                : questions
+            let saved = await sessionStore.load()
+            if let resume = BankLogic.resumeCandidate(saved: saved, category: category, subCategory: subCategory, ordered: ordered) {
+                session = resume; resumedFromDisk = true; return true
+            }
+            session = PracticeSession(category: category, subCategory: subCategory, questions: ordered)
+            resumedFromDisk = false
+            persist()
             return false
         }
-        await loadProgressIfNeeded()
-        let questions = BankLogic.parseJSONL(text).filter { $0.subCategory == subCategory }
-        let ordered = shuffleEnabled(category: category)
-            ? BankLogic.shuffledKeepingGroups(questions, seed: UInt64.random(in: .min ... .max))
-            : questions
-        let saved = await sessionStore.load()
-        if let resume = BankLogic.resumeCandidate(saved: saved, category: category, subCategory: subCategory,
-                                                  ordered: ordered) {
-            session = resume
-            resumedFromDisk = true
-            return true
-        }
-        session = PracticeSession(category: category, subCategory: subCategory, questions: ordered)
-        resumedFromDisk = false
-        persist()
+        phase = .failed("数据库读取失败，请在 我的 > 更新题库 重新获取")
         return false
     }
 

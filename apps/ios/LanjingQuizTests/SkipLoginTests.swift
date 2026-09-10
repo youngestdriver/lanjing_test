@@ -8,7 +8,7 @@ final class SkipLoginTests: XCTestCase {
 
     @MainActor
     func testSkipLoginRoutesToExamList() {
-        let appState = AppState()
+        let appState = AppState(bankDatabase: try! BankDatabase(inMemory: true))
         XCTAssertEqual(appState.route, .launching, "开屏初始应处于 launching 判定态,而不是直接亮登录页")
         appState.skipLogin()
         XCTAssertEqual(appState.route, .examList)
@@ -16,7 +16,7 @@ final class SkipLoginTests: XCTestCase {
 
     @MainActor
     func testNotLoggedInKeepsCurrentRoute() {
-        let appState = AppState()
+        let appState = AppState(bankDatabase: try! BankDatabase(inMemory: true))
         appState.route = .examList
         appState.handle(APIError.notLoggedIn)
         XCTAssertEqual(appState.route, .examList, "跳过登录后 notLoggedIn 不应再踢回登录页")
@@ -25,7 +25,7 @@ final class SkipLoginTests: XCTestCase {
 
     @MainActor
     func testSessionExpiredStillRedirectsToLogin() {
-        let appState = AppState()
+        let appState = AppState(bankDatabase: try! BankDatabase(inMemory: true))
         appState.route = .examList
         appState.handle(APIError.sessionExpired)
         XCTAssertEqual(appState.route, .login, "会话过期必须回到登录页")

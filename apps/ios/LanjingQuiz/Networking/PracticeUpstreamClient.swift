@@ -223,9 +223,12 @@ final class PracticeUpstreamClient {
     /// Either way: a wfs=1 paper creates a fresh upstream attempt which is
     /// best-effort-ended after fetching; wfs=0 papers are read-only, never
     /// ended, and no answer is ever submitted.
-    func crawlAllPapers(storage: BankStorage, refresh: Bool = false, progress: @escaping (CrawlProgress) -> Void) async throws {
+    func crawlAllPapers(storage: BankStorage, database: BankDatabase? = nil, refresh: Bool = false, progress: @escaping (CrawlProgress) -> Void) async throws {
         // Best-effort crawl logging — a log-write failure never breaks the crawl.
-        let log = { (entry: CrawlLogEntry) in try? storage.appendCrawlLog([entry]) }
+        let log = { (entry: CrawlLogEntry) in
+            try? storage.appendCrawlLog([entry])
+            if let database { try? database.appendLog(entry) }
+        }
 
         let papers: [Exam]
         do {
@@ -347,6 +350,9 @@ final class PracticeUpstreamClient {
         } else {
             try storage.saveMeta(finalMeta)
         }
+        if let database {
+            try await database.replaceCurrent(with: byCategory.isEmpty ? Self.loadQuestions(storage: storage) : byCategory, papers: papersDone)
+        }
     }
 
     /// Human-readable error text for the crawl log. APIError carries a
@@ -368,6 +374,12 @@ final class PracticeUpstreamClient {
             }
         }
         return ids
+    }
+
+    private static func loadQuestions(storage: BankStorage) -> [String: [BankQuestion]] {
+        Dictionary(uniqueKeysWithValues: BankLogic.categories.map { category in
+            (category, storage.loadCategoryText(category).map(BankLogic.parseJSONL) ?? [])
+        })
     }
 
     /// One JSONL line per record (write-side of the collector's bank format).

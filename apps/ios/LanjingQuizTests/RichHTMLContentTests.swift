@@ -171,4 +171,89 @@ final class RichHTMLContentTests: XCTestCase {
     func testStripTrailingFillerEmptiesFillerOnlyDocument() {
         XCTAssertEqual(RichHTMLContent.stripTrailingFiller("<p><br/></p><p>&nbsp;</p>"), "")
     }
+
+    // MARK: - Paragraph segmentation
+
+    func testParagraphPartsTextOnly() {
+        let parts = RichHTMLContent.paragraphParts(of: "<p>甲</p><p>乙</p>")
+        XCTAssertEqual(parts.count, 2)
+        guard case .text(let first) = parts[0], case .text(let second) = parts[1] else {
+            return XCTFail("expected two text parts")
+        }
+        XCTAssertTrue(first.contains("甲"))
+        XCTAssertTrue(second.contains("乙"))
+    }
+
+    func testParagraphPartsStandaloneImageBlock() {
+        let img = "https://x.com/chart.png"
+        let parts = RichHTMLContent.paragraphParts(
+            of: "<p>题干文字</p><p><img src=\"\(img)\" class=\"ksx-ue-question-image\"/></p><p>选项文字</p>"
+        )
+        XCTAssertEqual(parts.count, 3)
+        guard case .image(let url) = parts[1] else {
+            return XCTFail("standalone image block must be an image part, got \(parts[1])")
+        }
+        XCTAssertEqual(url, img)
+    }
+
+    func testParagraphPartsInlineFormulaStaysMixed() {
+        // 行内公式:图与文字同一段 → 整段走 WebView 保真。
+        let block = "<p>若 a=<img flag=\"tex\" src=\"https://x.com/f.png\">,则 ( )</p>"
+        let parts = RichHTMLContent.paragraphParts(of: block)
+        XCTAssertEqual(parts.count, 1)
+        guard case .mixed(let inner) = parts[0] else {
+            return XCTFail("inline formula block must stay mixed, got \(parts[0])")
+        }
+        XCTAssertEqual(inner, block)
+    }
+
+    func testParagraphPartsImageOnlyOption() {
+        let img = "https://x.com/formula.png"
+        let parts = RichHTMLContent.paragraphParts(of: "<p><img flag=\"tex\" src=\"\(img)\"> </p>")
+        XCTAssertEqual(parts.count, 1)
+        guard case .image(let url) = parts[0] else {
+            return XCTFail("image-only option must be an image part, got \(parts[0])")
+        }
+        XCTAssertEqual(url, img)
+    }
+
+    func testParagraphPartsResidualText() {
+        let parts = RichHTMLContent.paragraphParts(of: "<p>甲</p>残留")
+        XCTAssertEqual(parts.count, 2)
+        guard case .text(let residual) = parts[1] else {
+            return XCTFail("residual text should be a text part")
+        }
+        XCTAssertTrue(residual.contains("残留"))
+    }
+
+    // MARK: - contentParts(本地化接缝)
+
+    /// 回归锁:localize 把 src 换成 data: URI,一旦在**分段之前**做,
+    /// 独立图段就会拿到 data: URI —— 而 LocalBankImage 是按 remote URL
+    /// 查 SwiftData 的,永远查不中 → 整块图永久灰条。分段必须先于本地化:
+    /// 图段保留原始 remote URL,只有混排段(WebView)才拿本地化后的 HTML。
+    @MainActor
+    func testImagePartsKeepRawRemoteURLWhileMixedPartsGetLocalized() {
+        let remote = "https://x.com/chart.png"
+        let html = "<p>材料</p><p><img src=\"\(remote)\"></p><p>若 a=<img src=\"\(remote)\">,则（ ）</p>"
+        let parts = RichHTMLContent.contentParts(of: html) { localized in
+            localized.replacingOccurrences(of: remote, with: "data:image/png;base64,AAAA")
+        }
+        XCTAssertEqual(parts.count, 3)
+
+        guard case .text(let textHTML) = parts[0] else {
+            return XCTFail("expected text part, got \(parts[0])")
+        }
+        XCTAssertEqual(textHTML, "<p>材料</p>")
+
+        guard case .image(let imageURL) = parts[1] else {
+            return XCTFail("standalone image block must be an image part, got \(parts[1])")
+        }
+        XCTAssertEqual(imageURL, remote, "独立图段必须携带原始 remote URL,否则 resolver 查不到 → 永久灰条")
+
+        guard case .mixed(let mixedHTML) = parts[2] else {
+            return XCTFail("inline formula block must stay mixed, got \(parts[2])")
+        }
+        XCTAssertTrue(mixedHTML.contains("data:image/png"), "混排段交给 WebView,必须已本地化")
+    }
 }
