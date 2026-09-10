@@ -203,13 +203,15 @@ final class PracticeFlowUITests: XCTestCase {
         let header = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 1/'")).firstMatch
         XCTAssertTrue(header.waitForExistence(timeout: 10), "quiz screen is blank — no question header")
 
-        // The question 题干 is the FIRST web view in the tree (headerRow is
-        // plain text; option rows follow). Web-view frames are not
-        // KVC-compliant, so poll instead of NSPredicate expectations.
-        // With the paged TabView the (boundBy:) order no longer equals the
-        // page order — take the stem that is actually on-screen.
-        let questionWebView = try XCTUnwrap(visibleStemWebView(app))
-        XCTAssertTrue(waitForElement(questionWebView, shorterThan: 200, timeout: 10),
+        // 题干 (mock questions carry no stem field — the long/short text lives
+        // in `question`) renders natively for text-only HTML; RichHTMLContent
+        // exposes itself as an accessibility container (paragraphs may be many
+        // Text segments), so measure the container element — its frame is the
+        // combined bounding box of all paragraph segments. Only the current
+        // page is accessibility-visible, so the identifier matches one element.
+        let questionStem = app.otherElements.matching(identifier: "question-text").firstMatch
+        XCTAssertTrue(questionStem.waitForExistence(timeout: 10), "question text element missing")
+        XCTAssertTrue(waitForElement(questionStem, shorterThan: 200, timeout: 10),
                       "short question 题干 did not render short")
 
         // Short → long: answering q4 and advancing to the long q5 must grow
@@ -217,9 +219,9 @@ final class PracticeFlowUITests: XCTestCase {
         answerCurrentQuestion(app, letter: "A", advance: "下一题")
         let header2 = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 2/'")).firstMatch
         XCTAssertTrue(header2.waitForExistence(timeout: 10), "question 2 header missing")
-        XCTAssertTrue(waitForElement(questionWebView, tallerThan: 400, timeout: 10),
+        XCTAssertTrue(waitForElement(questionStem, tallerThan: 400, timeout: 10),
                       "long question 题干 did not render tall (问题 1)")
-        let longHeight = questionWebView.frame.height
+        let longHeight = questionStem.frame.height
 
         // Long → short (the user's exact complaint): jump back to q4 via the
         // answer card — the short 题干 must shrink, not keep the long height.
@@ -229,9 +231,9 @@ final class PracticeFlowUITests: XCTestCase {
         XCTAssertTrue(header1.waitForExistence(timeout: 5), "jump back to question 1 did not move the header")
         XCTAssertTrue(dots.waitForExistence(timeout: 2), "answer card dismissed after dot tap — 考试式卡片应保持打开")
         closeAnswerCard(app, dots: dots)
-        XCTAssertTrue(waitForElement(questionWebView, shorterThan: 200, timeout: 10),
+        XCTAssertTrue(waitForElement(questionStem, shorterThan: 200, timeout: 10),
                       "short question kept the previous long height (问题 1)")
-        XCTAssertLessThan(questionWebView.frame.height, longHeight * 0.6,
+        XCTAssertLessThan(questionStem.frame.height, longHeight * 0.6,
                           "short question 题干 did not shrink relative to the long one")
     }
 
@@ -406,18 +408,14 @@ final class PracticeFlowUITests: XCTestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.25))
         }
         let matches = app.buttons.matching(identifier: letter).allElementsBoundByIndex
-        return matches.first(where: \.isHittable) ?? matches.first!
+        if let match = matches.first(where: \.isHittable) ?? matches.first {
+            return match
+        }
+        XCTFail("option button \(letter) not found within deadline")
+        return app.buttons.matching(identifier: letter).firstMatch
     }
 
     /// 屏幕上可见的题干 web view(分页后元素(boundBy:) 顺序不再等于页码)。
-    private func visibleStemWebView(_ app: XCUIApplication) -> XCUIElement? {
-        let screen = app.windows.firstMatch.frame
-        return app.webViews.allElementsBoundByIndex.first { view in
-            let frame = view.frame
-            return frame.minX >= 0 && frame.maxX <= screen.width && frame.maxY > 0
-        }
-    }
-
     /// Tap an option letter, then the reveal button ("下一题" / "完成").
     private func answerCurrentQuestion(_ app: XCUIApplication, letter: String, advance: String) {
         let option = optionButton(app, letter)

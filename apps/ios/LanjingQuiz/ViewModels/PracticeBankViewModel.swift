@@ -33,6 +33,12 @@ final class PracticeBankViewModel {
     var phase: Phase = .idle
     var meta: BankMeta?
     var subcategories: [(name: String, count: Int)] = []
+    /// The category `subcategories` currently describes; nil before any load.
+    /// The subcategory-list screen renders rows only when this matches its own
+    /// category — stale rows from another category never flash on entry.
+    private(set) var subcategoryCategory: String?
+    /// 题型细分列表加载中(进入题型页到读到库之间显示 loading)。
+    private(set) var isLoadingSubcategories = false
     var session: PracticeSession?
     /// True when the current session was resumed from disk. Shown as a one-off
     /// banner by the quiz view; consumeResumeNotice() clears it (not persisted).
@@ -61,6 +67,8 @@ final class PracticeBankViewModel {
         phase = .idle
         meta = nil
         subcategories = []
+        subcategoryCategory = nil
+        isLoadingSubcategories = false
         session = nil
         resumedFromDisk = false
         Task { try? await sessionStore.clear() }
@@ -140,13 +148,37 @@ final class PracticeBankViewModel {
 
     /// Loads and groups one category's questions (called from the subcategory
     /// list's .task; navigation itself is driven by NavigationStack links).
+    /// The list is tagged with the category it describes and cleared
+    /// synchronously, so a screen for another category never renders the
+    /// previous category's rows while the async read is pending; a stale read
+    /// (superseded by a newer openCategory) is dropped.
     func openCategory(_ category: String) async {
-        if let database, let questions = try? await MainActor.run(body: { try database.questions(category: category) }) {
-            let groups = BankLogic.groupBySubcategory(questions)
-            subcategories = groups.map { (name: $0.name, count: $0.questions.count) }
+        subcategoryCategory = category
+        isLoadingSubcategories = true
+        subcategories = []
+        defer {
+            if subcategoryCategory == category { isLoadingSubcategories = false }
+        }
+        guard let database else {
+            phase = .failed("数据库读取失败，请在 我的 > 更新题库 重新获取")
             return
         }
-        phase = .failed("数据库读取失败，请在 我的 > 更新题库 重新获取")
+        // database.questions is @MainActor and synchronous; run it directly
+        // and only commit the result if still the requested category.
+        let result: Result<[BankQuestion], Error>
+        do {
+            result = .success(try database.questions(category: category))
+        } catch {
+            result = .failure(error)
+        }
+        guard subcategoryCategory == category else { return }
+        switch result {
+        case .success(let questions):
+            subcategories = BankLogic.groupBySubcategory(questions)
+                .map { (name: $0.name, count: $0.questions.count) }
+        case .failure:
+            phase = .failed("数据库读取失败，请在 我的 > 更新题库 重新获取")
+        }
     }
 
     /// Local-only session start (no network): parse the category file, filter

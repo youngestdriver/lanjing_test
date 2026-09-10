@@ -167,6 +167,24 @@ test("collectImageSources gathers distinct decoded img URLs", () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("collectImageSources includes stem-only images (一材料多题的共用图表)", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lanjing-qimg-"));
+  const bankDir = path.join(dir, "bank");
+  fs.mkdirSync(bankDir, { recursive: true });
+  fs.writeFileSync(path.join(bankDir, "资料分析.jsonl"), [
+    JSON.stringify({
+      category: "资料分析",
+      stem: '<p>某单位7月份用电情况如下图所示<img src="https://a.cn/chart.png"></p>',
+      question: "哪两项用电量的比值最接近3：17（ ）",
+      analysis: "",
+      options: ["A", "B"],
+    }),
+  ].join("\n") + "\n", "utf8");
+  const sources = collectImageSources(bankDir, TARGET_CATEGORIES);
+  assert.deepEqual([...sources], ["https://a.cn/chart.png"]);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("downloadImages fetches, dedups by URL and skips existing files", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lanjing-qimg-"));
   const outDir = path.join(dir, "out");

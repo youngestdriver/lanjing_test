@@ -78,6 +78,16 @@ final class AppState {
             // 进度注册表同样清零:入口行回到纯 "N 题" 基线(UI 测试断言)。
             try? await practiceProgressStore.clear()
         }
+        // UI-testing hook: 从磁盘上的题库包冷启动导入,让练习流程完全不依赖
+        // 网络(不启 mock 上游、不登录)。用法:
+        //   app.launchArguments = ["-import-bank", "/abs/path/lanjing-bank-YYYYMMDD.zip"]
+        // 模拟器 App 读得到宿主路径;真机沙盒内读不到,故只在 DEBUG 生效。
+        if let flag = ProcessInfo.processInfo.arguments.firstIndex(of: "-import-bank"),
+           flag + 1 < ProcessInfo.processInfo.arguments.count,
+           let database = bankDatabase {
+            let packageURL = URL(fileURLWithPath: ProcessInfo.processInfo.arguments[flag + 1])
+            _ = try? await BankImporter.run(packageAt: packageURL, database: database, storage: bankStorage)
+        }
         #endif
         let clock = ContinuousClock()
         let launchStart = clock.now
@@ -167,6 +177,13 @@ final class AppState {
     /// session; re-entering the practice tab re-crawls everything from
     /// scratch. (PracticeBankViewModel.bankWasDeleted clears the session file
     /// too — double insurance.)
+    /// 本地库被内容替换(导入题库)后通知所有题库 VM 重读——与 deleteBank 共用
+    /// 同一个信号:VM 收到后重置 phase 并 ensureBankReady()(这次会读到新库而
+    /// 不是重爬),练习会话与进度注册表随之清空(旧题 ID 已无意义)。
+    func notifyBankChanged() {
+        bankResetVersion += 1
+    }
+
     func deleteBank() {
         try? bankStorage.removeAll()
         try? bankDatabase?.resetAll()

@@ -85,6 +85,7 @@ struct PracticeOptionRowView: View {
                         fontSize: 16,
                         allowsTextSelection: false
                     )
+                    .id("\(question.id)-option-\(letter)")
                 }
                 Spacer(minLength: 0)
             }
@@ -96,7 +97,13 @@ struct PracticeOptionRowView: View {
         }
         .buttonStyle(.plain)
         .disabled(isAnswered || isEmptySlot)
-        .accessibilityIdentifier(accessibilityID)
+        // Default state: identifier = the keycap letter itself. The UI tests
+        // look the option up by letter — with native text rendering the
+        // button label is "A, <选项文字>" now, so matching can't rely on the
+        // label (XCUI identifier query falls back to label, which used to be
+        // exactly "A" back when the row content lived in a WKWebView).
+        // Answered states keep their verdict ids ("option-B-wrong").
+        .accessibilityIdentifier(accessibilityID.isEmpty ? letter : accessibilityID)
     }
 
     private var keycap: some View {
