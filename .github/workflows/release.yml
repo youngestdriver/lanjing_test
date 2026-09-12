@@ -67,7 +67,7 @@ jobs:
 
   # 题库快照:随 release 分发(iOS App 里「我的 > 题库 > 导入题库」直接吃这个包)。
   # 数据本身仍不入库(gitignore,上游 IP),所以按下面的顺序解析来源:
-  #   1. 工作区里有 apps/bank/data     → 用 snapshot CLI 现场打包(可复现,首选)
+  #   1. 工作区里有 data/             → 用 snapshot CLI 现场打包(可复现,首选)
   #   2. 手动运行且给了 bank_url        → 直接下载
   #   3. 否则取最近一个带题库包的 release 资产(首次需要 bootstrap 传一次)
   # 三条都落空就 fail:宁可让发布停下,也不要静默发出一个没有题库的版本。
@@ -91,9 +91,9 @@ jobs:
           BANK_URL: ${{ inputs.bank_url }}
         run: |
           mkdir -p "$RUNNER_TEMP/bank"
-          if [ -d apps/bank/data ] && [ -n "$(find apps/bank/data -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]; then
-            echo "来源: 工作区 apps/bank/data(现场打包)"
-            node apps/bank/scripts/snapshot-bank.js --out "$RUNNER_TEMP/bank/lanjing-bank.zip"
+          if [ -d data ] && [ -n "$(find data -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]; then
+            echo "来源: 工作区 data/(现场打包)"
+            node scripts/snapshot-bank.js --out "$RUNNER_TEMP/bank/lanjing-bank.zip"
             exit 0
           fi
           if [ -n "$BANK_URL" ]; then
@@ -124,13 +124,13 @@ jobs:
             [ "$found" = "$RUNNER_TEMP/bank/lanjing-bank.zip" ] || mv "$found" "$RUNNER_TEMP/bank/lanjing-bank.zip"
             exit 0
           fi
-          echo "::error::找不到题库包来源:工作区没有 apps/bank/data,没给 bank_url,历史 release 里也没有题库资产。先手动 bootstrap 一次:gh release upload <tag> lanjing-bank-*.zip --clobber"
+          echo "::error::找不到题库包来源:工作区没有 data/,没给 bank_url,历史 release 里也没有题库资产。先手动 bootstrap 一次:gh release upload <tag> lanjing-bank-*.zip --clobber"
           exit 1
 
       - name: Verify package
         run: |
           ls -lh "$RUNNER_TEMP/bank/lanjing-bank.zip"
-          node apps/bank/scripts/snapshot-bank.js --verify "$RUNNER_TEMP/bank/lanjing-bank.zip"
+          node scripts/snapshot-bank.js --verify "$RUNNER_TEMP/bank/lanjing-bank.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

@@ -1,16 +1,25 @@
 {
   "name": "lanjing-bank",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "Lanjing Weike question-bank tool: collector, classifier, snapshot. Consumed by lanjing-web as a git dependency.",
+  "description": "Lanjing Weike question-bank tool: collector, classifier, snapshot, export. Consumed by lanjing-web as a git dependency.",
   "exports": {
-    ".": "./apps/bank/lib/question-bank.js",
-    "./classifier": "./apps/bank/lib/question-classifier.js"
+    ".": "./lib/question-bank.js",
+    "./classifier": "./lib/question-classifier.js"
   },
   "files": [
-    "apps/bank/lib"
+    "lib"
   ],
+  "scripts": {
+    "collect": "node scripts/collect-bank.js",
+    "classify": "node scripts/classify-bank.js",
+    "export": "node scripts/export-bank.js",
+    "snapshot": "node scripts/snapshot-bank.js",
+    "test": "node --test test/*.test.js",
+    "check": "node --check lib/question-bank.js && node --check lib/question-classifier.js && node --check lib/bank-export.js && node --check lib/snapshot.js && node --check lib/parsers.js && node --check lib/upstream.js && node --check scripts/collect-bank.js && node --check scripts/classify-bank.js && node --check scripts/export-bank.js && node --check scripts/snapshot-bank.js && node --check test/question-bank.test.js && node --check test/question-classifier.test.js && node --check test/export-bank.test.js && node --check test/snapshot-bank.test.js && node --check test/upstream.test.js"
+  },
   "engines": {
     "node": ">=22"
-  }
+  },
+  "dependencies": {}
 }

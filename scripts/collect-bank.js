@@ -9,7 +9,7 @@
 //         [--idle-limit N] [--round-delay ms] [--bank-dir <path>]
 //         [--targets a,b,c]
 //
-// Data lands in apps/bank/data/ (gitignored): one JSONL file per category,
+// Data lands in data/ (gitignored): one JSONL file per category,
 // meta.json for resume, session_cookies.txt for the login session. Any
 // interrupted run continues where it left off when rerun on the same bank
 // dir.
@@ -30,7 +30,7 @@ const USAGE = `用法: node scripts/collect-bank.js [选项]
   --max-rounds N    最大轮数上限 (默认 200)
   --idle-limit N    连续 N 轮无新题即停止 (默认 3)
   --round-delay ms  每轮之间的等待 (默认 1500)
-  --bank-dir <path> 题库输出目录 (默认 apps/bank/data)
+  --bank-dir <path> 题库输出目录 (默认 data/)
   --targets a,b,c   目标分类 (默认 言语理解,数字运算,逻辑推理,资料分析,特有题型)
   --skip-in-progress 跳过进行中的作答 (默认会只读收集用户进行中的卷，不提交)
   --refresh         目标分类的 jsonl 改名 .bak 并清空续接状态，重新爬取全部试卷
@@ -161,9 +161,9 @@ function applyRefresh(bankDir, targets) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  // The bank lives in its own top-level directory (apps/bank): data and the
-  // collector's own session live under apps/bank/data/, independent of the
-  // web app's .local state.
+  // The bank lives in its own top-level directory (data/ at the repo root):
+  // data and the collector's own session live under data/, independent of any
+  // web app state.
   const bankDir = path.resolve(opts.bankDir || path.join(__dirname, "..", "data"));
   const targets = opts.targets || TARGET_CATEGORIES;
 
