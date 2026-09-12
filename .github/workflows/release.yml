@@ -1,6 +1,6 @@
 name: Release
 
-# Auto-publishes a release on every push to main (桌面版安装包 + 未签名 ipa,
+# Auto-publishes a release on every push to main (桌面版安装包 + Android apk,
 # version auto-bumped to the next patch). Can also be triggered manually from
 # the Actions tab ("Release" → Run workflow) or:
 #   gh workflow run release.yml -f version=v0.1.0
@@ -13,31 +13,15 @@ name: Release
 #                  (上游 IP,gitignore),CI 按 工作区 → bank_url → 历史
 #                  release 资产的顺序找来源,三条都落空就失败,绝不静默发出
 #                  一个没有题库的版本。
-#   include_ipa  — additionally build a signed ADHOC ipa (requires the
-#                  signing secrets below; fails fast with a clear message
-#                  when they are missing). The unsigned ipa is always built.
 #
 # Artifacts:
 #   1. 桌面版 — Windows 托盘单文件 / macOS .app+dmg / Linux 单文件;内嵌 Bun
 #      交叉编译的桌面服务二进制(apps/web/desktop-entry.js),免安装免依赖。
-#   2. iOS 未签名 ipa — always built (CODE_SIGNING_ALLOWED=NO); installable
-#      on real devices only after re-signing with a free Apple ID via
-#      Sideloadly/AltStore (instructions attached in the release).
-#   3. iOS 签名 ipa (ADHOC) — additionally built and signed when the signing
-#      secrets are configured; that job self-skips otherwise.
-#   4. 题库快照 — LanjingQuiz-bank-<version>.zip,每次发布都附带(来源解析见
+#   2. 题库快照 — LanjingQuiz-bank-<version>.zip,每次发布都附带(来源解析见
 #      bank-snapshot job);附带的包会在发布前用 snapshot CLI 校验完整性。
-#   5. Android 未签名 release APK — always built (unsigned release 可直接安装,
-#      与 ios-unsigned 同语义);版本号取自发布 tag,versionCode 按
+#   3. Android 未签名 release APK — always built (unsigned release 可直接安装);
+#      版本号取自发布 tag,versionCode 按
 #      major*10000+minor*100+patch 派生(-PversionName/-PversionCode 注入)。
-#
-# iOS signing secrets (add in repo Settings → Secrets and variables → Actions
-# when you have an Apple Developer certificate):
-#   IOS_CERT_BASE64          — export.p12, base64-encoded
-#   IOS_CERT_PASSWORD        — p12 export password
-#   IOS_PROVISIONING_BASE64  — ADHOC provisioning profile (.mobileprovision),
-#                              base64-encoded, for bundle id com.qzh.lanjingquiz
-#   DEVELOPMENT_TEAM         — team ID (e.g. AB12CD34EF)
 
 on:
   push:
@@ -53,11 +37,6 @@ on:
         description: "题库包下载地址(留空=取最近一个带题库的 release 资产)"
         required: false
         default: ""
-      include_ipa:
-        description: "构建并附带签名 ipa(需先配置签名 secrets)"
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -320,67 +299,8 @@ jobs:
           path: "${{ runner.temp }}/deliver"
           if-no-files-found: error
 
-  # Always built: unsigned Release ipa. Not directly installable — the
-  # attached install notes explain re-signing with a free Apple ID
-  # (Sideloadly/AltStore, 7-day refresh).
-  ios-unsigned:
-    name: iOS 未签名 ipa
-    needs: version
-    runs-on: macos-15
-    timeout-minutes: 30
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
-
-      - name: Build Release without code signing
-        run: |
-          xcodebuild build \
-            -project apps/ios/LanjingQuiz.xcodeproj \
-            -scheme LanjingQuiz \
-            -configuration Release \
-            -sdk iphoneos \
-            -derivedDataPath "$RUNNER_TEMP/unsigned-dd" \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
-
-      - name: Package unsigned ipa and install notes
-        run: |
-          app="$RUNNER_TEMP/unsigned-dd/Build/Products/Release-iphoneos/LanjingQuiz.app"
-          if [ ! -d "$app" ]; then
-            echo "::error::未找到构建产物 $app"
-            exit 1
-          fi
-          pkg="$RUNNER_TEMP/assets"
-          mkdir -p "$pkg/Payload"
-          cp -R "$app" "$pkg/Payload/"
-          cd "$pkg"
-          zip -r -q "LanjingQuiz-unsigned-${{ needs.version.outputs.version }}.ipa" Payload
-          # ASCII filename on purpose: upload/download-artifact mangles
-          # non-ASCII names through the artifact backend.
-          cat > "ipa-install-notes.txt" <<'EOF'
-          未签名 ipa(LanjingQuiz-unsigned-*.ipa)不能直接安装。它没有签名,
-          需要用免费工具 + 你自己的 Apple ID 签名后装到真机(每 7 天重新签名一次):
-
-          1. 下载 Sideloadly(https://sideloadly.io,macOS/Windows)或 AltStore;
-          2. iPhone 连接电脑并解锁;
-          3. Sideloadly 中选择本 ipa,填入你的 Apple ID 和密码(仅用于签名,
-             官方工具本地处理,不上传);
-          4. 点击 Start;完成后到手机:设置 → 通用 → VPN 与设备管理 →
-             开发者 App → 信任;
-          5. 信任后即可使用;7 天后过期需重新签名。
-
-          若 release 里另有 LanjingQuiz-*.ipa(带签名,ADHOC),那是已签好的
-          正式包,直接安装即可,无需本步骤。
-          EOF
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-unsigned
-          path: "${{ runner.temp }}/assets"
-          if-no-files-found: error
-
   # Always built: unsigned release APK。未配置签名 secrets,未签名 release 为交付物
-  # (构建用 debug 签名,可直接安装;与 ios-unsigned 同语义,正式签名后续接线)。
+  # (构建用 debug 签名,可直接安装;正式签名后续接线)。
   android-apk:
     name: Android 未签名 APK
     needs: version
@@ -414,89 +334,6 @@ jobs:
         with:
           name: android-apk
           path: apps/android/LanjingQuiz/build/outputs/apk/release/*.apk
-          if-no-files-found: error
-
-  # Signed ADHOC ipa, opt-in via the include_ipa input (job-level `if` cannot
-  # read secrets/env, so the decision comes from the dispatch inputs). The
-  # first step fails fast with a clear message when the signing secrets are
-  # missing; without a certificate no installable signed ipa can be produced.
-  ios-ipa:
-    name: iOS 签名 ipa (ADHOC)
-    if: inputs.include_ipa == 'true'
-    env:
-      IOS_CERT_BASE64: ${{ secrets.IOS_CERT_BASE64 }}
-      IOS_CERT_PASSWORD: ${{ secrets.IOS_CERT_PASSWORD }}
-      IOS_PROVISIONING_BASE64: ${{ secrets.IOS_PROVISIONING_BASE64 }}
-      DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
-    runs-on: macos-15
-    timeout-minutes: 30
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
-
-      - name: Verify signing secrets are configured
-        run: |
-          missing=""
-          for var in IOS_CERT_BASE64 IOS_CERT_PASSWORD IOS_PROVISIONING_BASE64 DEVELOPMENT_TEAM; do
-            [ -n "${!var}" ] || missing="$missing $var"
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::勾选了 include_ipa 但签名 secrets 未配置:$missing。请先在仓库 Settings → Secrets and variables → Actions 配置后再发布。"
-            exit 1
-          fi
-
-      - name: Import signing certificate into a build keychain
-        run: |
-          echo "$IOS_CERT_BASE64" | base64 --decode > /tmp/cert.p12
-          security create-keychain -p "" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "" build.keychain
-          security import /tmp/cert.p12 -k build.keychain -P "$IOS_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
-
-      - name: Install provisioning profile
-        run: |
-          echo "$IOS_PROVISIONING_BASE64" | base64 --decode > /tmp/profile.mobileprovision
-          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          uuid=$(security cms -D -i /tmp/profile.mobileprovision | plutil -extract UUID raw -)
-          cp /tmp/profile.mobileprovision "$HOME/Library/MobileDevice/Provisioning Profiles/$uuid.mobileprovision"
-
-      - name: Archive (Release configuration)
-        run: |
-          xcodebuild archive \
-            -project apps/ios/LanjingQuiz.xcodeproj \
-            -scheme LanjingQuiz \
-            -configuration Release \
-            -destination "generic/platform=iOS" \
-            -archivePath "$RUNNER_TEMP/LanjingQuiz.xcarchive" \
-            DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" CODE_SIGN_STYLE=Automatic \
-            -allowProvisioningUpdates
-
-      - name: Export ADHOC ipa
-        run: |
-          cat > "$RUNNER_TEMP/export.plist" <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key><string>ad-hoc</string>
-            <key>teamID</key><string>${DEVELOPMENT_TEAM}</string>
-            <key>signingStyle</key><string>automatic</string>
-            <key>stripSwiftSymbols</key><true/>
-          </dict>
-          </plist>
-          EOF
-          xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/LanjingQuiz.xcarchive" \
-            -exportOptionsPlist "$RUNNER_TEMP/export.plist" \
-            -exportPath "$RUNNER_TEMP/ipa" \
-            -allowProvisioningUpdates
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-ipa
-          path: "${{ runner.temp }}/ipa/*.ipa"
           if-no-files-found: error
 
   # 题库快照:随 release 分发(iOS App 里「我的 > 题库 > 导入题库」直接吃这个包)。
@@ -575,7 +412,7 @@ jobs:
 
   release:
     name: 创建 Release
-    needs: [version, web-desktop-services, web-desktop-windows, web-desktop-macos, web-desktop-linux, ios-unsigned, ios-ipa, bank-snapshot, android-apk]
+    needs: [version, web-desktop-services, web-desktop-windows, web-desktop-macos, web-desktop-linux, bank-snapshot, android-apk]
     if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     permissions:
