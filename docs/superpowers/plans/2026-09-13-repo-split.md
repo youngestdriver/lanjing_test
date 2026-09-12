@@ -976,13 +976,17 @@ Expected: 安装成功，输出 `classify: function / bank: object`。
 
 - [ ] **Step 1: 展开四个目录（注意 --strip-components 不同）**
 
+（勘误：实测 `git archive HEAD scripts` / `git archive HEAD assets` 的成员路径是
+`scripts/<file>` / `assets/<file>`，**不能带 `--strip-components=1`** —— 那会把内容摊平到仓根。
+`apps/web`/`apps/desktop`/`docs/web-api.md` 的 strip 值不变。）
+
 ```bash
 mkdir -p /Users/qzh/Project/lanjing-web
 cd /Users/qzh/Project/lanjing_test
 git archive HEAD apps/web | tar -x -C /Users/qzh/Project/lanjing-web --strip-components=2      # → 仓根
 git archive HEAD apps/desktop | tar -x -C /Users/qzh/Project/lanjing-web --strip-components=1  # → desktop/
-git archive HEAD scripts | tar -x -C /Users/qzh/Project/lanjing-web --strip-components=1       # → scripts/
-git archive HEAD assets | tar -x -C /Users/qzh/Project/lanjing-web --strip-components=1        # → assets/
+git archive HEAD scripts | tar -x -C /Users/qzh/Project/lanjing-web                        # → scripts/（不带 strip,见上方勘误）
+git archive HEAD assets | tar -x -C /Users/qzh/Project/lanjing-web                         # → assets/（不带 strip,见上方勘误）
 mkdir -p /Users/qzh/Project/lanjing-web/docs
 git archive HEAD docs/web-api.md | tar -x -C /Users/qzh/Project/lanjing-web/docs --strip-components=1
 ls /Users/qzh/Project/lanjing-web
@@ -1087,9 +1091,12 @@ const classifier = require("lanjing-bank/classifier");
 3. `test/desktop-icons.test.js:7-8`：
 
 ```js
-// __dirname is test/; the repo root (with assets/) is 2 levels up.
-const assetsDir = path.resolve(__dirname, "..", "..", "assets", "desktop");
+// __dirname is test/; the repo root (with assets/) is 1 level up.
+const assetsDir = path.resolve(__dirname, "..", "assets", "desktop");
 ```
+
+（勘误：实测 web 仓里 `assets/` 就在仓根、`test/` 也在仓根，从 `test/` 上溯**1 层**即可；
+按原文的 2 层会指到仓库外面，测试必然找不到 icon。落地代码即上面这版。）
 
 4. `test/public-bundle.test.js:19-20`：
 
