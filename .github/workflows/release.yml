@@ -299,43 +299,6 @@ jobs:
           path: "${{ runner.temp }}/deliver"
           if-no-files-found: error
 
-  # Always built: unsigned release APK。未配置签名 secrets,未签名 release 为交付物
-  # (构建用 debug 签名,可直接安装;正式签名后续接线)。
-  android-apk:
-    name: Android 未签名 APK
-    needs: version
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
-
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: 8.10.2
-
-      # 版本来自 release tag(去 v 前缀);versionCode 派生 = major*10000+minor*100+patch。
-      # build.gradle.kts 读取 -PversionName/-PversionCode(缺省回退 1.0/1)。
-      - name: Build unsigned release APK
-        working-directory: apps/android
-        run: |
-          ver="${{ needs.version.outputs.version }}"; ver="${ver#v}"
-          ./gradlew assembleRelease -PversionName="$ver" \
-            -PversionCode="$(echo "$ver" | awk -F. '{print $1*10000+$2*100+$3}')" --no-daemon
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-apk
-          path: apps/android/LanjingQuiz/build/outputs/apk/release/*.apk
-          if-no-files-found: error
-
   # 题库快照:随 release 分发(iOS App 里「我的 > 题库 > 导入题库」直接吃这个包)。
   # 数据本身仍不入库(gitignore,上游 IP),所以按下面的顺序解析来源:
   #   1. 工作区里有 apps/bank/data     → 用 snapshot CLI 现场打包(可复现,首选)
@@ -412,7 +375,7 @@ jobs:
 
   release:
     name: 创建 Release
-    needs: [version, web-desktop-services, web-desktop-windows, web-desktop-macos, web-desktop-linux, bank-snapshot, android-apk]
+    needs: [version, web-desktop-services, web-desktop-windows, web-desktop-macos, web-desktop-linux, bank-snapshot]
     if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     permissions:
@@ -433,11 +396,6 @@ jobs:
                 "${{ runner.temp }}"/assets/LanjingQuiz-server-arm64.exe \
                 "${{ runner.temp }}"/assets/server-darwin-arm64 \
                 "${{ runner.temp }}"/assets/server-darwin-x64
-          # android-apk 的 apk 改名为平台化名称(LanjingQuiz-android-<version>.apk)
-          for f in "${{ runner.temp }}"/assets/*.apk; do
-            [ -f "$f" ] || continue
-            mv "$f" "${{ runner.temp }}"/assets/LanjingQuiz-android-${{ needs.version.outputs.version }}.apk
-          done
           # 题库包同样平台化命名(bank-snapshot 的解析按 *bank*.zip 匹配)
           if [ -f "${{ runner.temp }}/assets/lanjing-bank.zip" ]; then
             mv "${{ runner.temp }}/assets/lanjing-bank.zip" \
