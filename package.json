@@ -1,0 +1,16 @@
+{
+  "name": "lanjing-bank",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lanjing Weike question-bank tool: collector, classifier, snapshot. Consumed by lanjing-web as a git dependency.",
+  "exports": {
+    ".": "./apps/bank/lib/question-bank.js",
+    "./classifier": "./apps/bank/lib/question-classifier.js"
+  },
+  "files": [
+    "apps/bank/lib"
+  ],
+  "engines": {
+    "node": ">=22"
+  }
+}
