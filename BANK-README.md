@@ -1,15 +1,15 @@
-# 题库工具 (apps/bank)
+# 题库工具 (lanjing-bank)
 
 独立于 Web 与 iOS 应用的机考题库工具:把蓝鲸微课平台的机考题库**完整保存**到本地,再做子分类和 Markdown 导出。纯 Node.js(≥22),**零 npm 依赖**,直接 `node` 运行,不需要启动 Web 服务。
 
 ```
-apps/bank/
+仓根/
 ├── package.json            # scripts: collect / classify / export / test / check
 ├── lib/
 │   ├── question-bank.js        # 收集器核心(进入/抓取/去重/JSONL 存储/续接)
 │   ├── question-classifier.js  # 子分类规则引擎(subCategory)
 │   ├── bank-export.js          # Markdown 导出(HTML→纯文本转换)
-│   ├── parsers.js              # 上游页面解析(与 apps/web/lib/parsers.js 保持同步的独立副本)
+│   ├── parsers.js              # 上游页面解析(与 lanjing-web 仓的 lib/parsers.js 保持同步的独立副本)
 │   └── upstream.js             # 直连上游客户端(cookie/登录/会话/API,不依赖 Web 服务)
 ├── scripts/
 │   ├── collect-bank.js         # 收集 CLI
@@ -42,7 +42,7 @@ npm run check
 - `session_cookies.txt` — 收集器**自己的登录会话**(与 Web 应用的会话相互独立,登录一次后复用)。
 - `export/` — Markdown 导出与下载的公式图片。
 
-全部在 `apps/bank/data/`,已被 gitignore,不会入库。
+全部在仓根 `data/`,已被 gitignore,不会入库。
 
 ## 会话与登录
 
@@ -52,8 +52,10 @@ npm run check
 - 无会话时:优先 `LANJING_PHONE` / `LANJING_PASSWORD` 环境变量,否则交互式输入(密码不回显、不落盘,只有登录产生的会话 cookie 会保存)。
 - 会话过期时自动清空并停止,重新登录后重跑即可续接。
 
-## 与 Web / iOS 的关系
+## 与 Web / iOS / Android 的关系
 
-- Web 服务(`apps/web/server.js`)把 `apps/bank/data/` 静态托管在 `/bank`,供 iOS 练习页下载题库。Web 应用本身不再包含任何收集/分类/导出代码。
-- 本目录的 `lib/parsers.js` 是 `apps/web/lib/parsers.js` 的独立副本,两边改动需保持同步。
+- 本仓现在只包含题库工具:Web / iOS / Android 客户端已迁出至各自独立的仓库(`youngestdriver/lanjing-web` / `lanjing-ios` / `lanjing-android`)。
+- Web 仓通过 npm git 依赖引用本仓的规则引擎(`lanjing-bank` 包的 `.` 与 `./classifier`),不再直接读本仓文件;它的 `/bank` 兼容路由从自己的本地题库目录(`LANJING_LOCAL_DIR/bank-data`,`LANJING_BANK_DIR` 可覆盖)读取。
+- 本仓 `lib/parsers.js` 与 Web 仓的 `lib/parsers.js` 是刻意保留的独立副本,两边改动需保持同步。
+- 分类器沿用「JS 为源,Swift / Kotlin 忠实移植」的约定:改一条规则 = 本仓引擎 + 测试 → Web 仓 bump 依赖 → iOS / Android 各移植一次。
 - 详细的收集/分类/导出规则与上游行为说明见仓库根 `README.md` 对应章节。

@@ -17,7 +17,7 @@ const { buildManifest, writeSnapshotZip, verifySnapshotZip } = require("../lib/s
 const USAGE = `用法: node scripts/snapshot-bank.js [选项]
 
 选项:
-  --bank-dir <path>  题库目录 (默认 apps/bank/data)
+  --bank-dir <path>  题库目录 (默认 data/)
   --out <path.zip>   产物路径 (默认 <bank-dir>/lanjing-bank-<YYYYMMDD>.zip)
   --report           只打印统计不落盘
   --verify <zip>     校验既有产物的完整性
