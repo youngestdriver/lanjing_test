@@ -1,11 +1,11 @@
-name: Release
+name: Release Bank
 
 # Auto-publishes a release on every push to main (题库快照包,
 # version auto-bumped to the next patch). Can also be triggered manually from
-# the Actions tab ("Release" → Run workflow) or:
-#   gh workflow run release.yml -f version=v0.1.0
+# the Actions tab ("Release Bank" → Run workflow) or:
+#   gh workflow run release-bank.yml -f version=v0.1.0
 #
-# Inputs (manual runs only; on push they default to false/empty):
+# Inputs (manual runs only; on push both default to empty):
 #   version      — tag to publish (e.g. v0.1.0); leave empty to auto-bump the
 #                  patch number of the latest tag (v0.1.0 → v0.1.1)
 #   bank_url     — 题库包的下载地址(留空则自动取「最近一个带题库包的 release」
@@ -59,7 +59,8 @@ jobs:
             echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
           else
             latest=$(git tag --sort=-v:refname | head -1)
-            [ -z "$latest" ] && latest="v0.0.0"
+            latest="${latest#v}"
+            [ -z "$latest" ] && latest="0.0.0"
             next=$(echo "$latest" | awk -F. '{printf "v%d.%d.%d", $1+0, $2+0, $3+1}')
             echo "version=$next" >> "$GITHUB_OUTPUT"
           fi
@@ -157,7 +158,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # 题库包同样平台化命名(bank-snapshot 的解析按 *bank*.zip 匹配)
+          # 题库包改名为发布命名 LanjingQuiz-bank-<version>.zip(bank-snapshot 的解析按 *bank*.zip 匹配)
           if [ -f "${{ runner.temp }}/assets/lanjing-bank.zip" ]; then
             mv "${{ runner.temp }}/assets/lanjing-bank.zip" \
                "${{ runner.temp }}/assets/LanjingQuiz-bank-${{ needs.version.outputs.version }}.zip"

@@ -1,13 +1,13 @@
 # Session & credentials
+# (bank 收集器的登录会话写在 data/ 下;这条裸文件名规则是兜底,防止会话文件
+#  在 --bank-dir 指向别处时被误提交)
 session_cookies.txt
-/apps/web/.local/
 
 # Question bank (collected exam data — upstream IP, kept out of the repo)
-/apps/bank/data/
+/data/
 
 # Saved exam data
 *_2026-*/
-/apps/web/public/index.backup.html
 patch_frontend.js
 
 # Debug files
@@ -27,14 +27,4 @@ node_modules/
 Thumbs.db
 .DS_Store
 
-# iOS build artifacts
-/apps/ios/build/
-/apps/ios/dist/
-*.ipa
-/apps/ios/*.xcuserstate
-/apps/ios/**/xcuserdata/
-
 .od-skills
-
-# Generated static-asset bundle (desktop builds; see scripts/build-public-bundle.js)
-/apps/web/public-bundle.js

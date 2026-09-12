@@ -1,385 +1,234 @@
-# 蓝鲸答题助手
+# 蓝鲸题库工具 (lanjing-bank)
 
-[![Release](https://github.com/youngestdriver/lanjing_test/actions/workflows/release.yml/badge.svg)](https://github.com/youngestdriver/lanjing_test/actions/workflows/release.yml)
+机考题库工具链：把蓝鲸微课平台的机考题库**完整采集**到本地，再做**子分类**、**快照打包**与
+**Markdown 导出**。纯 Node.js（≥22），**零 npm 依赖**，直接 `node` 运行，不需要启动任何服务。
 
-面向蓝鲸微课考试流程的第三方学习客户端。本仓库按应用维护 Web/PWA、原生 iOS 与原生安卓三套独立实现。三端现已覆盖同一组核心考试流程，但仍拥有各自的网络层、会话存储、界面代码和测试体系，不共享运行时或业务实现。
+三个客户端已迁出到各自独立的仓库，本仓**不再包含** Web / iOS / Android 代码：
 
-> [!IMPORTANT]
-> 本项目会把进入考试、提交答案、标记题目和交卷等操作发送到上游服务，可能直接改变账号中的真实考试记录。只应在获得授权的账号和场景中使用，不要把它用于违规答题、未授权访问或公开服务。
+| 仓库 | 内容 |
+|---|---|
+| [youngestdriver/lanjing-web](https://github.com/youngestdriver/lanjing-web) | Web / PWA 与桌面版（Express 本地代理 + 桌面壳） |
+| [youngestdriver/lanjing-ios](https://github.com/youngestdriver/lanjing-ios) | 原生 iOS（SwiftUI） |
+| [youngestdriver/lanjing-android](https://github.com/youngestdriver/lanjing-android) | 原生安卓（Kotlin / Compose） |
 
-## 项目组成
-
-| 客户端 | 定位 | 代码位置 | 运行方式 | 会话存储 |
-|---|---|---|---|---|
-| 原生 iOS | SwiftUI 原生客户端 | `apps/ios/` | Xcode 构建并安装到模拟器或设备 | iOS Keychain |
-| 原生安卓 | Kotlin/Compose 原生客户端 | `apps/android/` | Android Studio 或 Gradle 构建 | 加密 SharedPreferences |
-| Web / PWA | 响应式浏览器客户端与本地代理 | `apps/web/` | 浏览器访问本地 Express 服务 | Node 进程内存与 `apps/web/.local/` |
-
-三套客户端的网络路径不同：
-
-```text
-浏览器 / PWA ──> 本地 Express API ──> https://test.lanjingweike.com
-
-原生 iOS ────────────────────────> https://test.lanjingweike.com
-
-原生安卓 ────────────────────────> https://test.lanjingweike.com
-```
-
-Web 版必须启动 `apps/web/server.js`。iOS 与安卓版直接访问上游，不依赖 Node.js，也不需要同时运行 Web 服务。
-
-## 功能
-
-两端都覆盖登录、会话恢复、考试列表、开始或继续考试、逐题作答、题目标记、答题卡、交卷和结果展示。Web 的核心答题行为已与 iOS 对齐，但平台交互和自动化范围仍有差异：
-
-| 能力 | Web / PWA | 原生 iOS |
-|---|---|---|
-| 客户端形态 | 响应式单页应用、可安装 PWA，无前端构建步骤 | SwiftUI 原生应用，支持 iPhone 与 iPad |
-| 登录后首页 | “考试列表 / 练习 / 我的”三个一级入口；桌面为左侧导航，移动端为底部导航 | “考试列表 / 练习 / 我的”三个原生 `TabView` 入口 |
-| 单选题 | 点击选项后立即判定并提交 | 点击选项后立即判定并提交 |
-| 多选题 | 选择多个选项后确认，按完整集合判定并上报 | 选择多个选项后确认，按完整集合判定并上报 |
-| 历史作答 | 恢复状态及用户之前选择的选项 | 恢复状态及用户之前选择的选项 |
-| 自动切题 | 用户可配置，默认关闭；手动导航会取消待执行跳转 | 用户可配置，默认关闭；手动导航会取消待执行跳转 |
-| 列表与失败恢复 | 主动刷新、空态、加载重试及放弃考试后的陈旧记录抑制 | 下拉刷新、空态、加载重试及放弃考试后的陈旧记录抑制 |
-| 答案上报失败 | 保留本地选择、显示未同步状态并允许重试 | 统一处理会话失效；其他上报失败暂不提供重试 UI |
-| 会话持久化 | 进程级全局 Cookie，写入权限为 `0600` 的本地文件 | Cookie 存入 Keychain，会话失效时统一清理并返回登录页 |
-| 练习刷题 | 首次使用直连蓝鲸平台爬取全部机考题库到本地（.local/practice，逐卷进度与断点续爬），按 大类→题型细分 两级分类离线刷题，组合题材料渲染、按大类随机顺序；我的页提供 更新题库/删除题库/爬取日志导出 | 与 Web 对齐的完整练习页（首次直连爬取、断点续爬、原子更新、删除、日志导出） |
-| 云端会话同步 | 可选启用 CookieCloud 同步：登录后自动上传、启动时拉取、设置中手动同步（协议与官方扩展兼容） | 可选启用 CookieCloud 同步：登录后自动上传、启动时拉取、"我的"中手动同步（同一协议） |
-| 自动化验证 | 78 项 Node 单元测试 + 真实 Chrome + mock API 的浏览器回归；无真实上游 E2E | 21 个 XCTest 套件、185 项单元测试；练习流程 UI 测试基于进程内 mock 上游（`LANJING_BASE_URL`）；尚无真机或真实上游 E2E |
-| 原生安卓 | — | Kotlin/Compose 原生客户端：考试/练习/CookieCloud 与 iOS 逐字对齐（见设计文档）；UI 测试可在本地模拟器上运行（进程内 mock 上游，不触真实服务） |
-
-Web 与 iOS 登录后都以“考试列表 / 练习 / 我的”组织一级导航；主题、自动下一题、Cookie 云端同步和退出登录集中在“我的”，局域网访问开关仅 Web 提供。Web 额外提供桌面浏览器入口、响应式布局、触控和键盘答题以及可安装的 PWA 应用壳，iOS 提供原生分页手势、iPad 键盘导航、原生富文本容器和系统级会话存储。Web 与 iOS 的“练习”页**首次使用直连蓝鲸平台爬取全部机考题库题目并保存在本地**（Web 存于 `apps/web/.local/practice`；每个分类一个 JSONL，与收集器 `apps/bank/data` 同格式；每卷爬取进度写入 meta.json，中断后从断点续爬），之后离线按 一级分类（大类）→ 二级分类（题型细分）聚合刷题，题型由本地规则引擎分类，答案只在本机判分、不提交上游；爬取每张“新开”卷会创建一次上游作答并自动结束（消耗尝试次数），不再依赖局域网题库下载。Web 的“我的”页提供 更新题库（重爬全部试卷并原子替换）/删除题库/爬取日志导出。
+本仓同时以 npm 包 `lanjing-bank` 的形式被 Web 仓以 git 依赖引用（见
+[与客户端仓的关系](#与客户端仓的关系)）。
 
 ## 快速开始
 
-### Web / PWA
-
-环境要求：
-
-- Node.js 22 或更高版本
-- 能访问上游测试服务的网络环境
-
-从仓库根目录安装锁定版本的依赖并启动：
-
 ```bash
-npm --prefix apps/web ci
-npm --prefix apps/web start
+# 采集完整题库（首次需登录，之后复用 data/session_cookies.txt 会话）
+npm run collect            # = node scripts/collect-bank.js
+
+# 子分类（给每条记录追加 subCategory）
+npm run classify
+
+# 打包题库快照 zip（发布用；离线分发包，供 iOS「导入题库」直接吃）
+npm run snapshot
+
+# 导出为人类可读 Markdown（公式图片下载到 data/export/images/）
+npm run export
+
+# 测试与语法检查
+npm test
+npm run check
 ```
 
-浏览器打开：
+## 目录结构
 
 ```text
-http://127.0.0.1:3000
+.
+├── package.json            # scripts: collect / classify / export / snapshot / test / check
+├── lib/
+│   ├── question-bank.js        # 收集器核心（进入/抓取/去重/JSONL 存储/续接）
+│   ├── question-classifier.js  # 子分类规则引擎（subCategory）
+│   ├── snapshot.js             # 题库快照 zip 的构建与校验（manifest/sha256/CRC32）
+│   ├── bank-export.js          # Markdown 导出（HTML→纯文本转换）
+│   ├── parsers.js              # 上游页面解析（与 Web 仓 lib/parsers.js 保持同步的独立副本）
+│   └── upstream.js             # 直连上游客户端（cookie/登录/会话/API，不依赖任何服务）
+├── scripts/
+│   ├── collect-bank.js         # 采集 CLI
+│   ├── classify-bank.js        # 子分类 CLI
+│   ├── snapshot-bank.js        # 快照打包 / 校验 CLI
+│   └── export-bank.js          # 导出 CLI
+├── test/                       # node:test 单元 + 集成测试（stub 上游）
+├── docs/                       # 设计/计划文档
+└── data/                       # 采集/分类/导出的数据（gitignore，不入库）
 ```
 
-可通过 `PORT` 修改端口：
+## 题库数据 `data/`（不入库）
 
-```bash
-PORT=43127 npm --prefix apps/web start
-```
+题库数据是**上游平台的版权内容（IP）**，整目录被 `.gitignore` 排除，**绝不入库**：
 
-服务默认绑定所有网卡接口（`0.0.0.0`），登录后可在"我的 > 局域网访问"关闭，或用 `HOST` 环境变量指定绑定地址（例如仅本机访问）：
+- 每个目标分类一个 JSONL（`言语理解.jsonl` 等），外加 `meta.json`（轮次、各卷状态与统计）。
+  每条记录含 `_id`、`category`、`section`、`question`、`options`（4 槽）、`answer`、
+  `analysis`、来源卷与轮次。任意中断后重跑同一目录即可续接（去重按题目 `_id`，损坏尾行自动丢弃）。
+- `session_cookies.txt` — 收集器**自己的登录会话**（mode `0o600`，与任何客户端会话相互独立，
+  登录一次后复用）。
+- `export/` — Markdown 导出文件与下载的公式图片。
 
-```bash
-HOST=127.0.0.1 npm --prefix apps/web start
-```
+克隆本仓后 `data/` 是空的，题库需要自己采集（或从 release 的题库包恢复）。
 
-启动时服务会打印本机可用的局域网访问地址（如 `http://192.168.1.5:3000`）并提示风险；`TRUSTED_HOSTS`（逗号分隔）可额外允许指定主机名，如 `TRUSTED_HOSTS=my-mac.local`。
+## 采集 `npm run collect`
 
-服务启动后可以用无副作用的状态接口确认运行情况：
+`scripts/collect-bank.js` 通过 `lib/upstream.js` **直连上游**，把机考题库中的题目（题干、选项、
+正确答案、解析）逐份采集并去重保存。
 
-```bash
-curl --fail http://127.0.0.1:3000/api/status
-```
-
-未登录时的正常响应为：
-
-```json
-{
-  "loggedIn": false,
-  "hasSavedSession": false
-}
-```
-
-> [!WARNING]
-> Web 后端使用进程级全局 Cookie 和缓存，只适合本机单用户运行。服务默认绑定所有网卡接口并允许局域网访问（可在"我的 > 局域网访问"关闭），同时拒绝非白名单 Host、跨源和非 JSON 的写请求，但仍没有多用户会话隔离、TLS、CSRF token 或限流。同一局域网的设备都会共享这份会话，请只在可信网络使用，不要通过反向代理把它暴露到公网，也不要共享 `apps/web/.local/` 和包含会话信息的终端日志。
-
-### 原生 iOS
-
-环境要求：
-
-- macOS
-- Xcode 16 或更高版本
-- iOS 17 或更高版本的模拟器，或者配置了签名团队的真机
-
-打开已提交的工程：
-
-```bash
-open apps/ios/LanjingQuiz.xcodeproj
-```
-
-在 Xcode 中选择共享的 `LanjingQuiz` scheme 和目标设备，然后 Build & Run。模拟器构建不需要签名；真机运行需要在 Signing & Capabilities 中选择有效的 Development Team。
-
-日常开发不要求安装 XcodeGen。只有主动修改 `apps/ios/project.yml` 并准备重新生成工程时，才需要执行：
-
-```bash
-cd apps/ios
-xcodegen generate
-```
-
-生成后必须检查 Git diff，确认 `project.yml` 与已提交的 `.xcodeproj` 变化符合预期。发布 workflow 直接使用已提交工程，不负责验证两者完全一致。
-
-签名团队通过环境变量注入，**不提交具体的 Team ID**（它是与开发者账号关联的个人信息，历史提交中出现过的 ID 不应继续出现在新提交中）：
-
-```bash
-DEVELOPMENT_TEAM=XXXXXX xcodegen generate
-```
-
-未设置时生成的工程不含团队 ID，模拟器构建（`CODE_SIGNING_ALLOWED=NO`）不受影响；真机运行前在 Xcode 的 Signing & Capabilities 中选择团队即可。另外，Xcode 打开工程时可能自动向 `.xcodeproj/project.pbxproj` 写回签名团队、格式规范化等本地改动——提交前用 `git status` 检查该文件，仅包含这类本地改动的差异应当丢弃（`git checkout -- apps/ios/LanjingQuiz.xcodeproj/project.pbxproj`），不要提交。
-
-完整的构建说明、用户流程和 iOS 架构见 [apps/ios/README.md](apps/ios/README.md)。
-
-### 原生安卓
-
-环境要求：
-
-- JDK 17 或更高版本
-- Android SDK（platform 35、build-tools、platform-tools）；命令行构建需设置 `ANDROID_HOME`（Homebrew 示例：`export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools`）
-- 跑 UI 测试需 Android 模拟器（API 35）
-
-用 Android Studio 打开 `apps/android/` 直接运行，或命令行构建：
-
-```bash
-cd apps/android
-./gradlew assembleDebug
-```
-
-完整的构建说明、目录结构与测试命令见 [apps/android/README.md](apps/android/README.md)。
-
-## 本地 API
-
-Web 前端通过同源的 `/api` 路由访问本地 Express 代理：
-
-| Method | Path | 作用 |
-|---|---|---|
-| `GET` | `/api/status` | 查询本地会话状态 |
-| `POST` | `/api/login` | 访问上游登录并在本地保存会话 |
-| `GET` | `/api/exams` | 从上游获取考试和练习列表 |
-| `POST` | `/api/exams/:id/enter` | 开始或继续考试；可能创建真实作答记录 |
-| `GET` | `/api/exams/:id/questions` | 获取题目、答案和题卡状态 |
-| `POST` | `/api/exams/:id/answer` | 向上游写入真实答案 |
-| `POST` | `/api/exams/:id/mark` | 更新上游题目标记 |
-| `GET` | `/api/exams/:id/states` | 从上游刷新题卡状态 |
-| `POST` | `/api/exams/:id/submit` | 结束真实考试并解析结果 |
-| `POST` | `/api/logout` | 清除本地会话 |
-| `GET` | `/bank/*` | 题库静态下载（原 iOS 练习页数据源；iOS 已改直连上游，此端点保留为兼容，目录可用 `LANJING_BANK_DIR` 覆盖） |
-
-`enter`、`answer`、`mark` 和 `submit` 都可能改变上游状态。其中 `submit` 会结束当前考试，前端的“放弃考试”也使用这条提交路径，不是单纯删除本地记录。
-
-请求、响应、错误处理和上游映射详见 [docs/web-api.md](docs/web-api.md)。
-
-## 题库收集器
-
-`apps/bank/scripts/collect-bank.js` 是独立于 Web 与 iOS 的题库工具（`apps/bank/`，纯 Node、零 npm 依赖）中的收集 CLI：通过 `lib/upstream.js` **直连上游**把机考题库中的题目（题干、选项、正确答案、解析）逐份收集并去重保存，用于为后续功能准备本地题库。不需要启动 Web 服务。
-
-上游平台的实际结构（已对真实服务验证）：每份机考卷（【言语理解（二）】机考题库 等）是**固定题池**——重新进入只会拿到同一批题，同类不同卷（一）（二）（三）之间题目互不重叠；分类写在**卷名**里（言语理解/数字运算/逻辑推理/资料分析/特有题型），卷内 section 是子题型（逻辑填空、图形推理、时政等）。因此收集 = 每份目标卷进入一次即可全量（目前共 14 份目标卷、约 3000 题）：进入 → 抓取 → 空答案提交放弃（或对用户进行中的卷只读收集）→ 下一份。
+上游平台的实际结构（已对真实服务验证）：每份机考卷（【言语理解（二）】机考题库 等）是**固定题池**
+——重新进入只会拿到同一批题，同类不同卷（一）（二）（三）之间题目互不重叠；分类写在**卷名**里
+（言语理解 / 数字运算 / 逻辑推理 / 资料分析 / 特有题型），卷内 section 是子题型（逻辑填空、
+图形推理、时政等）。因此采集 = 每份目标卷进入一次即可全量（目前共 14 份目标卷、约 3000 题）：
+进入 → 抓取 → 空答案提交放弃（或对用户进行中的卷只读采集）→ 下一份。
 
 ```text
-node apps/bank/scripts/collect-bank.js [--exam <id>] [--max-rounds N]
+node scripts/collect-bank.js [--exam <id>] [--max-rounds N]
        [--idle-limit N] [--round-delay ms] [--bank-dir <path>]
-       [--targets a,b,c] [--skip-in-progress]
+       [--targets a,b,c] [--skip-in-progress] [--refresh]
 ```
 
 | 选项 | 默认 | 作用 |
 |---|---|---|
-| `--exam <id>` | 全部 | 只收集指定考试（可强制处理 `wfs=0` 的进行中卷） |
+| `--exam <id>` | 全部 | 只采集指定考试（可强制处理 `wfs=0` 的进行中卷） |
 | `--max-rounds N` | 200 | 最大轮数安全上限 |
 | `--idle-limit N` | 3 | 连续 N 轮无新题即停止 |
 | `--round-delay ms` | 1500 | 每轮间隔 |
-| `--bank-dir <path>` | `apps/bank/data/` | 题库输出目录 |
+| `--bank-dir <path>` | `data/` | 题库输出目录 |
 | `--targets a,b,c` | 5 个机考分类 | 目标分类（按卷名子串匹配；可自行加"常识判断"等） |
-| `--skip-in-progress` | 收集 | 跳过进行中的作答（默认只读收集用户进行中的卷，**不提交**） |
+| `--skip-in-progress` | 采集 | 跳过进行中的作答（默认只读采集用户进行中的卷，**不提交**） |
+| `--refresh` | 关 | 目标分类的 jsonl 改名 `.bak` 并清空续接状态，重新采集全部试卷（记录格式升级时用） |
 
-- 数据落盘在 `apps/bank/data/`（gitignore，不入库）：每个目标分类一个 JSONL（`言语理解.jsonl` 等），外加 `meta.json` 记录轮次、各卷状态与统计；任意中断后重跑同一目录即可续接（去重按题目 `_id`，损坏尾行自动丢弃）。每条记录含 `_id`、`category`（分类）、`section`（子题型，已去掉"(共N题…)"后缀）、`question`、`options`（4 槽）、`answer`（单选字母/多选数组/兜底/`null`）、`analysis`（解析）、来源卷与轮次。该目录同时由 server 在 `/bank` 静态托管（原 iOS 练习页数据源；iOS 已改直连上游，此托管保留为兼容）
-- 会话由收集器**自己管理**（`apps/bank/data/session_cookies.txt`，mode 0o600），不复用 Web 应用的登录态；登录一次后即可复用。没有可用会话时在交互式终端提示输入手机号和密码，密码仅在运行时存在于内存，**绝不落盘**。后台无人值守运行可改用 `LANJING_PHONE` / `LANJING_PASSWORD` 环境变量提供凭据（同样只存在于进程内，不写入任何文件）
-- ⚠️ 与 `enter`/`submit` 相关：收集器对 `wfs=1` 的卷每轮会创建一份空答案作答并立即放弃（消耗考试次数）；对 `wfs=0` 的卷（你自己的进行中作答）只读取题、绝不提交。机考卷的交卷接口返回 JSON 成功而非成绩页，收集器通过重拉考试列表验证 wfs 翻回判定放弃成功
-- 停止条件：所有目标卷耗尽、连续 `--idle-limit` 轮无新题、轮数上限，或 Ctrl+C（完成当前轮后停止，数据已落盘）
+- 会话由采集器**自己管理**（`data/session_cookies.txt`）。没有可用会话时：优先
+  `LANJING_PHONE` / `LANJING_PASSWORD` 环境变量，否则在交互式终端提示输入手机号和密码；
+  密码仅在运行时存在于内存，**绝不落盘**（只有登录产生的会话 cookie 会保存）。会话过期时
+  自动清空并停止，重新登录后重跑即可续接。
+- ⚠️ 与 `enter`/`submit` 相关：采集器对 `wfs=1` 的卷每轮会创建一份空答案作答并立即放弃
+  （消耗考试次数）；对 `wfs=0` 的卷（你自己的进行中作答）只读取题、绝不提交。
+- 停止条件：所有目标卷耗尽、连续 `--idle-limit` 轮无新题、轮数上限，或 Ctrl+C
+  （完成当前轮后停止，数据已落盘）。
 
-## 题库子分类
+## 子分类 `npm run classify`
 
-`apps/bank/scripts/classify-bank.js` 是题库的离线子分类 CLI：为 `apps/bank/data/` 下每条记录追加 `subCategory`（更细的题型类别，如 言语理解|阅读理解 → 主旨概括/意图推断/细节理解/标题选择…，数字运算|数量关系 → 行程/工程/利润/浓度…，特有题型 → 直接用 section 名）。资料分析不做正则分类——平台答题卡已把该类拆成 文字资料/统计表/统计图/简单计算/比重问题/平均数问题/倍数与比值相关/综合分析/基期与现期/长篇阅读…，HTML section 即子类（与特有题型同一约定）。规则在 `apps/bank/lib/question-classifier.js`：按 (category, section) 分组的有序正则，对「题干+解析」去 HTML 后的纯文本首条命中即定类，section 内规则优先，未命中落入各 section 兜底类（如 数量关系→和差倍比与方程、逻辑填空→实词辨析）；当前 3065 题「其他」占比约 1%。
+`scripts/classify-bank.js` 是离线子分类 CLI：为 `data/` 下每条记录追加 `subCategory`
+（更细的题型类别，如 言语理解|阅读理解 → 主旨概括/意图推断/细节理解/标题选择…，
+数字运算|数量关系 → 行程/工程/利润/浓度…，特有题型 → 直接用 section 名）。资料分析不做正则
+分类——平台答题卡已把该类拆成 文字资料/统计表/统计图/…，HTML section 即子类（与特有题型同一约定）。
 
-```text
-node apps/bank/scripts/classify-bank.js [--bank-dir <path>] [--dry-run]
-       [--no-backup] [--targets a,b,c]
-```
-
-- `--dry-run` 只统计并打印分类表，不写盘；正式运行首次写盘前把原文件备份为 `*.jsonl.bak`（一次性，重跑不覆盖），随后原子重写
-- 幂等：重跑输出与上次字节一致，不产生重复；新收集的题目补跑一次即可
-- 停止后（或任何时刻）可用 `npm --prefix apps/bank run classify` 或直接运行脚本重跑
-
-### Markdown 导出
-
-`apps/bank/scripts/export-bank.js` 把题库导出为**人类可读的 Markdown**：每个 (分类-子类) 一个文件（`<bank-dir>/export/言语理解-成语辨析.md`），题干/选项/答案/解析清洗成纯文本（HTML 与实体解码、段落保留）。**题干/选项/解析中的公式图片会下载到 `<out>/images/` 并本地引用**（按 URL 去重，重跑跳过已存在文件，下载失败回退远程链接；纯图片题仍标注"（图片题）"）。当前 3065 题、83 个文件、4257 张公式图、共约 73 MB。
-
-```text
-node apps/bank/scripts/export-bank.js [--bank-dir <path>] [--out <path>] [--targets a,b,c] [--no-images]
-npm --prefix apps/bank run export
-```
-
-## 项目结构
+规则在 `lib/question-classifier.js`：按 `(category, section)` 分组的有序正则，对「题干+解析」
+去 HTML 后的纯文本首条命中即定类，section 内规则优先，未命中落入各 section 兜底类
+（如 数量关系→和差倍比与方程、逻辑填空→实词辨析）。
 
 ```text
-.
-├── apps/
-│   ├── bank/                       # 独立题库工具（收集/子分类/导出 CLI + 直连上游客户端）
-│   │   ├── lib/                    # 收集器核心、子分类规则、导出、上游解析与直连客户端
-│   │   ├── scripts/                # collect-bank / classify-bank / export-bank CLI
-│   │   ├── test/                   # Node 单元与集成测试（stub 上游）
-│   │   ├── package.json
-│   │   ├── README.md
-│   │   └── data/                   # 收集/分类/导出的数据（gitignore，不入库）
-│   ├── android/
-│   │   ├── LanjingQuiz/            # Kotlin/Compose 应用源码(主/单元测试/仪器化测试)
-│   │   ├── gradle/libs.versions.toml
-│   │   └── README.md               # 安卓构建、架构与验证
-│   ├── ios/
-│   │   ├── LanjingQuiz.xcodeproj/  # 已提交的 Xcode 工程与共享 scheme
-│   │   ├── LanjingQuiz/            # SwiftUI 应用源码
-│   │   ├── LanjingQuizTests/       # XCTest 单元测试
-│   │   ├── project.yml             # XcodeGen 工程定义
-│   │   └── README.md               # iOS 详细文档
-│   └── web/
-│       ├── lib/parsers.js          # 考试页、成绩页与会话解析器
-│       ├── lib/cookiecloud.js      # CookieCloud 加密协议与 cookie 转换（与官方扩展互操作）
-│       ├── public/
-│       │   ├── js/                 # 浏览器应用与可测试答题逻辑
-│       │   ├── index.html          # 单页应用结构
-│       │   ├── styles.css
-│       │   └── sw.js               # Service Worker
-│       ├── test/                   # Node 单元测试与浏览器回归
-│       ├── tools/login-demo.js     # 敏感历史调试工具
-│       ├── package.json
-│       └── server.js               # 静态服务、会话和 API 代理
-├── docs/web-api.md                 # 本地 API 与上游映射
-└── README.md
+node scripts/classify-bank.js [--bank-dir <path>] [--dry-run] [--no-backup] [--targets a,b,c]
 ```
+
+- `--dry-run` 只统计并打印分类表，不写盘；正式运行首次写盘前把原文件备份为 `*.jsonl.bak`
+  （一次性，重跑不覆盖），随后原子重写。
+- 幂等：重跑输出与上次字节一致，不产生重复；新采集的题目补跑一次即可。
+
+## 快照 `npm run snapshot`
+
+`scripts/snapshot-bank.js` 把题库目录打成一个**离线分发包** zip（只读本地 `*.jsonl` 与
+`images/`，零网络），供客户端「导入题库」直接使用；包内带 manifest（题目数、图片 CRC32、
+长度、sha256），可用 `--verify` 校验完整性与 zip 对齐。
+
+```text
+node scripts/snapshot-bank.js [--bank-dir <path>] [--out <path.zip>] [--report]
+node scripts/snapshot-bank.js --verify <path.zip>
+```
+
+- 默认产物 `<bank-dir>/lanjing-bank-<YYYYMMDD>.zip`。
+- `--report` 只统计不落盘（引用图片数 / 已覆盖 / 缺失 / 题目数 / 各分类题数），退出码 0=全覆盖。
+- `--verify` 校验既有 zip（CRC32 + 长度 + sha256 + manifest 与 zip 对齐），退出码 0=通过；
+  发布流程在发布前用它校验「即将随 release 分发的那一个包」。
+
+## 导出 `npm run export`
+
+`scripts/export-bank.js` 把题库导出为**人类可读的 Markdown**：每个 (分类-子类) 一个文件
+（`<bank-dir>/export/言语理解-成语辨析.md`），题干/选项/答案/解析清洗成纯文本（HTML 与实体
+解码、段落保留）。**公式图片会下载到 `<out>/images/` 并本地引用**（按 URL 去重，重跑跳过已存在
+文件，下载失败回退远程链接；纯图片题标注"（图片题）"）。
+
+```text
+node scripts/export-bank.js [--bank-dir <path>] [--out <path>] [--targets a,b,c] [--no-images]
+```
+
+## 发布题库包
+
+[`.github/workflows/release-bank.yml`](.github/workflows/release-bank.yml)（`Release Bank`）
+在**每次 push 到 `main` 时自动发布**（版本号 = 最新 tag 的 patch +1，沿用 `v0.0.x` 序列），
+也可手动触发：
+
+```bash
+gh workflow run release-bank.yml -f version=v0.1.0
+gh workflow run release-bank.yml -f bank_url=https://…/lanjing-bank.zip
+```
+
+每次发布**必须**带题库包 `LanjingQuiz-bank-<version>.zip`（数据本身不入库，所以包随 release
+分发）。来源按三级顺序解析，三条都落空就**失败**——宁可让发布停下，也不静默发出一个没有题库的版本：
+
+1. **工作区有 `data/`** → 用 snapshot CLI 现场打包（可复现，首选）；
+2. **手动运行且给了 `bank_url`** → 直接下载该地址的包；
+3. 否则 → **取最近一个带题库包的 release 资产**。
+
+无论走哪条路，发布前都会用 `node scripts/snapshot-bank.js --verify` 校验一遍
+（CRC32 / 长度 / sha256 / manifest 对齐），通过后才创建 GitHub Release。首次（历史 release 里
+还没有题库资产时）需要手动 bootstrap 一次：
+
+```bash
+gh release upload <tag> lanjing-bank-*.zip --clobber
+```
+
+## 与客户端仓的关系
+
+- 本仓只包含题库工具；Web / iOS / Android 客户端已迁出至各自独立的仓库（见文首链接）。
+- Web 仓通过 npm git 依赖引用本仓的 `lanjing-bank` 包（`package.json` 的
+  `"lanjing-bank": "github:youngestdriver/lanjing_test#<tag>"`），用的是包的两个导出入口：
+  `.`（`lib/question-bank.js`）与 `./classifier`（`lib/question-classifier.js`），不再直接读本仓文件。
+- 本仓 `lib/parsers.js` 与 Web 仓的 `lib/parsers.js` 是刻意保留的独立副本，两边改动需保持同步。
+- **跨仓同步约定**（分类器沿用「JS 为源，Swift / Kotlin 忠实移植」）：改一条规则 =
+  本仓规则引擎 + 测试 → 主仓打 tag → Web 仓 bump git 依赖 → iOS / Android 各移植一次。
+  Web 仓不再从本仓读文件，所以**不 bump 依赖就不会生效**。
 
 ## 本地验证
 
-### Node
-
-Web 使用 Node 内置测试框架验证解析器和答题纯逻辑，并通过本机 Chrome 验证完整浏览器交互。题库工具（`apps/bank/`）零 npm 依赖，直接运行其 `check`/`test` 即可。提交前运行：
+零 npm 依赖，直接运行：
 
 ```bash
-npm --prefix apps/web ci
-npm --prefix apps/web run check
-npm --prefix apps/web test
-npm --prefix apps/web run test:browser
-npm --prefix apps/bank run check
-npm --prefix apps/bank test
+npm test     # node --test test/*.test.js
+npm run check   # node --check 全部 lib/scripts/test 源文件
 ```
 
-当前 101 项单元与安全测试覆盖历史答案映射、考试页与成绩页解析、会话失效识别、多选集合判定、答案编码、下一未答题、陈旧考试抑制，本地 API 的 Host、Origin、JSON 写请求、登录重定向识别、退出登录、旧上游响应隔离、局域网默认绑定与 `TRUSTED_HOSTS` 白名单、局域网访问开关的即时生效与持久化，以及 CookieCloud 的两种加密算法与官方扩展互操作向量（crypto-js 参考实现 + openssl 交叉验证）、fail-closed 解密、cookie 转换与域名过滤、配置校验与密码掩码、拉取/推送/合并/去重语义、重启后配置持久化。浏览器回归会启动本地服务和真实 Chrome，并完全拦截 `/api/*`：它验证三个首页入口及其深链接和浏览器历史、桌面侧栏与移动底栏、主题和自动切题设置持久化、CookieCloud 设置 UI（开关、输入框、警告文案与手动同步）、真实退出入口、多选提交、历史答案恢复、同步失败重试、交卷与旧 `401` 响应的竞态隔离、成绩页终态、键盘和触控交互、PWA 应用壳预缓存与离线导航回退，以及桌面、390px、320px 和低高度横屏布局。Web 侧测试都不访问真实上游；浏览器回归需要系统已安装 Google Chrome，或通过 `CHROME_PATH` 指定兼容的 Chromium 可执行文件。
-
-题库工具测试（`apps/bank/test/`）覆盖：收集器的卷名分类匹配、section 清洗（去"(共N题…)"后缀）、题卡位置关联、记录 schema（单选/多选/兜底答案/填空）、考试选择策略（pendingSubmit 优先、目标卷过滤、`wfs=0` 只读收集、强制 `--exam`）、502 交卷验证（重拉列表判定 wfs 翻回）、"未创建的作答绝不提交"保护、跨轮去重与 resume、损坏尾行容错、空闲/上限/会话失效停止；直连上游客户端的登录全流程（JSESSIONID 引导、表单编码、会话落盘）、登录失败、未登录拦截、会话过期（`onlineStatus:"0"` 与重定向到登录页两种识别）、cookie jar 合并与失效（`max-age=0` 删除）、幂等读取的重试语义；以及直连客户端 + stub 上游的端到端收集（新卷流程、JSON 成功交卷、进行中卷只读收集、非目标卷不进入、收集不扰动客户端已存会话）。题库子分类测试覆盖 HTML 剥离与实体解码、各 section 规则命中、优先级（意图先于主旨、削弱先于翻译）、兜底类、特有题型与资料分析 section 即子类（HTML 既定分类原样回显）、字段保真与幂等重写，以及全库 dry-run（其他 <5%，无 bank 文件时自动跳过）。
-
-启动服务后，还可按“快速开始”中的命令请求 `/api/status`，执行无副作用的 HTTP smoke test。
-
-### iOS
-
-当前 `LanjingQuizTests` 包含 21 个测试套件、185 项单元测试，覆盖答案映射、HTML 与结果解析、登录表单、会话失效、富文本、哈希、答题逻辑、练习流程（题型细分分类器、上游映射、练习会话与进度）、本地银行题库持久化、跳过登录，以及 CookieCloud 加密（与 Web 相同的互操作向量）与 cookie 转换。
-
-先查看当前 Xcode 可用的 destination：
-
-```bash
-xcodebuild \
-  -project apps/ios/LanjingQuiz.xcodeproj \
-  -scheme LanjingQuiz \
-  -showdestinations
-```
-
-再用其中一个可用模拟器运行测试：
-
-```bash
-xcodebuild \
-  -project apps/ios/LanjingQuiz.xcodeproj \
-  -scheme LanjingQuiz \
-  -destination 'platform=iOS Simulator,name=<可用设备>' \
-  -derivedDataPath /tmp/LanjingQuizDerivedData \
-  CODE_SIGNING_ALLOWED=NO \
-  test
-```
-
-确认放弃考试或交卷会修改真实上游状态，不应把这些操作加入无人值守 smoke test。
-
-### 发布 (Release)
-
-[`release.yml`](.github/workflows/release.yml) 在**每次 push 到 `main` 时自动发布**（版本号自动取最新 tag 的 patch +1），也可手动触发（Actions 页 → Release → Run workflow，或 `gh workflow run release.yml -f version=v0.1.0`），生成产物并创建带附件的 GitHub Release：
-
-**桌面发布产物**：每次发布提供免安装桌面版（无需安装 Node.js）。
-
-| 平台 | 产物 | 说明 |
-|---|---|---|
-| Windows | `LanjingQuiz-windows-x64.exe` / `LanjingQuiz-windows-arm64.exe` | 单文件，托盘图标（打开浏览器 / 退出） |
-| macOS | `LanjingQuiz-macOS.dmg`（Universal） | 菜单栏图标（打开浏览器 / 退出） |
-| Linux | `LanjingQuiz-linux-x64` / `LanjingQuiz-linux-arm64` | 单文件，`chmod +x` 后运行，终端 Ctrl+C 停止 |
-
-托盘/菜单栏图标提供：打开浏览器、设置 Cookie 服务器（CookieCloud 配置，保存后自动同步）、退出。
-
-首次使用：启动后自动打开浏览器；数据保存在本机（Windows `%LOCALAPPDATA%\LanjingQuiz\data`、macOS `~/Library/Application Support/LanjingQuiz`、Linux 程序旁 `.local`）。服务端口固定 3000,被占用时启动失败(Windows 托盘会提示)。未签名提示：macOS 首次打开需右键“打开”；Windows SmartScreen 选“更多信息 → 仍要运行”。
-
-> [!WARNING]
-> 局域网访问：服务默认监听所有网卡，同一局域网设备可用 `http://<本机IP>:3000` 访问，可在「我的 > 局域网访问」关闭。该服务共享同一份会话，没有多用户隔离/TLS/限流，只适合可信局域网，请勿暴露到公网。
-
-- **Android 未签名 APK**：始终构建（`assembleRelease`，未签名 release 可直接安装）；版本号取自发布 tag（versionCode 按 `major×10000+minor×100+patch` 派生）；
-- **iOS 未签名 ipa**：始终构建（`CODE_SIGNING_ALLOWED=NO`），附安装说明——配合 Sideloadly/AltStore 用免费 Apple ID 签名后装真机（7 天续签一次）；
-- **iOS 签名 ipa（ADHOC）**：仅当配置了签名 secrets（`IOS_CERT_BASE64`、`IOS_CERT_PASSWORD`、`IOS_PROVISIONING_BASE64`、`DEVELOPMENT_TEAM`）时才会构建并签名，否则自动跳过；
-- **题库快照**：默认关闭的保留位（`include_bank` 输入，仅手动运行时可用）——题库数据因版权问题被 gitignore，不在发布工作区；如需附带，可在私有仓库纳入数据，或本地打包后 `gh release upload <tag> 题库导出-*.zip`。
+测试覆盖：采集器的卷名分类匹配、section 清洗、题卡位置关联、记录 schema（单选/多选/兜底答案/
+填空）、考试选择策略（pendingSubmit 优先、目标卷过滤、`wfs=0` 只读采集、强制 `--exam`）、502 交卷
+验证、"未创建的作答绝不提交"保护、跨轮去重与 resume、损坏尾行容错、空闲/上限/会话失效停止；
+直连上游客户端的登录全流程（JSESSIONID 引导、表单编码、会话落盘）、未登录拦截、会话过期识别、
+cookie jar 合并与失效、幂等读取的重试语义；快照的 manifest/校验/缺失图片报告；子分类的 HTML 剥离
+与实体解码、各 section 规则命中、优先级、兜底类、字段保真与幂等重写。全部测试都不访问真实上游。
 
 ## 开发流程
 
 `main` 是唯一长期分支，并受分支保护：
 
-1. 从最新 `main` 创建短期分支，例如 `feat/web-multi-select` 或 `fix/ios-session`。
+1. 从最新 `main` 创建短期分支，例如 `feat/bank-snapshot` 或 `fix/classifier-rule`。
 2. 一个分支只处理一个明确变更。
-3. 通过 Pull Request 合回 `main`。
-4. 无需等待 CI 检查；合并后 `main` 的 push 会自动触发 Release workflow。
-5. 合并后删除短期分支。
+3. 通过 Pull Request 合回 `main`；合并后 `main` 的 push 会自动触发 `Release Bank` 发布题库包。
+4. 合并后删除短期分支。
 
-如果 GitHub 仓库设置中还保留旧的 `Node`、`iOS`、`Android` 或 `Bank` required check，请一并从分支保护规则中移除。
-
-不要提交以下本地数据或产物：
-
-- `apps/web/.local/`、账号凭据和调试日志
-- `node_modules/`
-- Xcode `xcuserdata/`、DerivedData 和本地构建目录
-- `.ipa`、归档包和其他发布制品
-
-iOS 安装包应通过受控的 Release、TestFlight 或发布产物分发，而不是提交到 Git 历史。
+不要提交：`data/`（题库数据与会话文件）、`node_modules/`、账号凭据与调试日志。
 
 ## 安全与限制
 
 - 上游地址目前固定为 `https://test.lanjingweike.com`，没有 `.env` 或运行时切换配置。
-- PWA 只缓存应用壳和静态资源；登录、试卷、答题与结果流程都依赖网络和上游服务，不能离线答题。
-- Web 后端会把上游 Cookie 明文保存到忽略跟踪的 `apps/web/.local/session_cookies.txt`；目录权限为 `0700`，文件权限为 `0600`，退出登录会删除该文件。
-- iOS 仅在登录请求中使用账号凭据，并把会话 Cookie 存入 Keychain；退出或会话失效时会清理 Cookie。
-- 主动退出登录（Web 的 `/api/logout` 与 iOS 的"退出登录"）会先调用上游 `POST /login/public/logout` 使会话失效（尽力而为，失败仍清本地），该会话在其他设备上随之失效；会话过期被动清理不会调用上游登出。
-- `apps/web/server.js` 的 Cookie 和考试缓存是进程级单例，因此不能作为多用户后端部署。
-- Web 默认绑定 `0.0.0.0`（所有网卡）并允许局域网访问；可在“我的 > 局域网访问”关闭，或用 `HOST` 环境变量指定绑定地址。开启时 Host/Origin 白名单包含本机所有非内部 IPv4 网卡地址，`TRUSTED_HOSTS` 可额外允许指定主机名；但共享会话、无 TLS 与限流等风险依旧，只应在可信网络使用。设置保存于 `apps/web/.local/settings.json`（权限 `0600`）。
-- CookieCloud 同步（Web 与 iOS 均可选启用，协议与官方浏览器扩展兼容）：登录成功后自动上传会话，启动时拉取一次云端会话，也可在设置中手动同步；推送前会先拉取远端数据，合并保留其中所有非 lanjingweike 域名条目，避免覆盖扩展同步的其他站点 cookie。手动同步与启动拉取会**双向校验有效性**：云端与本地会话分别通过上游轻量接口探测（复用会话失效识别），只有有效的会话才会被应用或推送——过期的云端会话不会覆盖本地有效会话，反之本地无效会话也不会被传播。UUID 与密码需与浏览器扩展一致才能互通；加密在客户端完成（Web 用 Node 内置 crypto，iOS 用 CommonCrypto），服务端只保存密文，未知算法或解密失败一律不应用。Web 端密码保存在 `apps/web/.local/settings.json`（权限 `0600`），iOS 端存入 Keychain；`/api/cookiecloud` 等读取接口永不下发密码。退出登录不会清除云端 blob，其他设备保持登录。
-- iOS 仅对本地网络放行明文 HTTP（`NSAllowsLocalNetworking`，配合 `NSLocalNetworkUsageDescription` 权限文案），不会放开任意 HTTP；Web 端到自建 CookieCloud 服务的请求限 http/https 且带 10 秒超时。
-- 上游接口和 HTML 结构不属于本仓库控制范围；页面、字段或认证流程变化都可能导致解析失败。
-- `apps/web/tools/login-demo.js` 是历史调试工具，可能直接访问上游，不应作为普通启动命令或无人值守测试执行。
-
-## 文档
-
-- [本地 API 与上游映射](docs/web-api.md)
-- [原生 iOS 构建、架构与验证](apps/ios/README.md)
-- [原生安卓构建、架构与验证](apps/android/README.md)
-- [发布 workflow](.github/workflows/release.yml)
+- 采集器把上游 Cookie 明文保存到 `data/session_cookies.txt`（目录 `0700`、文件 `0600`），
+  该目录已被 gitignore；会话仅保存在本机，不随仓库分发。
+- 账号凭据只在登录请求中使用，仅存在于进程内存（或环境变量），绝不落盘。
+- 上游接口和 HTML 结构不属于本仓库控制范围；页面、字段或认证流程变化都可能导致采集失败。
+- 采集会对 `wfs=1` 的进行中卷创建空答案作答并放弃（消耗考试次数），不要在无人值守的自动化里跑。
 
 ## 许可与免责声明
 
 本仓库当前没有提供开源许可证。公开可见不代表自动授予复制、修改、分发或商业使用权。
 
-本项目仅用于学习、研究和经授权的测试。使用者应自行确认账号权限、平台规则、当地法律和操作后果；维护者不对未授权使用、考试记录变更或由上游服务变化造成的损失负责。
+本项目仅用于学习、研究和经授权的测试。题库内容版权归上游平台所有，不应再分发。
+使用者应自行确认账号权限、平台规则、当地法律和操作后果；维护者不对未授权使用、考试记录变更
+或由上游服务变化造成的损失负责。
